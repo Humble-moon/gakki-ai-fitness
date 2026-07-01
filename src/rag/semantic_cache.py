@@ -18,7 +18,11 @@ class SemanticCache:
         cache_key = self._make_key(profile, query)
         data = self.redis.get(cache_key)
         if data:
-            return json.loads(data)
+            entry = json.loads(data)
+            # Unwrap the stored entry (same structure as set() stores)
+            if isinstance(entry, dict) and "result" in entry:
+                return entry["result"]
+            return entry
         # Try similar cache
         query_vec = self.emb.embed(query)
         keys = self.redis.conn.keys("cache:fitness:*")
