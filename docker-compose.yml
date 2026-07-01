@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports: ["5432:5432"]
+    environment:
+      - POSTGRES_USER=ai_fitness
+      - POSTGRES_PASSWORD=fitness123
+      - POSTGRES_DB=fitness_assistant
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  neo4j:
+    image: neo4j:5.20
+    ports: ["7474:7474", "7687:7687"]
+    environment:
+      - NEO4J_AUTH=neo4j/fitness123
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=1g
+    volumes:
+      - neo4j_data:/data
+
+  redis:
+    image: redis/redis-stack:latest
+    ports: ["6380:6379", "8002:8001"]
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: minio/minio:latest
+    ports: ["9000:9000", "9001:9001"]
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio_data:/data
+
+volumes:
+  pg_data:
+  neo4j_data:
+  redis_data:
+  minio_data:
