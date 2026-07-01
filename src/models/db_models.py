@@ -24,7 +24,7 @@ class UserProfile(Base):
 class Exercise(Base):
     __tablename__ = "exercises"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(100), nullable=False)
+    name = Column(String(100), nullable=False, unique=True)
     name_en = Column(String(100))
     exercise_type = Column(String(20))
     difficulty = Column(String(10))

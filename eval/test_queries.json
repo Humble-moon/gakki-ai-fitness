@@ -1,0 +1,12 @@
+[
+  {"id": "1", "query": "增肌计划", "goal": "增肌", "equipment": ["哑铃"], "days": 4,
+   "checks": ["has_plan_id", "has_exercises"]},
+  {"id": "2", "query": "减脂计划", "goal": "减脂", "equipment": ["自重"], "days": 3,
+   "checks": ["has_plan_id", "has_exercises"]},
+  {"id": "3", "query": "胸肌训练", "goal": "增肌", "equipment": ["哑铃", "杠铃"], "days": 4,
+   "checks": ["has_exercises"]},
+  {"id": "4", "exercise": "深蹲", "desc": "膝盖疼", "goal": "增肌",
+   "checks": ["has_issues", "has_suggestions"]},
+  {"id": "5", "query": "增肌计划", "goal": "增肌", "equipment": ["哑铃"], "days": 4,
+   "checks": ["cache_hit"]}
+]

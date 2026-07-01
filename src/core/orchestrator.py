@@ -47,6 +47,23 @@ class Orchestrator:
         result = self.writer.write_plan(
             retrieved, profile_dict, plan.get("skill_config", {})
         )
+        # Normalize LLM output: map variant keys to standard "days"
+        days_data = None
+        for key in ("weekly_plan", "weekly_schedule", "days", "schedule", "plan"):
+            if key in result:
+                days_data = result.pop(key)
+                break
+        if days_data:
+            result["days"] = days_data
+        for day in result.get("days", []):
+            for ex in day.get("exercises", []):
+                if "rest_seconds" in ex and "rest" not in ex:
+                    ex["rest"] = f"{ex.pop('rest_seconds')}s"
+                # Normalize exercise name key
+                if "exercise" in ex and "name" not in ex:
+                    ex["name"] = ex.pop("exercise")
+                if "movement" in ex and "name" not in ex:
+                    ex["name"] = ex.pop("movement")
         artifact = Artifact(
             artifact_id=task.task_id, artifact_type="training_plan", content=result
         )
