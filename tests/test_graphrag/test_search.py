@@ -6,7 +6,7 @@ from src.graphrag.builder import GraphBuilder
 @pytest.fixture(scope="module")
 def gs():
     builder = GraphBuilder()
-    # Seed minimal test data
+    # 写入最小测试数据
     exercises = [
         {
             "name": "哑铃卧推",

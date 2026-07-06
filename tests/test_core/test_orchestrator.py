@@ -15,7 +15,7 @@ class TestOrchestrator:
         )
         result = orch.generate_plan(profile, "帮我设计增肌计划")
         assert "plan_id" in result
-        # LLM may return "days", "notes", or "raw" (JSON parse fallback)
+        # LLM 可能返回 "days"、"notes" 或 "raw"（JSON 解析回退）
         assert ("days" in result or "raw" in result or
                 "notes" in result or "exercises" in result)
         if "days" in result:

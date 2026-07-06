@@ -1,9 +1,9 @@
-"""Tests for Task 14 (MCP Protocol) and Task 15 (A2A + Memory + HITL + Skills)."""
+"""Task 14（MCP 协议）和 Task 15（A2A + 记忆 + HITL + Skill）的测试。"""
 
 import json
 from unittest.mock import patch, MagicMock
 
-# ---------- ExerciseMCPServer ----------
+# ---------- ExerciseMCPServer（MCP 动作库服务）----------
 
 from src.mcp.exercise_server import ExerciseMCPServer
 
@@ -37,15 +37,25 @@ def test_exercise_mcp_get_exercise_detail_found():
 
 
 def test_exercise_mcp_get_exercise_detail_not_found():
+    """v2: 未找到动作抛出 McpToolError 而非返回 []。"""
+    from src.mcp.exercise_server import McpToolError
     server = ExerciseMCPServer()
-    results = server.call_tool("get_exercise_detail", {"name": "不存在"})
-    assert results == []
+    try:
+        server.call_tool("get_exercise_detail", {"name": "不存在"})
+        assert False, "Expected McpToolError"
+    except McpToolError as e:
+        assert e.tool_name == "get_exercise_detail"
 
 
 def test_exercise_mcp_unknown_tool():
+    """v2: 未知工具抛出 McpToolError 而非返回 []。"""
+    from src.mcp.exercise_server import McpToolError
     server = ExerciseMCPServer()
-    results = server.call_tool("unknown_tool", {})
-    assert results == []
+    try:
+        server.call_tool("unknown_tool", {})
+        assert False, "Expected McpToolError"
+    except McpToolError as e:
+        assert "unknown_tool" in str(e)
 
 
 def test_exercise_mcp_list_tools():
@@ -59,11 +69,10 @@ def test_exercise_mcp_list_tools():
     assert "get_exercise_detail" in tool_names
 
 
-# ---------- ToolRegistry (with mocked DB deps) ----------
+# ---------- ToolRegistry（使用模拟数据库依赖）----------
 
-@patch("src.mcp.tool_registry.VectorSearch")
 @patch("src.mcp.tool_registry.GraphSearch")
-def test_tool_registry_call_mcp_tool(mock_graph, mock_vector):
+def test_tool_registry_call_mcp_tool(mock_graph):
     from src.mcp.tool_registry import ToolRegistry
     registry = ToolRegistry()
     results = registry.call("search_by_equipment", {"equipment": "杠铃"})
@@ -71,9 +80,8 @@ def test_tool_registry_call_mcp_tool(mock_graph, mock_vector):
     assert all("杠铃" in e["equipment"] for e in results)
 
 
-@patch("src.mcp.tool_registry.VectorSearch")
 @patch("src.mcp.tool_registry.GraphSearch")
-def test_tool_registry_list_tools(mock_graph, mock_vector):
+def test_tool_registry_list_tools(mock_graph):
     from src.mcp.tool_registry import ToolRegistry
     registry = ToolRegistry()
     tools = registry.list_tools()
@@ -85,13 +93,16 @@ def test_tool_registry_list_tools(mock_graph, mock_vector):
     assert "graph_reason_pain" in tool_names
 
 
-@patch("src.mcp.tool_registry.VectorSearch")
 @patch("src.mcp.tool_registry.GraphSearch")
-def test_tool_registry_call_unknown_tool(mock_graph, mock_vector):
-    from src.mcp.tool_registry import ToolRegistry
+def test_tool_registry_call_unknown_tool(mock_graph):
+    """v2: 未知工具抛出 McpToolError(code=-32601) 而非返回 None。"""
+    from src.mcp.tool_registry import ToolRegistry, McpToolError
     registry = ToolRegistry()
-    result = registry.call("nonexistent", {})
-    assert result is None
+    try:
+        registry.call("nonexistent", {})
+        assert False, "Expected McpToolError"
+    except McpToolError as e:
+        assert e.code == -32601
 
 
 # ---------- SkillRegistry ----------
@@ -120,7 +131,7 @@ def test_skill_registry_match_exercise_analysis():
 def test_skill_registry_match_fallback():
     registry = SkillRegistry()
     result = registry.match("今天天气不错")
-    assert result == "muscle_building"  # default fallback
+    assert result == "muscle_building"  # 默认回退
 
 
 def test_skill_registry_get_existing():
@@ -245,7 +256,7 @@ def test_hitl_review_warning_issue():
     assert "可能不太适合" in result.suggestions
 
 
-# ---------- LongTermMemory (uses Redis) ----------
+# ---------- LongTermMemory（使用 Redis）----------
 
 from src.memory.long_term import LongTermMemory
 
@@ -273,7 +284,7 @@ def test_long_term_memory_record_feedback():
     memory = LongTermMemory()
     memory.redis.flushdb()
     memory.record_feedback(999, "plan_001", 5, "很有效果")
-    # Verify by reading the key directly
+    # 直接读取 key 进行校验
     key = "memory:user:999:feedback:plan_001"
     raw = memory.redis.get(key)
     assert raw is not None
