@@ -5,3 +5,13 @@ __pycache__/
 .pytest_cache/
 *.db
 *.log
+.venv/
+venv/
+data/knowledge_fetched/
+*.tmp
+dist/
+build/
+*.pyc
+.DS_Store
+.idea/
+.vscode/

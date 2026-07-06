@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRON MIND · AI 健身私教</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+SC:wght@300;400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #080808;
+    --bg-panel: #121214;
+    --bg-card: #1a1a1e;
+    --steel: #2a2a30;
+    --steel-light: #3a3a44;
+    --chalk: #e8e4dd;
+    --chalk-dim: #8a867e;
+    --amber: #f26b38;
+    --amber-glow: rgba(242,107,56,0.25);
+    --danger: #d9443a;
+    --safe: #47a87a;
+    --warn: #e6a23c;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body: 'Noto Sans SC', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--chalk);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-deep); }
+  ::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--steel-light); }
+
+  /* Selection */
+  ::selection { background: rgba(242,107,56,0.3); color: var(--chalk); }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  }
+
+  /* ── Layout ── */
+  .app {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--bg-panel);
+    border-right: 1px solid var(--steel);
+    padding: 32px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    position: relative;
+  }
+
+  .sidebar::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 200px;
+    background: linear-gradient(to top, rgba(242,107,56,0.04), transparent);
+    pointer-events: none;
+  }
+
+  .logo {
+    font-family: var(--font-display);
+    font-size: 48px;
+    letter-spacing: 4px;
+    line-height: 0.9;
+    color: var(--chalk);
+    margin-bottom: 8px;
+  }
+
+  .logo span { color: var(--amber); }
+
+  .logo-sub {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 6px;
+    color: var(--chalk-dim);
+    font-family: var(--font-mono);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--chalk-dim);
+    font-family: var(--font-mono);
+  }
+
+  .field input, .field select {
+    background: var(--bg-card);
+    border: 1px solid var(--steel);
+    color: var(--chalk);
+    padding: 10px 14px;
+    border-radius: 2px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    transition: border-color 0.2s;
+  }
+
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--amber);
+    box-shadow: 0 0 0 3px var(--amber-glow);
+  }
+
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+
+  .tag-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tag {
+    padding: 6px 14px;
+    border-radius: 2px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    border: 1px solid var(--steel);
+    background: transparent;
+    color: var(--chalk-dim);
+    transition: all 0.15s;
+  }
+
+  .tag:hover { border-color: var(--amber); color: var(--chalk); }
+  .tag.active { background: var(--amber); border-color: var(--amber); color: #fff; }
+
+  .btn-generate {
+    background: var(--amber);
+    color: #fff;
+    border: none;
+    padding: 14px 28px;
+    font-family: var(--font-display);
+    font-size: 20px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s var(--ease-out);
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .btn-generate::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.5s;
+  }
+
+  .btn-generate:hover {
+    background: #e85d2a;
+    box-shadow: 0 0 40px var(--amber-glow);
+    transform: translateY(-1px);
+  }
+
+  .btn-generate:hover::after { transform: translateX(100%); }
+
+  .btn-generate:active { transform: scale(0.98); }
+
+  .btn-generate:disabled {
+    opacity: 0.6;
+    cursor: wait;
+    transform: none;
+    box-shadow: none;
+    animation: pulse 1.5s infinite;
+  }
+
+  .btn-generate:disabled::after { display: none; }
+
+  /* ── Main Content ── */
+  .main {
+    padding: 48px 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    max-width: 900px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--steel);
+  }
+
+  .tab-btn {
+    padding: 14px 32px;
+    background: none;
+    border: none;
+    color: var(--chalk-dim);
+    font-family: var(--font-display);
+    font-size: 18px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .tab-btn:hover { color: var(--chalk); }
+  .tab-btn.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+  .tab-content { display: none; animation: fadeIn 0.3s var(--ease-out); }
+  .tab-content.active { display: block; }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 32px;
+    letter-spacing: 3px;
+    margin-bottom: 20px;
+  }
+
+  .query-input {
+    width: 100%;
+    min-height: 80px;
+    background: var(--bg-card);
+    border: 1px solid var(--steel);
+    color: var(--chalk);
+    padding: 16px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    resize: vertical;
+    border-radius: 2px;
+    margin-bottom: 20px;
+  }
+
+  .query-input:focus {
+    outline: none;
+    border-color: var(--amber);
+    box-shadow: 0 0 0 3px var(--amber-glow);
+  }
+
+  /* ── Advice Bubble ── */
+  .advice-bubble {
+    background: linear-gradient(135deg, rgba(242,107,56,0.08), rgba(242,107,56,0.02));
+    border-left: 3px solid var(--amber);
+    padding: 20px 24px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    line-height: 1.9;
+    color: var(--chalk);
+    animation: slideIn 0.3s ease;
+  }
+
+  .advice-bubble .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 16px;
+    background: var(--amber);
+    margin-left: 2px;
+    animation: blink 1s infinite;
+    vertical-align: text-bottom;
+  }
+  .live-stage {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border-left: 3px solid var(--amber);
+    margin-bottom: 16px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    animation: slideIn 0.3s ease;
+  }
+
+  .stage-icon { font-size: 20px; }
+
+  .stage-detail {
+    padding: 10px 16px;
+    background: rgba(242,107,56,0.06);
+    border-radius: 2px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--chalk-dim);
+    animation: slideIn 0.3s ease;
+  }
+
+  .stream-box {
+    background: var(--bg-card);
+    border: 1px solid var(--steel);
+    border-radius: 2px;
+    padding: 20px 24px;
+    min-height: 200px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    color: var(--chalk);
+    position: relative;
+    margin-bottom: 16px;
+  }
+
+  .stream-box .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 16px;
+    background: var(--amber);
+    margin-left: 2px;
+    animation: blink 1s infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+  @keyframes slideIn {
+    from { opacity:0; transform: translateY(12px); }
+    to { opacity:1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity:0; }
+    to { opacity:1; }
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; }
+    50% { opacity:0.5; }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* ── Results ── */
+  .plan-card {
+    background: var(--bg-card);
+    border: 1px solid var(--steel);
+    border-radius: 2px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    animation: slideIn 0.4s var(--ease-out) both;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .plan-card:nth-child(2) { animation-delay: 0.05s; }
+  .plan-card:nth-child(3) { animation-delay: 0.1s; }
+  .plan-card:nth-child(4) { animation-delay: 0.15s; }
+  .plan-card:nth-child(5) { animation-delay: 0.2s; }
+  .plan-card:nth-child(6) { animation-delay: 0.25s; }
+  .plan-card:nth-child(7) { animation-delay: 0.3s; }
+
+  .plan-card:hover {
+    border-color: var(--steel-light);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+
+  .plan-card-header {
+    padding: 16px 20px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--steel);
+    font-family: var(--font-display);
+    font-size: 18px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .plan-card-header:hover { background: var(--steel); }
+
+  .plan-card-header::after {
+    content: '▾';
+    font-size: 14px;
+    transition: transform 0.3s var(--ease-out);
+    color: var(--chalk-dim);
+  }
+
+  .plan-card.open .plan-card-header::after { transform: rotate(180deg); }
+
+  .plan-card-body {
+    max-height: 0;
+    overflow: hidden;
+    padding: 0 20px;
+    transition: max-height 0.5s var(--ease-out), padding 0.5s var(--ease-out);
+  }
+
+  .plan-card.open .plan-card-body {
+    max-height: 1200px;
+    padding: 16px 20px;
+  }
+
+  .exercise-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px 80px;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 13px;
+    align-items: center;
+    transition: background 0.15s;
+    border-radius: 2px;
+    margin: 0 -4px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .exercise-row:hover { background: rgba(255,255,255,0.02); }
+  .exercise-row:last-child { border-bottom: none; }
+  .exercise-name { font-weight: 700; }
+  .exercise-stat { color: var(--chalk-dim); font-family: var(--font-mono); text-align: center; }
+  .exercise-note { grid-column: 1/-1; color: var(--chalk-dim); font-size: 11px; font-style: italic; padding-top: 2px; }
+
+  .result-header {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .stat-pill {
+    padding: 6px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--steel);
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stat-pill .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+
+  .dot.green { background: var(--safe); }
+  .dot.amber { background: var(--warn); }
+  .dot.red { background: var(--danger); }
+
+  .warning-list {
+    background: rgba(230,162,60,0.08);
+    border: 1px solid rgba(230,162,60,0.2);
+    padding: 12px 16px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+    font-size: 13px;
+  }
+
+  .warning-list::before {
+    content: '⚠ 安全提示';
+    display: block;
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    color: var(--warn);
+  }
+
+  .analysis-block {
+    background: var(--bg-card);
+    border: 1px solid var(--steel);
+    border-radius: 2px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+
+  .analysis-block h4 {
+    font-family: var(--font-display);
+    font-size: 18px;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    color: var(--amber);
+  }
+
+  .analysis-block li {
+    margin-left: 16px;
+    padding: 4px 0;
+    font-size: 14px;
+    color: var(--chalk-dim);
+  }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--chalk-dim);
+    animation: fadeIn 0.6s var(--ease-out);
+  }
+
+  .empty-state .icon-ring {
+    width: 80px; height: 80px;
+    border: 2px solid var(--steel);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 32px;
+    position: relative;
+  }
+
+  .empty-state .icon-ring::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border: 1px solid var(--steel);
+    border-radius: 50%;
+    opacity: 0.5;
+  }
+
+  .empty-state p {
+    font-size: 14px;
+    max-width: 300px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--steel); }
+    .main { padding: 24px 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div>
+      <div class="logo">IRON<span>MIND</span></div>
+      <div class="logo-sub">AI Fitness Coach</div>
+    </div>
+
+    <div class="field">
+      <label>身高 (cm)</label>
+      <input id="height" type="number" value="180" min="100" max="250">
+    </div>
+
+    <div class="field">
+      <label>体重 (kg)</label>
+      <input id="weight" type="number" value="80" min="30" max="200">
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>训练年限</label>
+        <input id="years" type="number" value="1" min="0" max="30" step="0.5">
+      </div>
+      <div class="field">
+        <label>目标</label>
+        <select id="goal">
+          <option value="增肌" selected>增肌</option>
+          <option value="减脂">减脂</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>每周天数</label>
+        <input id="days" type="number" value="4" min="1" max="7">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>训练场景</label>
+      <div class="tag-group" id="scene-tags">
+        <span class="tag active" data-val="居家">🏠 居家</span>
+        <span class="tag" data-val="健身房">🏋️ 健身房</span>
+        <span class="tag" data-val="户外">🌳 户外</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>伤病史（选填）</label>
+      <input id="injuries-input" type="text" placeholder="如：下背偶尔酸痛、左肩做过手术...">
+    </div>
+
+    <button class="btn-generate" id="btn-generate" onclick="generatePlan()">
+      ▸ 生成计划
+    </button>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('plan')">训练计划</button>
+      <button class="tab-btn" onclick="switchTab('analysis')">动作分析</button>
+      <button class="tab-btn" onclick="switchTab('qa')">知识问答</button>
+    </div>
+
+    <!-- Plan Tab -->
+    <div class="tab-content active" id="tab-plan">
+      <textarea class="query-input" id="plan-query" placeholder="补充说明，如：帮我设计增肌计划，重点练胸和背..."></textarea>
+      <div id="plan-output">
+        <div class="empty-state">
+          <div class="icon-ring">📋</div>
+          <p>填好身体数据，然后点击生成<br>AI 会先分析你的情况再出计划</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analysis Tab -->
+    <div class="tab-content" id="tab-analysis">
+      <div class="field" style="margin-bottom:16px">
+        <label>动作名称</label>
+        <input id="ex-name" type="text" value="哑铃卧推" style="width:100%">
+      </div>
+      <textarea class="query-input" id="ex-desc" placeholder="描述你的训练感受，如：推的时候右边肩膀前侧有点疼..."></textarea>
+      <button class="btn-generate" onclick="analyzeExercise()">▸ 分析动作</button>
+      <div id="analysis-output" style="margin-top:24px">
+        <div class="empty-state">
+          <div class="icon-ring">🔍</div>
+          <p>输入动作名称和训练感受<br>AI 会对比标准规范帮你诊断问题</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Q&A Tab -->
+    <div class="tab-content" id="tab-qa">
+      <div style="display:flex; align-items:center; gap:8px">
+        <textarea class="query-input" id="qa-query" placeholder="输入你的健身问题，如：硬拉的时候下背酸正常吗？" style="flex:1"></textarea>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
+        <button class="btn-generate" onclick="askQuestion()">▸ 提问</button>
+        <span id="qa-session-badge" style="font-size:0.75rem; color:var(--chalk-dim); display:none;">💬 多轮对话中</span>
+        <button id="qa-new-session-btn" onclick="newQaSession()" style="font-size:0.7rem; background:none; border:1px solid var(--border); color:var(--chalk-dim); padding:4px 10px; border-radius:4px; cursor:pointer; display:none;">新对话</button>
+      </div>
+      <div id="qa-output" style="margin-top:24px">
+        <div class="empty-state">
+          <div class="icon-ring">💡</div>
+          <p>输入任何健身问题<br>AI 用知识图谱 + 动作库为你解答</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ── Tag Toggles ──
+document.querySelectorAll('.tag-group').forEach(group => {
+  group.addEventListener('click', e => {
+    const tag = e.target.closest('.tag');
+    if (!tag) return;
+    tag.classList.toggle('active');
+  });
+});
+
+const SCENE_EQUIPMENT = {
+  '居家':   ['哑铃', '自重', '弹力带'],
+  '健身房': ['哑铃', '杠铃', '绳索', '腿举机', '史密斯机', '引体向上架', '龙门架'],
+  '户外':   ['自重', '弹力带', '单杠'],
+};
+
+// Multi-turn conversation: generate a session ID once per page load
+let qaSessionId = 'qa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+let qaTurnCount = 0;
+
+function newQaSession() {
+  qaSessionId = 'qa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  qaTurnCount = 0;
+  document.getElementById('qa-session-badge').style.display = 'none';
+  document.getElementById('qa-new-session-btn').style.display = 'none';
+  document.getElementById('qa-output').innerHTML = `
+    <div class="empty-state">
+      <div class="icon-ring">💡</div>
+      <p>新对话已开始<br>输入你的健身问题</p>
+    </div>`;
+}
+
+function getTags(id) {
+  return [...document.querySelectorAll(`#${id} .tag.active`)].map(t => t.dataset.val);
+}
+
+function getProfile() {
+  // Map scene selections to equipment list
+  const scenes = getTags('scene-tags');
+  const equipment = [...new Set(scenes.flatMap(s => SCENE_EQUIPMENT[s] || []))];
+
+  // Parse injuries from free-text input
+  const injuriesRaw = document.getElementById('injuries-input')?.value?.trim() || '';
+  const injuries = injuriesRaw ? [injuriesRaw] : [];
+
+  return {
+    height: parseFloat(document.getElementById('height').value) || 180,
+    weight: parseFloat(document.getElementById('weight').value) || 80,
+    training_years: parseFloat(document.getElementById('years').value) || 1,
+    goal: document.getElementById('goal').value,
+    available_equipment: equipment,
+    days_per_week: parseInt(document.getElementById('days').value) || 4,
+    injuries: injuries,
+  };
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['plan','analysis','qa'][i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── SSE Streaming ──
+async function streamFrom(url, body, outputEl) {
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  // Clear state
+  let stageEl = null;
+  let detailEl = null;
+  let streamBox = null;
+  let streamText = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = JSON.parse(line.slice(6));
+      const { event, data } = payload;
+      const resultArea = document.getElementById(outputEl);
+
+      if (event === 'stage') {
+        // Don't clear the advice bubble — only clear pipeline area
+        const oldAdvice = resultArea.querySelector('.advice-bubble');
+        const oldPlans = resultArea.querySelectorAll('.plan-card, .result-header, .warning-list');
+        resultArea.innerHTML = '';
+        if (oldAdvice) resultArea.appendChild(oldAdvice);
+        stageEl = el('div', 'live-stage', `<span class="stage-icon">⚙</span>${data}`);
+        resultArea.appendChild(stageEl);
+      }
+
+      else if (event === 'advice_chunk') {
+        if (!streamBox || streamBox.classList.contains('stream-box')) {
+          // Create advice bubble if not already created
+          streamBox = el('div', 'advice-bubble', '');
+          if (detailEl) detailEl.after(streamBox);
+          else if (stageEl) stageEl.after(streamBox);
+        }
+        streamText += data;
+        streamBox.innerHTML = streamText + '<span class="cursor"></span>';
+      }
+
+      else if (event === 'advice_done') {
+        // Remove cursor, advice is complete
+        if (streamBox) streamBox.querySelector('.cursor')?.remove();
+        // Reset for next streaming section
+        streamBox = null;
+        streamText = '';
+      }
+
+      else if (event === 'planner_done') {
+        detailEl = el('div', 'stage-detail',
+          `识别模式: <b>${data.skill}</b> · 拆解 ${(data.subtasks||[]).length} 个子任务: ${(data.subtasks||[]).slice(0,4).join('、')}`);
+        if (stageEl) stageEl.after(detailEl);
+      }
+
+      else if (event === 'retriever_done') {
+        if (detailEl) detailEl.remove();
+        detailEl = el('div', 'stage-detail',
+          `检索到 <b>${data.count}</b> 个匹配动作: ${(data.names||[]).join('、')}`);
+        if (stageEl) stageEl.after(detailEl);
+      }
+
+      else if (event === 'writer_chunk') {
+        if (!streamBox) {
+          streamBox = el('div', 'stream-box', '');
+          if (detailEl) detailEl.after(streamBox);
+          else if (stageEl) stageEl.after(streamBox);
+        }
+        streamText += data;
+        streamBox.innerHTML = streamText + '<span class="cursor"></span>';
+      }
+
+      else if (event === 'factcheck_done') {
+        if (streamBox) {
+          streamBox.querySelector('.cursor')?.remove();
+        }
+        if (detailEl) detailEl.remove();
+        detailEl = el('div', 'stage-detail',
+          `${data.safe ? '✓' : '⚠'} 安全审查完成 · ${data.issues} 个问题 · 置信度 ${Math.round(data.confidence*100)}%`);
+        if (streamBox) streamBox.after(detailEl);
+        else if (stageEl) stageEl.after(detailEl);
+      }
+
+      else if (event === 'done') {
+        const resultArea = document.getElementById(outputEl);
+        const oldAdvice = resultArea.querySelector('.advice-bubble');
+        resultArea.innerHTML = '';
+        if (oldAdvice) resultArea.appendChild(oldAdvice);
+        renderPlanResult(resultArea, data);
+      }
+    }
+  }
+}
+
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html) e.innerHTML = html;
+  return e;
+}
+
+// ── Render Results ──
+function renderPlanResult(container, data) {
+  // Stats bar
+  const stats = el('div', 'result-header', '');
+  stats.appendChild(el('div', 'stat-pill',
+    `<span class="dot green"></span>置信度 ${Math.round((data.confidence||0)*100)}%`));
+  if (data.warnings && data.warnings.length) {
+    stats.appendChild(el('div', 'stat-pill',
+      `<span class="dot amber"></span>${data.warnings.length} 个提示`));
+  }
+  if (data.requires_review) {
+    stats.appendChild(el('div', 'stat-pill',
+      `<span class="dot red"></span>需人工确认`));
+  }
+  container.appendChild(stats);
+
+  // Warnings
+  if (data.warnings && data.warnings.length) {
+    const w = el('div', 'warning-list', data.warnings.map(s => `· ${s}`).join('<br>'));
+    container.appendChild(w);
+  }
+
+  // Plan cards
+  const days = data.days || [];
+  days.forEach(day => {
+    const card = el('div', 'plan-card open', '');
+    card.innerHTML = `
+      <div class="plan-card-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>DAY ${day.day} · ${day.focus || ''}</span>
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--chalk-dim)">${(day.exercises||[]).length} 动作</span>
+      </div>
+      <div class="plan-card-body">
+        ${(day.exercises||[]).map(ex => `
+          <div class="exercise-row">
+            <span class="exercise-name">${ex.name || '?'}</span>
+            <span class="exercise-stat">${ex.sets || '?'} 组</span>
+            <span class="exercise-stat">${ex.reps || '?'}</span>
+            <span class="exercise-stat">休${ex.rest || '60s'}</span>
+            ${ex.notes ? `<span class="exercise-note">${ex.notes}</span>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  // If no structured days, show raw JSON
+  if (!days.length && data.raw) {
+    const raw = el('div', 'stream-box', data.raw);
+    container.appendChild(raw);
+  }
+}
+
+// ── Actions ──
+async function generatePlan() {
+  const btn = document.getElementById('btn-generate');
+  btn.disabled = true;
+  btn.textContent = '⟳ 生成中';
+  const output = document.getElementById('plan-output');
+  output.innerHTML = '';
+  output.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    const body = {
+      ...getProfile(),
+      query: document.getElementById('plan-query')?.value || ''
+    };
+    await streamFrom('/api/generate-plan', body, 'plan-output');
+  } catch(e) {
+    output.innerHTML = `<div class="live-stage" style="border-left-color:var(--danger)">请求失败: ${e.message}</div>`;
+  }
+  btn.disabled = false;
+  btn.textContent = '▸ 生成计划';
+  // Scroll to top of results
+  output.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function analyzeExercise() {
+  const output = document.getElementById('analysis-output');
+  output.innerHTML = '';
+
+  const body = {
+    ...getProfile(),
+    exercise_name: document.getElementById('ex-name').value || '哑铃卧推',
+    user_description: document.getElementById('ex-desc').value || ''
+  };
+
+  let stageEl = null, streamBox = null, streamText = '';
+
+  try {
+    const resp = await fetch('/api/analyze-exercise', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const { event, data } = JSON.parse(line.slice(6));
+
+        if (event === 'stage') {
+          stageEl = el('div', 'live-stage', data);
+          output.appendChild(stageEl);
+        } else if (event === 'retriever_done') {
+          const d = el('div', 'stage-detail', `检索到 <b>${data.count}</b> 个相关动作参考`);
+          output.appendChild(d);
+        } else if (event === 'writer_chunk') {
+          if (!streamBox) {
+            streamBox = el('div', 'stream-box', '');
+            output.appendChild(streamBox);
+          }
+          streamText += data;
+          streamBox.innerHTML = streamText + '<span class="cursor"></span>';
+        } else if (event === 'done') {
+          if (streamBox) streamBox.querySelector('.cursor')?.remove();
+          // Show structured analysis below the streamed text
+          if (stageEl) stageEl.remove();
+          const resultDiv = el('div', '', '');
+          renderAnalysisResult(resultDiv, data);
+          output.appendChild(resultDiv);
+        }
+      }
+    }
+  } catch(e) {
+    output.innerHTML = `<div class="live-stage" style="border-left-color:var(--danger)">请求失败: ${e.message}</div>`;
+  }
+}
+
+function renderAnalysisResult(container, data) {
+  const severityColor = { '安全': 'var(--safe)', '注意': 'var(--warn)', '警告': 'var(--danger)' };
+  const color = severityColor[data.severity] || 'var(--chalk)';
+
+  const header = el('div', 'result-header', '');
+  header.appendChild(el('div', 'stat-pill', `<span class="dot" style="background:${color}"></span>严重程度: <b>${data.severity || '未知'}</b>`));
+  if (data.confidence) {
+    header.appendChild(el('div', 'stat-pill', `<span class="dot green"></span>置信度 ${Math.round(data.confidence*100)}%`));
+  }
+  container.appendChild(header);
+
+  const blocks = [
+    { title: '发现的问题', content: (data.issues_found||[]), type: 'list', color: 'var(--danger)' },
+    { title: '改进建议', content: (data.suggestions||[]), type: 'list', color: 'var(--amber)' },
+  ];
+
+  blocks.forEach(b => {
+    const div = el('div', 'analysis-block', '');
+    div.innerHTML = `<h4 style="color:${b.color}">${b.title}</h4>`;
+    if (b.type === 'list') {
+      const list = b.content.length
+        ? b.content.map(i => `<li>${i}</li>`).join('')
+        : '<li style="color:var(--chalk-dim)">暂无</li>';
+      div.innerHTML += `<ul>${list}</ul>`;
+    }
+    container.appendChild(div);
+  });
+}
+
+async function askQuestion() {
+  const output = document.getElementById('qa-output');
+  const question = document.getElementById('qa-query')?.value?.trim();
+  if (!question) {
+    output.innerHTML = '<div class="live-stage" style="border-left-color:var(--danger)">请输入你的健身问题</div>';
+    return;
+  }
+
+  output.innerHTML = '';
+
+  const body = { ...getProfile(), question, session_id: qaSessionId };
+  qaTurnCount++;
+  let stageEl = null, streamBox = null, streamText = '';
+
+  try {
+    const resp = await fetch('/api/ask-question', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const { event, data } = JSON.parse(line.slice(6));
+
+        if (event === 'stage') {
+          stageEl = el('div', 'live-stage', data);
+          output.appendChild(stageEl);
+        } else if (event === 'graph_done') {
+          const painData = data.pain_data || {};
+          const causes = painData.possible_causes || [];
+          const rehab = painData.suggested_rehab || [];
+          if (causes.length || rehab.length) {
+            const graphDiv = el('div', 'stage-detail', '');
+            let html = `🔗 知识图谱推理完成`;
+            if (causes.length) html += `<br>关联伤病: ${causes.map(c => c.injury).join('、')}`;
+            if (rehab.length) html += `<br>康复动作: ${rehab.join('、')}`;
+            graphDiv.innerHTML = html;
+            output.appendChild(graphDiv);
+          }
+        } else if (event === 'retriever_done') {
+          if (data.count > 0) {
+            const d = el('div', 'stage-detail',
+              `检索到 <b>${data.count}</b> 个相关知识条目: ${(data.names||[]).slice(0,5).join('、')}`);
+            output.appendChild(d);
+          }
+        } else if (event === 'answer_chunk') {
+          if (!streamBox) {
+            streamBox = el('div', 'advice-bubble', '');
+            output.appendChild(streamBox);
+          }
+          streamText += data;
+          streamBox.innerHTML = streamText + '<span class="cursor"></span>';
+        } else if (event === 'done') {
+          if (streamBox) streamBox.querySelector('.cursor')?.remove();
+          // Clear stages, keep answer
+          output.querySelectorAll('.live-stage, .stage-detail').forEach(e => e.remove());
+          // Show multi-turn badge after first turn
+          if (qaTurnCount >= 1) {
+            document.getElementById('qa-session-badge').style.display = 'inline';
+            document.getElementById('qa-new-session-btn').style.display = 'inline';
+          }
+        }
+      }
+    }
+  } catch(e) {
+    output.innerHTML = `<div class="live-stage" style="border-left-color:var(--danger)">请求失败: ${e.message}</div>`;
+  }
+}
+</script>
+</body>
+</html>
