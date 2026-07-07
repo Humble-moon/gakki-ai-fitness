@@ -78,9 +78,11 @@ class VectorSearch:
         # 例：[0.1, -0.05, 0.3] → "[0.1,-0.05,0.3]"
         vec_str = f"[{','.join(str(v) for v in vec)}]"
 
-        # 步骤 3：构建参数化查询的过滤条件
-        # 使用参数化查询防止 SQL 注入：用户输入作为参数绑定而非拼入 SQL 字符串
-        params = {"vec_str": vec_str, "top_k": top_k}
+        # 步骤 3：构建参数化查询
+        # vec_str 是 embedding 模型内部生成的 float 列表格式化字符串（如 "[0.1,0.2,...]"），
+        # 不来自用户输入，无 SQL 注入风险，使用 f-string 直接拼接以兼容 pgvector 的 ::vector 语法。
+        # equipment 和 top_k 来自外部，使用参数化查询。
+        params = {"top_k": top_k}
         filter_clause = ""
         if filters:
             if "equipment" in filters:
@@ -91,14 +93,13 @@ class VectorSearch:
         # <=> 是 pgvector 扩展提供的余弦距离运算符
         # embedding <=> vector 返回 0~2 的距离值（0 = 完全相同方向，2 = 完全相反）
         # 1 - distance 将距离转换为相似度（1 = 完全相同，-1 = 完全相反）
-        # 这种转换让分数越接近 1 表示越相关，符合直觉
         sql = f"""
             SELECT name, name_en, exercise_type, difficulty, equipment,
                    target_muscles, description, common_errors,
-                   1 - (embedding <=> :vec_str::vector) AS similarity
+                   1 - (embedding <=> '{vec_str}'::vector) AS similarity
             FROM exercises
             WHERE embedding IS NOT NULL {filter_clause}
-            ORDER BY embedding <=> :vec_str::vector
+            ORDER BY embedding <=> '{vec_str}'::vector
             LIMIT :top_k
         """
         rows = self.pg.fetch_all(sql, params)
