@@ -93,26 +93,50 @@ class SkillRegistry:
            - 该技能无检索过滤参数，因为分析场景需要全量动作信息
            - 模板为"分析报告"而不是训练计划
         """
+        # NOTE: exercise_analysis 必须最先注册，确保其触发词优先级最高。
+        # 因为"增肌期腰痛"类查询同时含"增肌"和"痛"，应路由到动作分析而非增肌。
+        self.register(Skill(
+            name="exercise_analysis",
+            description="动作质量分析",
+            triggers=[
+                # 疼痛/不适（"痛"是"疼"的同义词，之前漏了）
+                "疼", "痛", "不舒服", "咔咔响", "弹响", "撕裂感",
+                # 姿势/动作纠正
+                "姿势", "纠正", "借力", "错误", "不对",
+                # 发力感/肌肉感知问题
+                "找不到", "没感觉", "泵感", "发力感",
+                # 伤病/诊断关键词（精确医学术语，误匹配概率极低）
+                "损伤", "间盘", "腰突", "半月板", "髌骨", "脱臼",
+                "腱鞘炎", "网球肘", "肩峰撞击", "跟腱炎",
+                "手术", "恢复期", "炎症",
+                # 动作分析疑问句式
+                "是不是", "怎么办", "哪个更", "哪个好", "哪个", "区别",
+                "能不能", "会不会加重", "怎么纠正", "怎么改进",
+                "怎么判断", "怎么安全",
+                # 能力/限制表达
+                "做不了", "算不算",
+                # 伤后康复
+                "术后", "重建",
+                # 通用动作词
+                "动作",
+            ],
+            retrieval_filters={},
+            plan_template="分析报告"
+        ))
+        # fat_loss 必须在 muscle_building 之前注册，否则"增肌减脂"会先命中"增肌"
+        self.register(Skill(
+            name="fat_loss",
+            description="减脂训练计划生成",
+            triggers=["减脂", "减重", "瘦", "刷脂", "塑形", "体脂"],
+            retrieval_filters={"rep_range": "12-15", "rest": "30-60s"},
+            plan_template="上下肢分化/全身"
+        ))
         self.register(Skill(
             name="muscle_building",
             description="增肌训练计划生成",
             triggers=["增肌", "增重", "变大", "维度", "增肌塑形"],
             retrieval_filters={"rep_range": "6-12", "rest": "60-90s"},
             plan_template="四分化/五分化"
-        ))
-        self.register(Skill(
-            name="fat_loss",
-            description="减脂训练计划生成",
-            triggers=["减脂", "减重", "瘦", "刷脂", "塑形"],
-            retrieval_filters={"rep_range": "12-15", "rest": "30-60s"},
-            plan_template="上下肢分化/全身"
-        ))
-        self.register(Skill(
-            name="exercise_analysis",
-            description="动作质量分析",
-            triggers=["动作", "姿势", "感觉", "疼", "不舒服", "是不是"],
-            retrieval_filters={},
-            plan_template="分析报告"
         ))
 
     def register(self, skill: Skill):

@@ -1,0 +1,219 @@
+{
+  "ablation": {},
+  "agent": {
+    "planner": {
+      "num_samples": 60,
+      "correct": 47,
+      "accuracy": 0.7833,
+      "per_class": {
+        "exercise_analysis": {
+          "precision": 0.8438,
+          "recall": 0.8182,
+          "f1": 0.8308,
+          "support": 33,
+          "correct": 27,
+          "predicted_as": 32
+        },
+        "fat_loss": {
+          "precision": 1.0,
+          "recall": 0.7692,
+          "f1": 0.8696,
+          "support": 13,
+          "correct": 10,
+          "predicted_as": 10
+        },
+        "muscle_building": {
+          "precision": 0.5556,
+          "recall": 0.7143,
+          "f1": 0.625,
+          "support": 14,
+          "correct": 10,
+          "predicted_as": 18
+        }
+      },
+      "confusion_matrix": {
+        "labels": [
+          "exercise_analysis",
+          "fat_loss",
+          "muscle_building"
+        ],
+        "matrix": [
+          [
+            27,
+            0,
+            6
+          ],
+          [
+            1,
+            10,
+            2
+          ],
+          [
+            4,
+            0,
+            10
+          ]
+        ]
+      },
+      "by_category": {
+        "injury": {
+          "num_samples": 14,
+          "correct": 13,
+          "accuracy": 0.9286,
+          "per_class": {
+            "exercise_analysis": {
+              "precision": 1.0,
+              "recall": 0.9286,
+              "f1": 0.963,
+              "support": 14,
+              "correct": 13,
+              "predicted_as": 13
+            },
+            "muscle_building": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0,
+              "correct": 0,
+              "predicted_as": 1
+            }
+          }
+        },
+        "exercise_analysis": {
+          "num_samples": 16,
+          "correct": 11,
+          "accuracy": 0.6875,
+          "per_class": {
+            "exercise_analysis": {
+              "precision": 1.0,
+              "recall": 0.6875,
+              "f1": 0.8148,
+              "support": 16,
+              "correct": 11,
+              "predicted_as": 11
+            },
+            "muscle_building": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0,
+              "correct": 0,
+              "predicted_as": 5
+            }
+          }
+        },
+        "fat_loss": {
+          "num_samples": 10,
+          "correct": 8,
+          "accuracy": 0.8,
+          "per_class": {
+            "exercise_analysis": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0,
+              "correct": 0,
+              "predicted_as": 1
+            },
+            "fat_loss": {
+              "precision": 1.0,
+              "recall": 0.8,
+              "f1": 0.8889,
+              "support": 10,
+              "correct": 8,
+              "predicted_as": 8
+            },
+            "muscle_building": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0,
+              "correct": 0,
+              "predicted_as": 1
+            }
+          }
+        },
+        "muscle_building": {
+          "num_samples": 10,
+          "correct": 8,
+          "accuracy": 0.8,
+          "per_class": {
+            "exercise_analysis": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "support": 0,
+              "correct": 0,
+              "predicted_as": 2
+            },
+            "muscle_building": {
+              "precision": 1.0,
+              "recall": 0.8,
+              "f1": 0.8889,
+              "support": 10,
+              "correct": 8,
+              "predicted_as": 8
+            }
+          }
+        },
+        "mixed": {
+          "num_samples": 10,
+          "correct": 7,
+          "accuracy": 0.7,
+          "per_class": {
+            "exercise_analysis": {
+              "precision": 0.6,
+              "recall": 1.0,
+              "f1": 0.75,
+              "support": 3,
+              "correct": 3,
+              "predicted_as": 5
+            },
+            "fat_loss": {
+              "precision": 1.0,
+              "recall": 0.6667,
+              "f1": 0.8,
+              "support": 3,
+              "correct": 2,
+              "predicted_as": 2
+            },
+            "muscle_building": {
+              "precision": 0.6667,
+              "recall": 0.5,
+              "f1": 0.5714,
+              "support": 4,
+              "correct": 2,
+              "predicted_as": 3
+            }
+          }
+        }
+      },
+      "errors": []
+    },
+    "fact_checker": {
+      "num_samples": 20,
+      "true_positive": 13,
+      "false_positive": 6,
+      "false_negative": 1,
+      "true_negative": 0,
+      "precision": 0.6842,
+      "recall": 0.9286,
+      "fpr": 1.0,
+      "fnr": 0.0714,
+      "f1": 0.7879,
+      "injury_subset": {
+        "num_samples": 14,
+        "true_positive": 13,
+        "false_positive": 0,
+        "false_negative": 0,
+        "true_negative": 1,
+        "precision": 1.0,
+        "recall": 1.0,
+        "fpr": 0.0,
+        "fnr": 0.0,
+        "f1": 1.0
+      },
+      "errors": []
+    }
+  }
+}
