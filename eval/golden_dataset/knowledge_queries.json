@@ -1,0 +1,758 @@
+[
+  {
+    "id": "k001",
+    "query": "我每周练几次胸肌效果最好？是不是练得越多越好？",
+    "category": "knowledge",
+    "source_doc": "01-zengji-yuanli.md",
+    "source_title": "增肌原理：从肌纤维到训练刺激",
+    "relevant_doc_ids": [
+      "01-zengji-yuanli.md"
+    ],
+    "answer_summary": "每周每块肌群的总训练组数10-20组是最佳区间，同一肌群每周训练两次比一次效果更好，超过20组边际收益递减且恢复压力增加。",
+    "topic": "训练频率与容量",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k002",
+    "query": "增肌时每天要吃多少蛋白质？怎么分配比较好？",
+    "category": "knowledge",
+    "source_doc": "01-zengji-yuanli.md",
+    "source_title": "增肌原理：从肌纤维到训练刺激",
+    "relevant_doc_ids": [
+      "01-zengji-yuanli.md"
+    ],
+    "answer_summary": "每公斤体重1.6-2.2克/天，将蛋白质均匀分布在3-4餐中，每餐至少含20-40克优质蛋白。",
+    "topic": "蛋白质摄入",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k003",
+    "query": "我每次训练都用同样的重量和组数，感觉没进步了怎么办？",
+    "category": "knowledge",
+    "source_doc": "01-zengji-yuanli.md",
+    "source_title": "增肌原理：从肌纤维到训练刺激",
+    "relevant_doc_ids": [
+      "01-zengji-yuanli.md"
+    ],
+    "answer_summary": "核心方法是渐进超负荷，每次训练在前一次基础上做更多一点：重量增加2.5kg、多做一组、缩短组间休息或增加动作幅度。",
+    "topic": "渐进超负荷",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k004",
+    "query": "为什么我减脂一段时间后体重就不动了，是不是方法不对？",
+    "category": "knowledge",
+    "source_doc": "02-jianzhi-yuanli.md",
+    "source_title": "减脂原理：热量缺口与代谢适应",
+    "relevant_doc_ids": [
+      "02-jianzhi-yuanli.md"
+    ],
+    "answer_summary": "当身体进入热量缺口状态时，会启动节能模式：基础代谢下降、日常非运动消耗减少、饥饿激素上升。这是减脂平台期的主要原因。对抗代谢适应最有效的方法不是进一步减少摄入，而是周期化饮食和保持力量训练强度。",
+    "topic": "减脂平台期",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k005",
+    "query": "减脂期是不是只做有氧就够了，力量训练可以停掉吗？",
+    "category": "knowledge",
+    "source_doc": "02-jianzhi-yuanli.md",
+    "source_title": "减脂原理：热量缺口与代谢适应",
+    "relevant_doc_ids": [
+      "02-jianzhi-yuanli.md"
+    ],
+    "answer_summary": "很多人在减脂期只做有氧，这是最大的误区。力量训练在减脂期有三个不可替代的作用：保留肌肉量维持基础代谢、训练后过量氧耗增加额外消耗、改善胰岛素敏感性有助于脂肪氧化。减脂期的力量训练应该保持大重量低次数，而不是改为小重量高次数。",
+    "topic": "减脂期训练",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k006",
+    "query": "减脂期每天应该吃多少蛋白质和脂肪才不会掉肌肉？",
+    "category": "knowledge",
+    "source_doc": "02-jianzhi-yuanli.md",
+    "source_title": "减脂原理：热量缺口与代谢适应",
+    "relevant_doc_ids": [
+      "02-jianzhi-yuanli.md"
+    ],
+    "answer_summary": "减脂期蛋白质摄入应比增肌期更高（每公斤体重2.0-2.4克），因为身体处于分解代谢状态。脂肪摄入不低于每公斤体重0.8克，以维持激素正常分泌。",
+    "topic": "减脂期营养",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k007",
+    "query": "我每次训练后应该间隔多久再练同一个部位？",
+    "category": "knowledge",
+    "source_doc": "03-chaoliang-huifu.md",
+    "source_title": "超量恢复：训练进步的底层逻辑",
+    "relevant_doc_ids": [
+      "03-chaoliang-huifu.md"
+    ],
+    "answer_summary": "实践中，48-72小时的间隔是最常见的理想区间，具体取决于训练强度和个人恢复能力。",
+    "topic": "训练频率",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k008",
+    "query": "每天睡不到6小时，是不是会影响增肌效果？",
+    "category": "knowledge",
+    "source_doc": "03-chaoliang-huifu.md",
+    "source_title": "超量恢复：训练进步的底层逻辑",
+    "relevant_doc_ids": [
+      "03-chaoliang-huifu.md"
+    ],
+    "answer_summary": "每天少于6小时睡眠会显著损害训练恢复和增肌效果。",
+    "topic": "恢复与睡眠",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k009",
+    "query": "怎么判断自己是不是练过度了？",
+    "category": "knowledge",
+    "source_doc": "03-chaoliang-huifu.md",
+    "source_title": "超量恢复：训练进步的底层逻辑",
+    "relevant_doc_ids": [
+      "03-chaoliang-huifu.md"
+    ],
+    "answer_summary": "持续疲劳、训练热情下降、睡眠质量差、静息心率升高、频繁生病——这些都是过度训练的警示信号。",
+    "topic": "过度训练",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k010",
+    "query": "我每次去健身房都练同样的重量和次数，感觉没什么进步了，该怎么办？",
+    "category": "knowledge",
+    "source_doc": "04-jianjin-chaofuhe.md",
+    "source_title": "渐进超负荷：从新手到进阶的进步法则",
+    "relevant_doc_ids": [
+      "04-jianjin-chaofuhe.md"
+    ],
+    "answer_summary": "渐进超负荷的七种实现方式，包括增加重量、次数、组数、缩短组间休息、增加动作幅度、改善动作质量、增加训练频率。",
+    "topic": "训练方法",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k011",
+    "query": "我练了半年了，每次训练都能加一点重量，但最近加不动了怎么办？",
+    "category": "knowledge",
+    "source_doc": "04-jianjin-chaofuhe.md",
+    "source_title": "渐进超负荷：从新手到进阶的进步法则",
+    "relevant_doc_ids": [
+      "04-jianjin-chaofuhe.md"
+    ],
+    "answer_summary": "不同阶段的超负荷策略：中级期（1-3年）线性增长空间有限，需要周期化安排，每周或每两周尝试加一次重，同时配合容量波动。",
+    "topic": "进阶策略",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k012",
+    "query": "我每次训练都凭感觉加重量，但好像效果不太好，是不是需要记录什么？",
+    "category": "knowledge",
+    "source_doc": "04-jianjin-chaofuhe.md",
+    "source_title": "渐进超负荷：从新手到进阶的进步法则",
+    "relevant_doc_ids": [
+      "04-jianjin-chaofuhe.md"
+    ],
+    "answer_summary": "记录的重要性：不记录训练数据就无法有效实施渐进超负荷，每次训练记录重量、次数、组数、主观感受。",
+    "topic": "训练记录",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k013",
+    "query": "新手刚开始健身，最应该先练哪几个动作？",
+    "category": "knowledge",
+    "source_doc": "05-xinren-rumen.md",
+    "source_title": "新手训练完全指南",
+    "relevant_doc_ids": [
+      "05-xinren-rumen.md"
+    ],
+    "answer_summary": "深蹲、硬拉、卧推、推举、划船、引体向上这六个基础复合动作覆盖全身主要肌群，是所有训练计划的基石。",
+    "topic": "训练动作选择",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k014",
+    "query": "新手一周练几次比较好？每次练多久？",
+    "category": "knowledge",
+    "source_doc": "05-xinren-rumen.md",
+    "source_title": "新手训练完全指南",
+    "relevant_doc_ids": [
+      "05-xinren-rumen.md"
+    ],
+    "answer_summary": "推荐一周三次、每次一小时，频率比强度重要，坚持三个月比一个月疯狂训练然后放弃好一百倍。",
+    "topic": "训练频率与时长",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k015",
+    "query": "新手训练时，每次加多少重量比较合适？",
+    "category": "knowledge",
+    "source_doc": "05-xinren-rumen.md",
+    "source_title": "新手训练完全指南",
+    "relevant_doc_ids": [
+      "05-xinren-rumen.md"
+    ],
+    "answer_summary": "在保证动作质量的前提下，每次训练尝试加重2.5-5kg，但动作变形时必须退回来。",
+    "topic": "训练进阶方法",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k016",
+    "query": "我每周只能去三天健身房，应该选哪种分化训练方案？",
+    "category": "knowledge",
+    "source_doc": "06-fenhua-xunlian.md",
+    "source_title": "分化训练：如何选择适合你的训练分割方案",
+    "relevant_doc_ids": [
+      "06-fenhua-xunlian.md"
+    ],
+    "answer_summary": "三天以下选全身训练，每周三次，每次训练包含所有主要肌群的基本动作。",
+    "topic": "分化方案选择",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k017",
+    "query": "练了半年多，想一周练四天，上下肢二分和推拉腿三分哪个更适合我？",
+    "category": "knowledge",
+    "source_doc": "06-fenhua-xunlian.md",
+    "source_title": "分化训练：如何选择适合你的训练分割方案",
+    "relevant_doc_ids": [
+      "06-fenhua-xunlian.md"
+    ],
+    "answer_summary": "四天选上下肢二分，一周四练，每个肌群一周两练，训练频率和容量的平衡点恰到好处，是初中级首选。",
+    "topic": "分化方案选择",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k018",
+    "query": "为什么说五分化训练不适合新手？",
+    "category": "knowledge",
+    "source_doc": "06-fenhua-xunlian.md",
+    "source_title": "分化训练：如何选择适合你的训练分割方案",
+    "relevant_doc_ids": [
+      "06-fenhua-xunlian.md"
+    ],
+    "answer_summary": "五分法适合追求极致维度的健美选手，缺点是频率太低（每肌群一周一次），对初中级训练者效率不高。",
+    "topic": "分化训练适用性",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k019",
+    "query": "我每天到底需要吃多少蛋白质才能有效增肌？",
+    "category": "knowledge",
+    "source_doc": "07-danbaizhi-yinshi.md",
+    "source_title": "蛋白质与肌肉合成：健身人群的蛋白质摄入指南",
+    "relevant_doc_ids": [
+      "07-danbaizhi-yinshi.md"
+    ],
+    "answer_summary": "增肌目标需要每公斤体重1.6-2.2克/天。一个80公斤的增肌期男性，每天需要128-176克蛋白质。",
+    "topic": "蛋白质摄入量",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k020",
+    "query": "训练后是不是必须马上喝蛋白粉？",
+    "category": "knowledge",
+    "source_doc": "07-danbaizhi-yinshi.md",
+    "source_title": "蛋白质与肌肉合成：健身人群的蛋白质摄入指南",
+    "relevant_doc_ids": [
+      "07-danbaizhi-yinshi.md"
+    ],
+    "answer_summary": "如果训练前餐距离训练结束不超过4-5小时，不需要立即补充。更重要的是全天总蛋白质摄入达标。",
+    "topic": "训练后营养",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k021",
+    "query": "蛋白粉和鸡胸肉哪个更好？能不能只吃蛋白粉？",
+    "category": "knowledge",
+    "source_doc": "07-danbaizhi-yinshi.md",
+    "source_title": "蛋白质与肌肉合成：健身人群的蛋白质摄入指南",
+    "relevant_doc_ids": [
+      "07-danbaizhi-yinshi.md"
+    ],
+    "answer_summary": "蛋白粉不能替代全食物，全食物提供微量营养素和饱腹感。蛋白粉应作为无法通过食物满足需求时的便捷补充。",
+    "topic": "蛋白粉与食物",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k022",
+    "query": "减脂期应该完全不吃碳水吗？",
+    "category": "knowledge",
+    "source_doc": "08-tanshui-xunlian.md",
+    "source_title": "碳水化合物与训练表现",
+    "relevant_doc_ids": [
+      "08-tanshui-xunlian.md"
+    ],
+    "answer_summary": "减脂期可以适当降低碳水但不应完全断碳，每公斤体重2-3克/天是维持训练表现的底线。",
+    "topic": "碳水摄入策略",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k023",
+    "query": "训练前和训练后分别应该吃什么类型的碳水？",
+    "category": "knowledge",
+    "source_doc": "08-tanshui-xunlian.md",
+    "source_title": "碳水化合物与训练表现",
+    "relevant_doc_ids": [
+      "08-tanshui-xunlian.md"
+    ],
+    "answer_summary": "训练前1-2小时选择中低升糖指数碳水（燕麦、全麦面包、红薯），训练后摄入高升糖指数碳水（白米饭、香蕉、葡萄糖）。",
+    "topic": "快碳与慢碳选择",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k024",
+    "query": "晚上吃碳水真的会让人变胖吗？",
+    "category": "knowledge",
+    "source_doc": "08-tanshui-xunlian.md",
+    "source_title": "碳水化合物与训练表现",
+    "relevant_doc_ids": [
+      "08-tanshui-xunlian.md"
+    ],
+    "answer_summary": "'晚上吃碳水会变胖'没有科学依据，全天总热量平衡才是关键。",
+    "topic": "碳水误区",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k025",
+    "query": "我每天应该吃多少肌酸？需要冲击期或者循环使用吗？",
+    "category": "knowledge",
+    "source_doc": "09-buji-kexue.md",
+    "source_title": "补剂科学：健身补给品的循证指南",
+    "relevant_doc_ids": [
+      "09-buji-kexue.md"
+    ],
+    "answer_summary": "每天5克一水肌酸，持续服用，不需要冲击期，不需要循环使用。",
+    "topic": "肌酸",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k026",
+    "query": "训练前喝咖啡有没有用？应该喝多少？",
+    "category": "knowledge",
+    "source_doc": "09-buji-kexue.md",
+    "source_title": "补剂科学：健身补给品的循证指南",
+    "relevant_doc_ids": [
+      "09-buji-kexue.md"
+    ],
+    "answer_summary": "咖啡因是有效的训练前增强剂，训练前30-60分钟摄入每公斤体重3-6毫克咖啡因，可以提升力量输出、减少疲劳感。",
+    "topic": "咖啡因",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k027",
+    "query": "BCAA（支链氨基酸）有必要单独买来喝吗？",
+    "category": "knowledge",
+    "source_doc": "09-buji-kexue.md",
+    "source_title": "补剂科学：健身补给品的循证指南",
+    "relevant_doc_ids": [
+      "09-buji-kexue.md"
+    ],
+    "answer_summary": "BCAA单独补充意义不大，如果能摄入足够的全蛋白质，BCAA是多余的，全蛋白质的增肌效果优于单独的BCAA。",
+    "topic": "BCAA",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k028",
+    "query": "我深蹲和硬拉时下背部老是疼，是继续练还是停下来？",
+    "category": "knowledge",
+    "source_doc": "10-changjian-shangbing.md",
+    "source_title": "健身常见伤病的预防与处理",
+    "relevant_doc_ids": [
+      "10-changjian-shangbing.md"
+    ],
+    "answer_summary": "如果疼痛是双侧的、酸痛性质的、休息后缓解，通常可以继续训练但要调整动作选择。如果是单侧的、刺痛的、放射到臀腿的，可能是椎间盘问题，需要停止训练并就医。",
+    "topic": "下背部疼痛",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k029",
+    "query": "做卧推和推举的时候肩膀外侧疼，是怎么回事？",
+    "category": "knowledge",
+    "source_doc": "10-changjian-shangbing.md",
+    "source_title": "健身常见伤病的预防与处理",
+    "relevant_doc_ids": [
+      "10-changjian-shangbing.md"
+    ],
+    "answer_summary": "肩峰撞击是最常见的问题，表现为推举和侧平举时肩外侧疼痛。预防措施包括加强肩袖外旋肌群、保持推拉动作的训练量平衡、卧推时肩胛下沉收紧。",
+    "topic": "肩关节问题",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k030",
+    "query": "我练手臂多了肘关节疼，外侧和内侧疼分别是什么问题？",
+    "category": "knowledge",
+    "source_doc": "10-changjian-shangbing.md",
+    "source_title": "健身常见伤病的预防与处理",
+    "relevant_doc_ids": [
+      "10-changjian-shangbing.md"
+    ],
+    "answer_summary": "肘部外侧疼痛是网球肘，内侧疼痛是高尔夫球肘。通常是抓握力过强、反复屈伸手腕或训练量突然增加导致的肌腱过度使用。",
+    "topic": "网球肘与高尔夫球肘",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k031",
+    "query": "我最近下背痛，怎么判断是肌肉拉伤还是腰椎间盘问题？",
+    "category": "knowledge",
+    "source_doc": "11-xiabeitong-guanli.md",
+    "source_title": "下背痛与力量训练：安全训练指南",
+    "relevant_doc_ids": [
+      "11-xiabeitong-guanli.md"
+    ],
+    "answer_summary": "机械性下背痛表现为双侧酸痛、活动后减轻、休息后缓解、无腿部放射；神经性下背痛表现为单侧刺痛、放射到腿臀、咳嗽加重、有麻木感。前者可谨慎训练，后者需暂停并就医。",
+    "topic": "疼痛类型区分",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k032",
+    "query": "下背痛急性期（头两天）还能做力量训练吗？应该怎么活动？",
+    "category": "knowledge",
+    "source_doc": "11-xiabeitong-guanli.md",
+    "source_title": "下背痛与力量训练：安全训练指南",
+    "relevant_doc_ids": [
+      "11-xiabeitong-guanli.md"
+    ],
+    "answer_summary": "急性期避免所有直接脊柱负荷动作（如杠铃深蹲、硬拉），可进行温和活动如轻松步行、猫牛式、仰卧位骨盆后倾，急性期通常冰敷15分钟间隔2小时。",
+    "topic": "急性期管理",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k033",
+    "query": "下背痛恢复后，怎么判断自己可以安全地恢复深蹲硬拉？",
+    "category": "knowledge",
+    "source_doc": "11-xiabeitong-guanli.md",
+    "source_title": "下背痛与力量训练：安全训练指南",
+    "relevant_doc_ids": [
+      "11-xiabeitong-guanli.md"
+    ],
+    "answer_summary": "疼痛完全消失至少一周、所有康复动作无痛完成、核心稳定性测试（如平板支撑60秒无腰痛）通过，且不能疼痛减轻就马上恢复原强度，否则易复发慢性化。",
+    "topic": "回归训练判断标准",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k034",
+    "query": "我卧推的时候肩膀总是不舒服，该怎么调整动作才能保护肩膀？",
+    "category": "knowledge",
+    "source_doc": "12-jianxiu-baohu.md",
+    "source_title": "肩关节保护：增肌不伤肩的完全指南",
+    "relevant_doc_ids": [
+      "12-jianxiu-baohu.md"
+    ],
+    "answer_summary": "卧推时肩胛骨必须保持全程下沉和回缩，避免肩膀前伸；动作底端杠铃应轻触下胸部而非锁骨，上臂与躯干呈45度角而非90度。",
+    "topic": "卧推动作调整",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k035",
+    "query": "我平时练推的动作比较多，拉的动作很少，这样对肩膀有什么影响？",
+    "category": "knowledge",
+    "source_doc": "12-jianxiu-baohu.md",
+    "source_title": "肩关节保护：增肌不伤肩的完全指南",
+    "relevant_doc_ids": [
+      "12-jianxiu-baohu.md"
+    ],
+    "answer_summary": "推拉不平衡会导致肩胛骨位置异常，增加肩峰撞击的风险。经验法则是拉的组数至少等于甚至略多于推的组数。",
+    "topic": "推拉平衡",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k036",
+    "query": "肩膀外侧疼的时候还能继续练吗？应该怎么处理？",
+    "category": "knowledge",
+    "source_doc": "12-jianxiu-baohu.md",
+    "source_title": "肩关节保护：增肌不伤肩的完全指南",
+    "relevant_doc_ids": [
+      "12-jianxiu-baohu.md"
+    ],
+    "answer_summary": "如果推举或侧平举时肩外侧出现疼痛，暂停这些动作1-2周，期间可以继续做不痛的拉类动作和外旋训练来保持肩袖力量。如果疼痛持续超过两周或伴有夜间疼痛，需要排除肩袖撕裂或盂唇损伤。",
+    "topic": "肩痛处理",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k037",
+    "query": "我深蹲时膝盖内扣怎么办？",
+    "category": "knowledge",
+    "source_doc": "13-xiguanjie-jiankang.md",
+    "source_title": "膝关节健康：深蹲不伤膝的完全指南",
+    "relevant_doc_ids": [
+      "13-xiguanjie-jiankang.md"
+    ],
+    "answer_summary": "膝盖内扣通常是因为大腿内收肌群紧张而外展肌群（如臀中肌）力量不足导致的。需要确保膝盖方向对齐第二和第三脚趾，并主动激活臀肌来保持股骨外旋。",
+    "topic": "深蹲技术",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k038",
+    "query": "膝盖疼的时候还能练腿吗？",
+    "category": "knowledge",
+    "source_doc": "13-xiguanjie-jiankang.md",
+    "source_title": "膝关节健康：深蹲不伤膝的完全指南",
+    "relevant_doc_ids": [
+      "13-xiguanjie-jiankang.md"
+    ],
+    "answer_summary": "可以，但应暂时避免全深度杠铃深蹲，优先选择减少关节压力的变式，如箱式深蹲、六角杠硬拉、腿举、后抬腿和臀推。",
+    "topic": "膝盖疼痛康复",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k039",
+    "query": "深蹲要蹲多深才不伤膝盖？",
+    "category": "knowledge",
+    "source_doc": "13-xiguanjie-jiankang.md",
+    "source_title": "膝关节健康：深蹲不伤膝的完全指南",
+    "relevant_doc_ids": [
+      "13-xiguanjie-jiankang.md"
+    ],
+    "answer_summary": "对健康膝关节而言，蹲到大腿上表面低于水平面是安全和有益的，半蹲反而会导致更大的膝关节剪切力。如果柔韧性受限，应蹲到骨盆不后倾的最大深度。",
+    "topic": "深蹲深度",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k040",
+    "query": "我深蹲时总是蹲不下去，是柔韧性太差吗？",
+    "category": "knowledge",
+    "source_doc": "14-shendun-jishu.md",
+    "source_title": "深蹲技术完全指南",
+    "relevant_doc_ids": [
+      "14-shendun-jishu.md"
+    ],
+    "answer_summary": "站距太窄可能导致骨性撞击，而非柔韧性问题；通过跳高自然落地的试错法可找到个人最佳站距。",
+    "topic": "深蹲站距与活动度",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k041",
+    "query": "深蹲时应该怎么呼吸？",
+    "category": "knowledge",
+    "source_doc": "14-shendun-jishu.md",
+    "source_title": "深蹲技术完全指南",
+    "relevant_doc_ids": [
+      "14-shendun-jishu.md"
+    ],
+    "answer_summary": "每次下蹲前深吸一口气到腹部（不是胸腔），屏住呼吸收紧核心（瓦式呼吸），站起后呼气再重新吸气。",
+    "topic": "呼吸与核心稳定",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k042",
+    "query": "深蹲时膝盖内扣是什么原因？怎么改善？",
+    "category": "knowledge",
+    "source_doc": "14-shendun-jishu.md",
+    "source_title": "深蹲技术完全指南",
+    "relevant_doc_ids": [
+      "14-shendun-jishu.md"
+    ],
+    "answer_summary": "核心原因是臀中肌激活不足；可以通过弹力带深蹲和侧卧蚌式开合进行激活训练。",
+    "topic": "常见错误与纠正",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k043",
+    "query": "我硬拉的时候总是感觉下背很酸，是不是我姿势有问题？该怎么调整？",
+    "category": "knowledge",
+    "source_doc": "15-yingla-jishu.md",
+    "source_title": "硬拉技术完全指南",
+    "relevant_doc_ids": [
+      "15-yingla-jishu.md"
+    ],
+    "answer_summary": "下背圆起是最危险的错误，也是受伤的主要原因。如果无法在保持脊柱中立的前提下从地面开始拉，需要从较高的起始位置开始，如架拉或垫铃拉。",
+    "topic": "硬拉常见错误与调整",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k044",
+    "query": "我有腰椎间盘突出的老毛病，想练拉类动作，哪种硬拉变式最安全？",
+    "category": "knowledge",
+    "source_doc": "15-yingla-jishu.md",
+    "source_title": "硬拉技术完全指南",
+    "relevant_doc_ids": [
+      "15-yingla-jishu.md"
+    ],
+    "answer_summary": "六角杠硬拉站在杠铃内侧，重心在身体中心线，对于有腰痛史的训练者是最安全的硬拉变式。",
+    "topic": "硬拉变式选择",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k045",
+    "query": "硬拉锁定的时候要不要刻意往后仰？我总怕没锁住。",
+    "category": "knowledge",
+    "source_doc": "15-yingla-jishu.md",
+    "source_title": "硬拉技术完全指南",
+    "relevant_doc_ids": [
+      "15-yingla-jishu.md"
+    ],
+    "answer_summary": "锁定阶段过度后仰则会给腰椎间盘施加不必要的前侧压力，纠正方法是锁定只伸髋不过度后仰胸椎，顶部收紧臀部即可。",
+    "topic": "硬拉锁定技术",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k046",
+    "query": "卧推的时候脚悬空会有什么影响？",
+    "category": "knowledge",
+    "source_doc": "16-wotui-jishu.md",
+    "source_title": "卧推技术完全指南",
+    "relevant_doc_ids": [
+      "16-wotui-jishu.md"
+    ],
+    "answer_summary": "双脚稳定踩地，为整个身体提供稳定支点。如果脚悬空，身体会晃动，力量传递效率大打折扣。",
+    "topic": "卧推预备姿势",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k047",
+    "query": "卧推时杠铃应该垂直上下推吗？正确的轨迹是怎样的？",
+    "category": "knowledge",
+    "source_doc": "16-wotui-jishu.md",
+    "source_title": "卧推技术完全指南",
+    "relevant_doc_ids": [
+      "16-wotui-jishu.md"
+    ],
+    "answer_summary": "正确的轨迹是从动作顶端开始杠铃在肩关节正上方，下降时杠铃轨迹略向胸下方向移动，在上腹部和下胸交界处轻触。推起时杠铃轨迹回到肩关节正上方。这个弧线轨迹减少了肩关节的撞击空间。",
+    "topic": "杠铃轨迹与触胸位置",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k048",
+    "query": "我一个人练卧推，没有保护员，要不要用夹子把杠铃片固定住？",
+    "category": "knowledge",
+    "source_doc": "16-wotui-jishu.md",
+    "source_title": "卧推技术完全指南",
+    "relevant_doc_ids": [
+      "16-wotui-jishu.md"
+    ],
+    "answer_summary": "卧推没有保护员时不要用夹子固定杠铃片——如果被压住，你可以向一侧倾斜让杠铃片滑落脱困。",
+    "topic": "安全要点",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k049",
+    "query": "做站姿杠铃推举时，杠铃应该怎么握才正确？",
+    "category": "knowledge",
+    "source_doc": "17-tuiju-jishu.md",
+    "source_title": "推举技术完全指南",
+    "relevant_doc_ids": [
+      "17-tuiju-jishu.md"
+    ],
+    "answer_summary": "手掌根托住杠铃而不是用手指，握距略宽于肩，前臂在动作底端尽可能垂直于地面，从侧面看手腕应在肘关节正上方。",
+    "topic": "推举技术",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k050",
+    "query": "推举过程中杠铃经过脸部时应该怎么处理？",
+    "category": "knowledge",
+    "source_doc": "17-tuiju-jishu.md",
+    "source_title": "推举技术完全指南",
+    "relevant_doc_ids": [
+      "17-tuiju-jishu.md"
+    ],
+    "answer_summary": "杠铃经过面部时微微将头和上身推过杠铃下方——不是杠铃绕过脸，而是脸绕过杠铃。",
+    "topic": "推举技术",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k051",
+    "query": "哑铃推举比杠铃推举好在哪？",
+    "category": "knowledge",
+    "source_doc": "17-tuiju-jishu.md",
+    "source_title": "推举技术完全指南",
+    "relevant_doc_ids": [
+      "17-tuiju-jishu.md"
+    ],
+    "answer_summary": "哑铃推举左右手独立工作，可以暴露和纠正力量不平衡；活动范围更大，三角肌拉伸和收缩更充分；对肩关节更友好，双肘可以自然选择舒适角度。",
+    "topic": "训练动作对比",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k052",
+    "query": "我练了半年多，最近感觉进步越来越慢，是不是该换计划了？",
+    "category": "knowledge",
+    "source_doc": "18-zhouqihua-xunlian.md",
+    "source_title": "周期化训练：如何长期规划训练进程",
+    "relevant_doc_ids": [
+      "18-zhouqihua-xunlian.md"
+    ],
+    "answer_summary": "非周期化的训练在度过新手期后几乎必然会遇到平台期。周期化是在不同时间尺度上有计划地变化训练变量，实现持续的进步并管理疲劳累积。",
+    "topic": "平台期与周期化必要性",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k053",
+    "query": "减载周是不是完全不练，还是可以练但少做点？",
+    "category": "knowledge",
+    "source_doc": "18-zhouqihua-xunlian.md",
+    "source_title": "周期化训练：如何长期规划训练进程",
+    "relevant_doc_ids": [
+      "18-zhouqihua-xunlian.md"
+    ],
+    "answer_summary": "减载不是完全不练，而是把训练容量降到平时的40-50%，但保持强度（重量）不变或略降。这样既给身体足够的恢复时间，又不会让神经系统失去对重量的适应。",
+    "topic": "减载周安排",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  },
+  {
+    "id": "k054",
+    "query": "我想试试波动周期化，具体怎么安排一周里的重量和次数？",
+    "category": "knowledge",
+    "source_doc": "18-zhouqihua-xunlian.md",
+    "source_title": "周期化训练：如何长期规划训练进程",
+    "relevant_doc_ids": [
+      "18-zhouqihua-xunlian.md"
+    ],
+    "answer_summary": "波动周期化是在一周内就变化训练刺激。比如推拉腿方案中，周一的推日是5组5次的大重量日，周四的推日则是3组10次的容量日。",
+    "topic": "波动周期化",
+    "eval_type": "knowledge_retrieval",
+    "difficulty": "medium"
+  }
+]
