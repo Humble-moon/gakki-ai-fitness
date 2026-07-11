@@ -6,601 +6,984 @@
 <title>IRON MIND · AI 健身私教</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+SC:wght@300;400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg-deep: #080808;
-    --bg-panel: #121214;
-    --bg-card: #1a1a1e;
-    --steel: #2a2a30;
-    --steel-light: #3a3a44;
-    --chalk: #e8e4dd;
-    --chalk-dim: #8a867e;
-    --amber: #f26b38;
-    --amber-glow: rgba(242,107,56,0.25);
-    --danger: #d9443a;
-    --safe: #47a87a;
-    --warn: #e6a23c;
-    --font-display: 'Bebas Neue', sans-serif;
-    --font-body: 'Noto Sans SC', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
+/* ============================================================
+   IRON MIND — Industrial Forge Aesthetic
+   设计方向：工业锻造厂 × 霓虹灯光
+   配色：锻造炉的暖橙 + 冷却钢的冷蓝 + 深炭背景
+   字体：Syncopate(logo) + Rajdhani(标题) + Noto Sans SC(正文) + Share Tech Mono(数据)
+   ============================================================ */
+:root {
+  --bg-deep:        #060608;
+  --bg-panel:       #0d0d12;
+  --bg-card:        #14141b;
+  --bg-card-hover:  #1a1a24;
+  --steel:          #232330;
+  --steel-light:    #343444;
+  --forge-amber:    #ff6b35;
+  --forge-amber-dim: rgba(255,107,53,0.18);
+  --forge-amber-glow: rgba(255,107,53,0.35);
+  --cool-blue:      #00c9a0;
+  --cool-blue-dim:  rgba(0,201,160,0.15);
+  --danger:         #f04343;
+  --warn:           #f0a040;
+  --chalk:          #e8e5df;
+  --chalk-dim:      #7c7a74;
+  --chalk-faint:    #4a4844;
 
-  * { margin:0; padding:0; box-sizing:border-box; }
+  --font-logo:    'Syncopate', sans-serif;
+  --font-heading: 'Rajdhani', sans-serif;
+  --font-body:    'Noto Sans SC', sans-serif;
+  --font-mono:    'Share Tech Mono', monospace;
 
-  html { scroll-behavior: smooth; }
+  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth:  cubic-bezier(0.4, 0, 0.2, 1);
 
-  body {
-    background: var(--bg-deep);
-    color: var(--chalk);
-    font-family: var(--font-body);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+}
 
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg-deep); }
-  ::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--steel-light); }
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
 
-  /* Selection */
-  ::selection { background: rgba(242,107,56,0.3); color: var(--chalk); }
+body {
+  background: var(--bg-deep);
+  color: var(--chalk);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
 
-  /* Noise texture overlay */
-  body::before {
-    content: '';
-    position: fixed; inset: 0; z-index: 9999; pointer-events: none;
-    opacity: 0.025;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
-  }
+/* ── Ambient Background ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 80%, rgba(255,107,53,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 85% 15%, rgba(0,201,160,0.03) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(120,120,160,0.02) 0%, transparent 70%);
+}
 
-  /* ── Layout ── */
-  .app {
-    display: grid;
-    grid-template-columns: 340px 1fr;
-    min-height: 100vh;
-  }
+/* Subtle grid texture */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.03;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
 
-  /* ── Sidebar ── */
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--steel-light); }
+
+::selection { background: rgba(255,107,53,0.25); color: var(--chalk); }
+
+/* ── Layout ── */
+.app {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  min-height: 100vh;
+  position: relative; z-index: 1;
+}
+
+/* ═══════════════ SIDEBAR ═══════════════ */
+.sidebar {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--steel);
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  position: relative;
+  overflow-y: auto;
+}
+
+/* Sidebar top accent line */
+.sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--forge-amber), var(--cool-blue));
+}
+
+/* Sidebar bottom glow */
+.sidebar::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 160px;
+  background: linear-gradient(to top, var(--forge-amber-dim), transparent);
+  pointer-events: none;
+}
+
+.logo-block {
+  margin-bottom: 4px;
+}
+
+.logo {
+  font-family: var(--font-logo);
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  line-height: 1;
+  color: var(--chalk);
+  text-transform: uppercase;
+}
+
+.logo-accent { color: var(--forge-amber); }
+
+.logo-sub {
+  font-size: 10px;
+  letter-spacing: 8px;
+  color: var(--chalk-dim);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+/* ── Form Fields ── */
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: var(--chalk-faint);
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+
+.field input, .field select, .field textarea {
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  color: var(--chalk);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 13px;
+  transition: all 0.2s var(--ease-out);
+  width: 100%;
+}
+
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--forge-amber);
+  box-shadow: 0 0 0 3px var(--forge-amber-dim);
+}
+
+.field input::placeholder { color: var(--chalk-faint); }
+
+.row { display: flex; gap: 12px; }
+.row .field { flex: 1; }
+
+/* ── Tag Pills ── */
+.tag-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  border: 1px solid var(--steel);
+  background: transparent;
+  color: var(--chalk-dim);
+  transition: all 0.2s var(--ease-out);
+  user-select: none;
+}
+
+.tag:hover {
+  border-color: var(--forge-amber);
+  color: var(--chalk);
+  background: var(--forge-amber-dim);
+}
+
+.tag.active {
+  background: var(--forge-amber);
+  border-color: var(--forge-amber);
+  color: #fff;
+  font-weight: 500;
+  box-shadow: 0 0 16px var(--forge-amber-glow);
+}
+
+/* ── Generate Button ── */
+.btn-generate {
+  background: var(--forge-amber);
+  color: #fff;
+  border: none;
+  padding: 16px 32px;
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.25s var(--ease-out);
+  text-transform: uppercase;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.btn-generate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.6s var(--ease-smooth);
+}
+
+.btn-generate:hover::before { transform: translateX(100%); }
+
+.btn-generate:hover {
+  background: #ff7a4a;
+  box-shadow: 0 0 48px var(--forge-amber-glow), 0 8px 32px rgba(0,0,0,0.4);
+  transform: translateY(-2px);
+}
+
+.btn-generate:active { transform: scale(0.97); transition: transform 0.1s; }
+
+.btn-generate:disabled {
+  opacity: 0.55;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+  animation: btnPulse 1.6s ease-in-out infinite;
+}
+
+.btn-generate:disabled::before { display: none; }
+
+/* ── Secondary Button ── */
+.btn-secondary {
+  background: transparent;
+  color: var(--chalk-dim);
+  border: 1px solid var(--steel);
+  padding: 8px 18px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s var(--ease-out);
+  text-transform: uppercase;
+}
+
+.btn-secondary:hover {
+  border-color: var(--cool-blue);
+  color: var(--cool-blue);
+  background: var(--cool-blue-dim);
+}
+
+/* ═══════════════ MAIN ═══════════════ */
+.main {
+  padding: 40px 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 960px;
+  overflow-y: auto;
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--steel);
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  padding: 12px 28px;
+  background: none;
+  border: none;
+  color: var(--chalk-dim);
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s var(--ease-out);
+  text-transform: uppercase;
+  position: relative;
+  margin-bottom: -1px;
+}
+
+.tab-btn:hover { color: var(--chalk); }
+
+.tab-btn.active {
+  color: var(--forge-amber);
+  border-bottom-color: var(--forge-amber);
+}
+
+.tab-content { display: none; animation: fadeSlideIn 0.35s var(--ease-out); }
+.tab-content.active { display: block; }
+
+/* ── Section Header ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.section-header .icon {
+  width: 36px; height: 36px;
+  border: 2px solid var(--steel-light);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  background: var(--bg-card);
+}
+
+.section-header h2 {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--chalk);
+}
+
+/* ── Query Input ── */
+.query-input {
+  width: 100%;
+  min-height: 72px;
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  color: var(--chalk);
+  padding: 14px 18px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  resize: vertical;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s var(--ease-out);
+  line-height: 1.6;
+}
+
+.query-input:focus {
+  outline: none;
+  border-color: var(--forge-amber);
+  box-shadow: 0 0 0 3px var(--forge-amber-dim);
+}
+
+.query-input::placeholder { color: var(--chalk-faint); }
+
+/* ── Live Stage Indicator ── */
+.live-stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: var(--bg-card);
+  border-left: 3px solid var(--forge-amber);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--chalk-dim);
+  animation: fadeSlideIn 0.3s var(--ease-out);
+}
+
+.live-stage .dot-pulse {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--forge-amber);
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+
+/* ── Stage Detail ── */
+.stage-detail {
+  padding: 10px 16px;
+  background: var(--forge-amber-dim);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--chalk-dim);
+  font-family: var(--font-mono);
+  animation: fadeSlideIn 0.3s var(--ease-out);
+}
+
+/* ── Advice Bubble ── */
+.advice-bubble {
+  background: linear-gradient(135deg, rgba(255,107,53,0.06), rgba(0,201,160,0.03));
+  border-left: 3px solid var(--forge-amber);
+  padding: 20px 24px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--chalk);
+  animation: fadeSlideIn 0.35s var(--ease-out);
+  position: relative;
+}
+
+.advice-bubble .cursor {
+  display: inline-block;
+  width: 2px; height: 16px;
+  background: var(--forge-amber);
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+
+/* ── Stream Box ── */
+.stream-box {
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-sm);
+  padding: 20px 24px;
+  min-height: 160px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  color: var(--chalk);
+  position: relative;
+  margin-bottom: 16px;
+  animation: fadeSlideIn 0.35s var(--ease-out);
+}
+
+.stream-box .cursor {
+  display: inline-block;
+  width: 2px; height: 16px;
+  background: var(--forge-amber);
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+
+/* ── Empty State ── */
+.empty-state {
+  text-align: center;
+  padding: 48px 20px 32px;
+  color: var(--chalk-dim);
+  animation: fadeSlideIn 0.5s var(--ease-out);
+}
+
+.empty-state .icon-ring {
+  width: 72px; height: 72px;
+  border: 2px solid var(--steel-light);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 30px;
+  position: relative;
+  background: var(--bg-card);
+}
+
+.empty-state .icon-ring::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 1px solid var(--steel);
+  border-radius: 50%;
+  opacity: 0.4;
+}
+
+.empty-state h3 {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  color: var(--chalk);
+}
+
+.empty-state p {
+  font-size: 13px;
+  max-width: 340px;
+  margin: 0 auto;
+  line-height: 1.7;
+  color: var(--chalk-dim);
+}
+
+/* ── Feature Cards Grid ── */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 0;
+  animation: fadeSlideIn 0.5s var(--ease-out) 0.15s both;
+}
+
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  transition: all 0.25s var(--ease-out);
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card:hover {
+  border-color: var(--steel-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+.feature-card .fc-icon {
+  font-size: 24px;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.feature-card .fc-title {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--chalk);
+  margin-bottom: 4px;
+}
+
+.feature-card .fc-desc {
+  font-size: 11px;
+  color: var(--chalk-dim);
+  line-height: 1.5;
+}
+
+.feature-card .fc-accent {
+  position: absolute;
+  top: 0; right: 0;
+  width: 40px; height: 40px;
+  opacity: 0.06;
+  font-size: 40px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ── Example Query Chips ── */
+.example-queries {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  animation: fadeSlideIn 0.5s var(--ease-out) 0.25s both;
+}
+
+.example-queries .eq-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: var(--chalk-faint);
+  font-family: var(--font-mono);
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.eq-chip {
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: 1px solid var(--steel);
+  background: transparent;
+  color: var(--chalk-dim);
+  transition: all 0.2s var(--ease-out);
+  white-space: nowrap;
+}
+
+.eq-chip:hover {
+  border-color: var(--cool-blue);
+  color: var(--cool-blue);
+  background: var(--cool-blue-dim);
+  transform: translateY(-1px);
+}
+
+/* ── System Status Bar ── */
+.sys-status {
+  display: flex;
+  gap: 16px;
+  padding-top: 24px;
+  margin-top: 28px;
+  border-top: 1px solid var(--steel);
+  animation: fadeSlideIn 0.5s var(--ease-out) 0.3s both;
+}
+
+.sys-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--chalk-faint);
+  font-family: var(--font-mono);
+}
+
+.sys-stat-item .ss-val {
+  color: var(--chalk-dim);
+  font-weight: 600;
+}
+
+.sys-stat-item .ss-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--cool-blue);
+  box-shadow: 0 0 6px var(--cool-blue-dim);
+}
+
+/* ── Responsive features ── */
+@media (max-width: 900px) {
+  .feature-grid { grid-template-columns: repeat(2, 1fr); }
+  .sys-status { flex-wrap: wrap; gap: 10px; }
+}
+
+@media (max-width: 480px) {
+  .feature-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Results: Stats Bar ── */
+.result-header {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.stat-pill {
+  padding: 6px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s var(--ease-out);
+}
+
+.stat-pill:hover {
+  border-color: var(--steel-light);
+  background: var(--bg-card-hover);
+}
+
+.stat-pill .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot.green { background: var(--cool-blue); box-shadow: 0 0 8px var(--cool-blue-dim); }
+.dot.amber { background: var(--warn); }
+.dot.red   { background: var(--danger); box-shadow: 0 0 8px rgba(240,67,67,0.3); }
+
+/* ── Warning List ── */
+.warning-list {
+  background: rgba(240,160,64,0.06);
+  border: 1px solid rgba(240,160,64,0.12);
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--warn);
+}
+
+.warning-list::before {
+  content: '⚠ 安全提示';
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  color: var(--warn);
+  text-transform: uppercase;
+}
+
+/* ── Plan Card ── */
+.plan-card {
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  overflow: hidden;
+  animation: cardReveal 0.5s var(--ease-out) both;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+}
+
+.plan-card:nth-child(2) { animation-delay: 0.06s; }
+.plan-card:nth-child(3) { animation-delay: 0.12s; }
+.plan-card:nth-child(4) { animation-delay: 0.18s; }
+.plan-card:nth-child(5) { animation-delay: 0.24s; }
+.plan-card:nth-child(6) { animation-delay: 0.30s; }
+.plan-card:nth-child(7) { animation-delay: 0.36s; }
+
+.plan-card:hover {
+  border-color: var(--steel-light);
+  box-shadow: 0 4px 28px rgba(0,0,0,0.4);
+  transform: translateX(3px);
+}
+
+.plan-card-header {
+  padding: 16px 22px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--steel);
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  transition: background 0.15s;
+  text-transform: uppercase;
+}
+
+.plan-card-header:hover { background: var(--bg-card-hover); }
+
+.plan-card-header::after {
+  content: '▾';
+  font-size: 14px;
+  transition: transform 0.35s var(--ease-spring);
+  color: var(--chalk-faint);
+}
+
+.plan-card.open .plan-card-header::after { transform: rotate(180deg); color: var(--forge-amber); }
+
+.plan-card-body {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 22px;
+  transition: max-height 0.55s var(--ease-out), padding 0.55s var(--ease-out);
+}
+
+.plan-card.open .plan-card-body {
+  max-height: 1400px;
+  padding: 14px 22px;
+}
+
+/* ── Exercise Row ── */
+.exercise-row {
+  display: grid;
+  grid-template-columns: 1fr 70px 70px 70px;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.025);
+  font-size: 13px;
+  align-items: center;
+  transition: background 0.15s, transform 0.15s;
+  border-radius: var(--radius-sm);
+}
+
+.exercise-row:hover {
+  background: rgba(255,255,255,0.015);
+  transform: translateX(4px);
+}
+
+.exercise-row:last-child { border-bottom: none; }
+
+.exercise-name {
+  font-weight: 600;
+  color: var(--chalk);
+}
+
+.exercise-stat {
+  color: var(--chalk-dim);
+  font-family: var(--font-mono);
+  text-align: center;
+  font-size: 12px;
+}
+
+.exercise-note {
+  grid-column: 1/-1;
+  color: var(--chalk-faint);
+  font-size: 11px;
+  font-style: italic;
+  padding-top: 2px;
+}
+
+/* ── Analysis Blocks ── */
+.analysis-block {
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-sm);
+  padding: 20px 24px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s;
+  animation: fadeSlideIn 0.4s var(--ease-out) both;
+}
+
+.analysis-block:nth-child(2) { animation-delay: 0.05s; }
+.analysis-block:nth-child(3) { animation-delay: 0.1s; }
+
+.analysis-block:hover { border-color: var(--steel-light); }
+
+.analysis-block h4 {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+}
+
+.analysis-block ul {
+  list-style: none;
+  padding: 0;
+}
+
+.analysis-block li {
+  padding: 6px 0 6px 20px;
+  font-size: 13px;
+  color: var(--chalk-dim);
+  position: relative;
+  line-height: 1.6;
+}
+
+.analysis-block li::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 13px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--forge-amber);
+  opacity: 0.6;
+}
+
+/* ── Session Badge ── */
+.session-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--cool-blue);
+  font-family: var(--font-mono);
+  padding: 4px 12px;
+  border: 1px solid var(--cool-blue-dim);
+  border-radius: 20px;
+  background: var(--cool-blue-dim);
+}
+
+/* ═══════════════ ANIMATIONS ═══════════════ */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes btnPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.75; }
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.3; transform: scale(1.6); }
+}
+
+/* ═══════════════ RESPONSIVE ═══════════════ */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
   .sidebar {
-    background: var(--bg-panel);
-    border-right: 1px solid var(--steel);
-    padding: 32px 28px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    position: relative;
-  }
-
-  .sidebar::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 200px;
-    background: linear-gradient(to top, rgba(242,107,56,0.04), transparent);
-    pointer-events: none;
-  }
-
-  .logo {
-    font-family: var(--font-display);
-    font-size: 48px;
-    letter-spacing: 4px;
-    line-height: 0.9;
-    color: var(--chalk);
-    margin-bottom: 8px;
-  }
-
-  .logo span { color: var(--amber); }
-
-  .logo-sub {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 6px;
-    color: var(--chalk-dim);
-    font-family: var(--font-mono);
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .field label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    color: var(--chalk-dim);
-    font-family: var(--font-mono);
-  }
-
-  .field input, .field select {
-    background: var(--bg-card);
-    border: 1px solid var(--steel);
-    color: var(--chalk);
-    padding: 10px 14px;
-    border-radius: 2px;
-    font-family: var(--font-body);
-    font-size: 14px;
-    transition: border-color 0.2s;
-  }
-
-  .field input:focus, .field select:focus {
-    outline: none;
-    border-color: var(--amber);
-    box-shadow: 0 0 0 3px var(--amber-glow);
-  }
-
-  .row { display: flex; gap: 12px; }
-  .row .field { flex: 1; }
-
-  .tag-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .tag {
-    padding: 6px 14px;
-    border-radius: 2px;
-    font-size: 12px;
-    font-family: var(--font-mono);
-    cursor: pointer;
-    border: 1px solid var(--steel);
-    background: transparent;
-    color: var(--chalk-dim);
-    transition: all 0.15s;
-  }
-
-  .tag:hover { border-color: var(--amber); color: var(--chalk); }
-  .tag.active { background: var(--amber); border-color: var(--amber); color: #fff; }
-
-  .btn-generate {
-    background: var(--amber);
-    color: #fff;
-    border: none;
-    padding: 14px 28px;
-    font-family: var(--font-display);
-    font-size: 20px;
-    letter-spacing: 4px;
-    cursor: pointer;
-    border-radius: 2px;
-    transition: all 0.2s var(--ease-out);
-    text-transform: uppercase;
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-  }
-
-  .btn-generate::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-    transform: translateX(-100%);
-    transition: transform 0.5s;
-  }
-
-  .btn-generate:hover {
-    background: #e85d2a;
-    box-shadow: 0 0 40px var(--amber-glow);
-    transform: translateY(-1px);
-  }
-
-  .btn-generate:hover::after { transform: translateX(100%); }
-
-  .btn-generate:active { transform: scale(0.98); }
-
-  .btn-generate:disabled {
-    opacity: 0.6;
-    cursor: wait;
-    transform: none;
-    box-shadow: none;
-    animation: pulse 1.5s infinite;
-  }
-
-  .btn-generate:disabled::after { display: none; }
-
-  /* ── Main Content ── */
-  .main {
-    padding: 48px 56px;
-    display: flex;
-    flex-direction: column;
-    gap: 32px;
-    max-width: 900px;
-  }
-
-  .tabs {
-    display: flex;
-    gap: 0;
+    border-right: none;
     border-bottom: 1px solid var(--steel);
+    max-height: none;
   }
+  .main { padding: 24px 20px; }
+  .logo { font-size: 28px; letter-spacing: 4px; }
+  .tabs { overflow-x: auto; }
+  .tab-btn { padding: 10px 18px; font-size: 14px; white-space: nowrap; }
+}
 
-  .tab-btn {
-    padding: 14px 32px;
-    background: none;
-    border: none;
-    color: var(--chalk-dim);
-    font-family: var(--font-display);
-    font-size: 18px;
-    letter-spacing: 2px;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s;
-    text-transform: uppercase;
-  }
-
-  .tab-btn:hover { color: var(--chalk); }
-  .tab-btn.active { color: var(--amber); border-bottom-color: var(--amber); }
-
-  .tab-content { display: none; animation: fadeIn 0.3s var(--ease-out); }
-  .tab-content.active { display: block; }
-
-  .section-title {
-    font-family: var(--font-display);
-    font-size: 32px;
-    letter-spacing: 3px;
-    margin-bottom: 20px;
-  }
-
-  .query-input {
-    width: 100%;
-    min-height: 80px;
-    background: var(--bg-card);
-    border: 1px solid var(--steel);
-    color: var(--chalk);
-    padding: 16px;
-    font-family: var(--font-body);
-    font-size: 14px;
-    resize: vertical;
-    border-radius: 2px;
-    margin-bottom: 20px;
-  }
-
-  .query-input:focus {
-    outline: none;
-    border-color: var(--amber);
-    box-shadow: 0 0 0 3px var(--amber-glow);
-  }
-
-  /* ── Advice Bubble ── */
-  .advice-bubble {
-    background: linear-gradient(135deg, rgba(242,107,56,0.08), rgba(242,107,56,0.02));
-    border-left: 3px solid var(--amber);
-    padding: 20px 24px;
-    border-radius: 2px;
-    margin-bottom: 16px;
-    font-size: 14px;
-    line-height: 1.9;
-    color: var(--chalk);
-    animation: slideIn 0.3s ease;
-  }
-
-  .advice-bubble .cursor {
-    display: inline-block;
-    width: 2px;
-    height: 16px;
-    background: var(--amber);
-    margin-left: 2px;
-    animation: blink 1s infinite;
-    vertical-align: text-bottom;
-  }
-  .live-stage {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--bg-card);
-    border-left: 3px solid var(--amber);
-    margin-bottom: 16px;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    animation: slideIn 0.3s ease;
-  }
-
-  .stage-icon { font-size: 20px; }
-
-  .stage-detail {
-    padding: 10px 16px;
-    background: rgba(242,107,56,0.06);
-    border-radius: 2px;
-    margin-bottom: 16px;
-    font-size: 13px;
-    color: var(--chalk-dim);
-    animation: slideIn 0.3s ease;
-  }
-
-  .stream-box {
-    background: var(--bg-card);
-    border: 1px solid var(--steel);
-    border-radius: 2px;
-    padding: 20px 24px;
-    min-height: 200px;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    line-height: 1.8;
-    white-space: pre-wrap;
-    color: var(--chalk);
-    position: relative;
-    margin-bottom: 16px;
-  }
-
-  .stream-box .cursor {
-    display: inline-block;
-    width: 2px;
-    height: 16px;
-    background: var(--amber);
-    margin-left: 2px;
-    animation: blink 1s infinite;
-    vertical-align: text-bottom;
-  }
-
-  @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
-  @keyframes slideIn {
-    from { opacity:0; transform: translateY(12px); }
-    to { opacity:1; transform: translateY(0); }
-  }
-  @keyframes fadeIn {
-    from { opacity:0; }
-    to { opacity:1; }
-  }
-  @keyframes pulse {
-    0%,100% { opacity:1; }
-    50% { opacity:0.5; }
-  }
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-
-  /* ── Results ── */
-  .plan-card {
-    background: var(--bg-card);
-    border: 1px solid var(--steel);
-    border-radius: 2px;
-    margin-bottom: 10px;
-    overflow: hidden;
-    animation: slideIn 0.4s var(--ease-out) both;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-
-  .plan-card:nth-child(2) { animation-delay: 0.05s; }
-  .plan-card:nth-child(3) { animation-delay: 0.1s; }
-  .plan-card:nth-child(4) { animation-delay: 0.15s; }
-  .plan-card:nth-child(5) { animation-delay: 0.2s; }
-  .plan-card:nth-child(6) { animation-delay: 0.25s; }
-  .plan-card:nth-child(7) { animation-delay: 0.3s; }
-
-  .plan-card:hover {
-    border-color: var(--steel-light);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-  }
-
-  .plan-card-header {
-    padding: 16px 20px;
-    background: var(--bg-panel);
-    border-bottom: 1px solid var(--steel);
-    font-family: var(--font-display);
-    font-size: 18px;
-    letter-spacing: 2px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    user-select: none;
-    transition: background 0.15s;
-  }
-
-  .plan-card-header:hover { background: var(--steel); }
-
-  .plan-card-header::after {
-    content: '▾';
-    font-size: 14px;
-    transition: transform 0.3s var(--ease-out);
-    color: var(--chalk-dim);
-  }
-
-  .plan-card.open .plan-card-header::after { transform: rotate(180deg); }
-
-  .plan-card-body {
-    max-height: 0;
-    overflow: hidden;
-    padding: 0 20px;
-    transition: max-height 0.5s var(--ease-out), padding 0.5s var(--ease-out);
-  }
-
-  .plan-card.open .plan-card-body {
-    max-height: 1200px;
-    padding: 16px 20px;
-  }
-
-  .exercise-row {
-    display: grid;
-    grid-template-columns: 1fr 80px 80px 80px;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
-    font-size: 13px;
-    align-items: center;
-    transition: background 0.15s;
-    border-radius: 2px;
-    margin: 0 -4px;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-
-  .exercise-row:hover { background: rgba(255,255,255,0.02); }
-  .exercise-row:last-child { border-bottom: none; }
-  .exercise-name { font-weight: 700; }
-  .exercise-stat { color: var(--chalk-dim); font-family: var(--font-mono); text-align: center; }
-  .exercise-note { grid-column: 1/-1; color: var(--chalk-dim); font-size: 11px; font-style: italic; padding-top: 2px; }
-
-  .result-header {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-  }
-
-  .stat-pill {
-    padding: 6px 16px;
-    background: var(--bg-card);
-    border: 1px solid var(--steel);
-    border-radius: 2px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .stat-pill .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-  }
-
-  .dot.green { background: var(--safe); }
-  .dot.amber { background: var(--warn); }
-  .dot.red { background: var(--danger); }
-
-  .warning-list {
-    background: rgba(230,162,60,0.08);
-    border: 1px solid rgba(230,162,60,0.2);
-    padding: 12px 16px;
-    border-radius: 2px;
-    margin-bottom: 20px;
-    font-size: 13px;
-  }
-
-  .warning-list::before {
-    content: '⚠ 安全提示';
-    display: block;
-    font-family: var(--font-display);
-    font-size: 14px;
-    letter-spacing: 2px;
-    margin-bottom: 8px;
-    color: var(--warn);
-  }
-
-  .analysis-block {
-    background: var(--bg-card);
-    border: 1px solid var(--steel);
-    border-radius: 2px;
-    padding: 20px 24px;
-    margin-bottom: 16px;
-  }
-
-  .analysis-block h4 {
-    font-family: var(--font-display);
-    font-size: 18px;
-    letter-spacing: 2px;
-    margin-bottom: 12px;
-    color: var(--amber);
-  }
-
-  .analysis-block li {
-    margin-left: 16px;
-    padding: 4px 0;
-    font-size: 14px;
-    color: var(--chalk-dim);
-  }
-
-  /* ── Empty State ── */
-  .empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--chalk-dim);
-    animation: fadeIn 0.6s var(--ease-out);
-  }
-
-  .empty-state .icon-ring {
-    width: 80px; height: 80px;
-    border: 2px solid var(--steel);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 20px;
-    font-size: 32px;
-    position: relative;
-  }
-
-  .empty-state .icon-ring::after {
-    content: '';
-    position: absolute;
-    inset: -8px;
-    border: 1px solid var(--steel);
-    border-radius: 50%;
-    opacity: 0.5;
-  }
-
-  .empty-state p {
-    font-size: 14px;
-    max-width: 300px;
-    margin: 0 auto;
-    line-height: 1.6;
-  }
-
-  /* ── Responsive ── */
-  @media (max-width: 768px) {
-    .app { grid-template-columns: 1fr; }
-    .sidebar { border-right: none; border-bottom: 1px solid var(--steel); }
-    .main { padding: 24px 20px; }
-  }
+@media (max-width: 480px) {
+  .sidebar { padding: 20px 16px; gap: 14px; }
+  .main { padding: 16px 12px; }
+  .result-header { gap: 8px; }
+  .stat-pill { padding: 4px 12px; font-size: 10px; }
+  .exercise-row { grid-template-columns: 1fr 50px 50px 50px; gap: 6px; font-size: 11px; }
+}
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- Sidebar -->
+
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
   <aside class="sidebar">
-    <div>
-      <div class="logo">IRON<span>MIND</span></div>
+    <div class="logo-block">
+      <div class="logo">IRON<span class="logo-accent">MIND</span></div>
       <div class="logo-sub">AI Fitness Coach</div>
     </div>
 
-    <div class="field">
-      <label>身高 (cm)</label>
-      <input id="height" type="number" value="180" min="100" max="250">
-    </div>
-
-    <div class="field">
-      <label>体重 (kg)</label>
-      <input id="weight" type="number" value="80" min="30" max="200">
-    </div>
-
-    <div class="row">
+    <div class="field-group">
       <div class="field">
-        <label>训练年限</label>
-        <input id="years" type="number" value="1" min="0" max="30" step="0.5">
+        <label>身高 Height (cm)</label>
+        <input id="height" type="number" value="180" min="100" max="250">
       </div>
-      <div class="field">
-        <label>目标</label>
-        <select id="goal">
-          <option value="增肌" selected>增肌</option>
-          <option value="减脂">减脂</option>
-        </select>
-      </div>
-    </div>
 
-    <div class="row">
       <div class="field">
-        <label>每周天数</label>
-        <input id="days" type="number" value="4" min="1" max="7">
+        <label>体重 Weight (kg)</label>
+        <input id="weight" type="number" value="80" min="30" max="200">
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>训练年限</label>
+          <input id="years" type="number" value="1" min="0" max="30" step="0.5">
+        </div>
+        <div class="field">
+          <label>目标 Goal</label>
+          <select id="goal">
+            <option value="增肌" selected>增肌</option>
+            <option value="减脂">减脂</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>每周天数 / Week</label>
+          <input id="days" type="number" value="4" min="1" max="7">
+        </div>
       </div>
     </div>
 
     <div class="field">
-      <label>训练场景</label>
+      <label>训练场景 Scene</label>
       <div class="tag-group" id="scene-tags">
-        <span class="tag active" data-val="居家">🏠 居家</span>
-        <span class="tag" data-val="健身房">🏋️ 健身房</span>
-        <span class="tag" data-val="户外">🌳 户外</span>
+        <span class="tag active" data-val="居家">居家</span>
+        <span class="tag" data-val="健身房">健身房</span>
+        <span class="tag" data-val="户外">户外</span>
       </div>
     </div>
 
     <div class="field">
-      <label>伤病史（选填）</label>
+      <label>伤病史 Injuries</label>
       <input id="injuries-input" type="text" placeholder="如：下背偶尔酸痛、左肩做过手术...">
     </div>
 
@@ -609,7 +992,7 @@
     </button>
   </aside>
 
-  <!-- Main Content -->
+  <!-- ═══════════════ MAIN ═══════════════ -->
   <main class="main">
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('plan')">训练计划</button>
@@ -619,45 +1002,147 @@
 
     <!-- Plan Tab -->
     <div class="tab-content active" id="tab-plan">
-      <textarea class="query-input" id="plan-query" placeholder="补充说明，如：帮我设计增肌计划，重点练胸和背..."></textarea>
-      <div id="plan-output">
-        <div class="empty-state">
-          <div class="icon-ring">📋</div>
-          <p>填好身体数据，然后点击生成<br>AI 会先分析你的情况再出计划</p>
+      <textarea class="query-input" id="plan-query" placeholder="补充说明，如：帮我设计增肌计划，重点练胸和背，每次控制在60分钟内..."></textarea>
+      <div id="plan-output" style="margin-top:20px">
+        <div class="welcome-area">
+          <div class="empty-state">
+            <div class="icon-ring">&#9764;</div>
+            <h3>Ready to Forge</h3>
+            <p>AI 将分析你的身体数据，为你锻造专属训练计划<br>经过智能规划 → 知识检索 → 内容生成 → 安全检查四个环节</p>
+          </div>
+
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="fc-icon">&#9881;</span>
+              <span class="fc-title">智能规划</span>
+              <span class="fc-desc">AI 理解你的目标，自动匹配合适的训练方案，拆解成每日可执行计划</span>
+              <span class="fc-accent">01</span>
+            </div>
+            <div class="feature-card">
+              <span class="fc-icon">&#8981;</span>
+              <span class="fc-title">精准匹配</span>
+              <span class="fc-desc">从动作库中智能检索最适合你的训练动作，考虑器械条件和训练水平</span>
+              <span class="fc-accent">02</span>
+            </div>
+            <div class="feature-card">
+              <span class="fc-icon">&#9888;</span>
+              <span class="fc-title">安全守护</span>
+              <span class="fc-desc">自动检测伤病风险，发现安全隐患会给出替代方案，确保训练安全</span>
+              <span class="fc-accent">03</span>
+            </div>
+          </div>
+
+          <div class="example-queries">
+            <span class="eq-label">试试这些</span>
+            <span class="eq-chip" onclick="document.getElementById('plan-query').value=this.textContent;generatePlan()">帮我设计增肌计划，重点练胸和背</span>
+            <span class="eq-chip" onclick="document.getElementById('plan-query').value=this.textContent;generatePlan()">新手减脂，只有哑铃，一周三练</span>
+            <span class="eq-chip" onclick="document.getElementById('plan-query').value=this.textContent;generatePlan()">下背有旧伤，想练腿怎么安排</span>
+          </div>
+
+          <div class="sys-status">
+            <div class="sys-stat-item"><span class="ss-dot"></span> 动作库 <span class="ss-val">39</span> 个标准动作</div>
+            <div class="sys-stat-item"><span class="ss-dot"></span> 知识库 <span class="ss-val">21</span> 篇专业文献</div>
+            <div class="sys-stat-item"><span class="ss-dot"></span> 智能安全检测</div>
+            <div class="sys-stat-item"><span class="ss-dot"></span> 支持多轮对话</div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Analysis Tab -->
     <div class="tab-content" id="tab-analysis">
-      <div class="field" style="margin-bottom:16px">
-        <label>动作名称</label>
+      <div class="field" style="margin-bottom:14px">
+        <label>动作名称 Exercise</label>
         <input id="ex-name" type="text" value="哑铃卧推" style="width:100%">
       </div>
-      <textarea class="query-input" id="ex-desc" placeholder="描述你的训练感受，如：推的时候右边肩膀前侧有点疼..."></textarea>
-      <button class="btn-generate" onclick="analyzeExercise()">▸ 分析动作</button>
+      <textarea class="query-input" id="ex-desc" placeholder="描述你的训练感受，如：推的时候右边肩膀前侧有点疼，感觉发力不均匀..."></textarea>
+      <div style="margin-top:12px">
+        <button class="btn-generate" onclick="analyzeExercise()">▸ 分析动作</button>
+      </div>
       <div id="analysis-output" style="margin-top:24px">
-        <div class="empty-state">
-          <div class="icon-ring">🔍</div>
-          <p>输入动作名称和训练感受<br>AI 会对比标准规范帮你诊断问题</p>
+        <div class="welcome-area">
+          <div class="empty-state">
+            <div class="icon-ring">&#8981;</div>
+            <h3>Motion Inspector</h3>
+            <p>描述你的训练感受，AI 对比标准规范<br>帮你诊断动作问题，给出具体改进建议</p>
+          </div>
+
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="fc-icon">&#128269;</span>
+              <span class="fc-title">动作对比</span>
+              <span class="fc-desc">找到标准动作规范，和你的描述逐一对比，定位偏差</span>
+              <span class="fc-accent">01</span>
+            </div>
+            <div class="feature-card">
+              <span class="fc-icon">&#9888;</span>
+              <span class="fc-title">风险识别</span>
+              <span class="fc-desc">自动识别疼痛不适信号，判断是否存在动作与伤病的冲突</span>
+              <span class="fc-accent">02</span>
+            </div>
+            <div class="feature-card">
+              <span class="fc-icon">&#9998;</span>
+              <span class="fc-title">改进建议</span>
+              <span class="fc-desc">给出具体可操作的纠正方案，告诉你哪里错了、怎么改</span>
+              <span class="fc-accent">03</span>
+            </div>
+          </div>
+
+          <div class="example-queries">
+            <span class="eq-label">试试这些</span>
+            <span class="eq-chip" onclick="document.getElementById('ex-name').value='杠铃深蹲';document.getElementById('ex-desc').value=this.dataset.desc;analyzeExercise()" data-desc="深蹲时膝盖内侧有点疼，起来的时候感觉不稳">深蹲膝盖内侧疼，起来不稳</span>
+            <span class="eq-chip" onclick="document.getElementById('ex-name').value='哑铃卧推';document.getElementById('ex-desc').value=this.dataset.desc;analyzeExercise()" data-desc="推的时候右边肩膀前侧有点疼，感觉发力不均匀">卧推时右肩前侧疼，发力不均</span>
+            <span class="eq-chip" onclick="document.getElementById('ex-name').value='硬拉';document.getElementById('ex-desc').value=this.dataset.desc;analyzeExercise()" data-desc="做硬拉的时候下背酸的厉害，不确定姿势对不对">硬拉下背酸，不确定姿势对不对</span>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Q&A Tab -->
     <div class="tab-content" id="tab-qa">
-      <div style="display:flex; align-items:center; gap:8px">
-        <textarea class="query-input" id="qa-query" placeholder="输入你的健身问题，如：硬拉的时候下背酸正常吗？" style="flex:1"></textarea>
-      </div>
-      <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
-        <button class="btn-generate" onclick="askQuestion()">▸ 提问</button>
-        <span id="qa-session-badge" style="font-size:0.75rem; color:var(--chalk-dim); display:none;">💬 多轮对话中</span>
-        <button id="qa-new-session-btn" onclick="newQaSession()" style="font-size:0.7rem; background:none; border:1px solid var(--border); color:var(--chalk-dim); padding:4px 10px; border-radius:4px; cursor:pointer; display:none;">新对话</button>
+      <textarea class="query-input" id="qa-query" placeholder="输入你的健身问题，如：硬拉的时候下背酸正常吗？减脂期怎么安排碳水？" style="margin-bottom:8px"></textarea>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="btn-generate" onclick="askQuestion()" style="flex:0 0 auto; width:auto;">▸ 提问</button>
+        <span class="session-badge" id="qa-session-badge" style="display:none;">多轮对话中</span>
+        <button class="btn-secondary" id="qa-new-session-btn" onclick="newQaSession()" style="display:none;">新对话</button>
       </div>
       <div id="qa-output" style="margin-top:24px">
-        <div class="empty-state">
-          <div class="icon-ring">💡</div>
-          <p>输入任何健身问题<br>AI 用知识图谱 + 动作库为你解答</p>
+        <div class="welcome-area">
+          <div class="empty-state">
+            <div class="icon-ring">&#10033;</div>
+            <h3>Knowledge Forge</h3>
+            <p>自由提问任何健身问题，AI 从知识库中找答案<br>支持多轮对话，记住上下文，追问不用重复</p>
+          </div>
+
+          <div class="feature-grid">
+            <div class="feature-card">
+              <span class="fc-icon">&#128300;</span>
+              <span class="fc-title">关联推理</span>
+              <span class="fc-desc">自动关联动作-肌肉-伤病的因果关系，发现深层问题</span>
+              <span class="fc-accent">01</span>
+            </div>
+            <div class="feature-card">
+              <span class="fc-icon">&#128218;</span>
+              <span class="fc-title">知识搜索</span>
+              <span class="fc-desc">从专业文献中精准查找答案，每句话都有据可查</span>
+              <span class="fc-accent">02</span>
+            </div>
+            <div class="feature-card">
+              <span class="fc-icon">&#128172;</span>
+              <span class="fc-title">连续对话</span>
+              <span class="fc-desc">AI 记住前面的对话内容，你可以像和真人教练聊天一样追问</span>
+              <span class="fc-accent">03</span>
+            </div>
+          </div>
+
+          <div class="example-queries">
+            <span class="eq-label">试试这些</span>
+            <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">硬拉的时候下背酸正常吗？</span>
+            <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">减脂期碳水应该怎么安排？</span>
+            <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">深蹲膝盖疼有哪些替代动作？</span>
+            <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">增肌期每天需要吃多少蛋白质？</span>
+            <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">肩袖肌群怎么练？</span>
+          </div>
         </div>
       </div>
     </div>
@@ -665,22 +1150,18 @@
 </div>
 
 <script>
-// ── Tag Toggles ──
-document.querySelectorAll('.tag-group').forEach(group => {
-  group.addEventListener('click', e => {
-    const tag = e.target.closest('.tag');
-    if (!tag) return;
-    tag.classList.toggle('active');
-  });
-});
+/* ================================================================
+   IRON MIND — Client-side logic (API calls, SSE streaming, rendering)
+   ================================================================ */
 
+// ── Scene → Equipment mapping ──
 const SCENE_EQUIPMENT = {
   '居家':   ['哑铃', '自重', '弹力带'],
   '健身房': ['哑铃', '杠铃', '绳索', '腿举机', '史密斯机', '引体向上架', '龙门架'],
   '户外':   ['自重', '弹力带', '单杠'],
 };
 
-// Multi-turn conversation: generate a session ID once per page load
+// ── Multi-turn QA session ──
 let qaSessionId = 'qa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 let qaTurnCount = 0;
 
@@ -690,10 +1171,27 @@ function newQaSession() {
   document.getElementById('qa-session-badge').style.display = 'none';
   document.getElementById('qa-new-session-btn').style.display = 'none';
   document.getElementById('qa-output').innerHTML = `
-    <div class="empty-state">
-      <div class="icon-ring">💡</div>
-      <p>新对话已开始<br>输入你的健身问题</p>
+    <div class="welcome-area">
+      <div class="empty-state">
+        <div class="icon-ring">&#10033;</div>
+        <h3>New Session</h3>
+        <p>新对话已开始，基于知识库 + 图谱向你解答</p>
+      </div>
+      <div class="example-queries">
+        <span class="eq-label">试试这些</span>
+        <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">硬拉的时候下背酸正常吗？</span>
+        <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">减脂期碳水应该怎么安排？</span>
+        <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">深蹲膝盖疼有哪些替代动作？</span>
+      </div>
     </div>`;
+}
+
+// ── Helpers ──
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html) e.innerHTML = html;
+  return e;
 }
 
 function getTags(id) {
@@ -701,11 +1199,8 @@ function getTags(id) {
 }
 
 function getProfile() {
-  // Map scene selections to equipment list
   const scenes = getTags('scene-tags');
   const equipment = [...new Set(scenes.flatMap(s => SCENE_EQUIPMENT[s] || []))];
-
-  // Parse injuries from free-text input
   const injuriesRaw = document.getElementById('injuries-input')?.value?.trim() || '';
   const injuries = injuriesRaw ? [injuriesRaw] : [];
 
@@ -720,6 +1215,16 @@ function getProfile() {
   };
 }
 
+// ── Tag toggle ──
+document.querySelectorAll('.tag-group').forEach(group => {
+  group.addEventListener('click', e => {
+    const tag = e.target.closest('.tag');
+    if (!tag) return;
+    tag.classList.toggle('active');
+  });
+});
+
+// ── Tab switching ──
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
     b.classList.toggle('active', ['plan','analysis','qa'][i] === name);
@@ -728,8 +1233,8 @@ function switchTab(name) {
   document.getElementById('tab-' + name).classList.add('active');
 }
 
-// ── SSE Streaming ──
-async function streamFrom(url, body, outputEl) {
+// ═══════════════ SSE STREAMING ═══════════════
+async function streamFrom(url, body, outputId) {
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -740,7 +1245,6 @@ async function streamFrom(url, body, outputEl) {
   const decoder = new TextDecoder();
   let buffer = '';
 
-  // Clear state
   let stageEl = null;
   let detailEl = null;
   let streamBox = null;
@@ -758,21 +1262,19 @@ async function streamFrom(url, body, outputEl) {
       if (!line.startsWith('data: ')) continue;
       const payload = JSON.parse(line.slice(6));
       const { event, data } = payload;
-      const resultArea = document.getElementById(outputEl);
+      const resultArea = document.getElementById(outputId);
 
       if (event === 'stage') {
-        // Don't clear the advice bubble — only clear pipeline area
+        // Preserve existing advice bubble
         const oldAdvice = resultArea.querySelector('.advice-bubble');
-        const oldPlans = resultArea.querySelectorAll('.plan-card, .result-header, .warning-list');
         resultArea.innerHTML = '';
         if (oldAdvice) resultArea.appendChild(oldAdvice);
-        stageEl = el('div', 'live-stage', `<span class="stage-icon">⚙</span>${data}`);
+        stageEl = el('div', 'live-stage', `<span class="dot-pulse"></span>${data}`);
         resultArea.appendChild(stageEl);
       }
 
       else if (event === 'advice_chunk') {
-        if (!streamBox || streamBox.classList.contains('stream-box')) {
-          // Create advice bubble if not already created
+        if (!streamBox || !streamBox.classList.contains('advice-bubble')) {
           streamBox = el('div', 'advice-bubble', '');
           if (detailEl) detailEl.after(streamBox);
           else if (stageEl) stageEl.after(streamBox);
@@ -782,23 +1284,24 @@ async function streamFrom(url, body, outputEl) {
       }
 
       else if (event === 'advice_done') {
-        // Remove cursor, advice is complete
-        if (streamBox) streamBox.querySelector('.cursor')?.remove();
-        // Reset for next streaming section
+        if (streamBox) {
+          streamBox.querySelector('.cursor')?.remove();
+        }
         streamBox = null;
         streamText = '';
       }
 
       else if (event === 'planner_done') {
+        detailEl?.remove();
         detailEl = el('div', 'stage-detail',
-          `识别模式: <b>${data.skill}</b> · 拆解 ${(data.subtasks||[]).length} 个子任务: ${(data.subtasks||[]).slice(0,4).join('、')}`);
+          `识别: <b>${data.skill}</b> · ${(data.subtasks||[]).length} 子任务 · ${(data.subtasks||[]).slice(0,4).join('、')}`);
         if (stageEl) stageEl.after(detailEl);
       }
 
       else if (event === 'retriever_done') {
-        if (detailEl) detailEl.remove();
+        detailEl?.remove();
         detailEl = el('div', 'stage-detail',
-          `检索到 <b>${data.count}</b> 个匹配动作: ${(data.names||[]).join('、')}`);
+          `检索到 <b>${data.count}</b> 个匹配项: ${(data.names||[]).join('、')}`);
         if (stageEl) stageEl.after(detailEl);
       }
 
@@ -813,35 +1316,28 @@ async function streamFrom(url, body, outputEl) {
       }
 
       else if (event === 'factcheck_done') {
-        if (streamBox) {
-          streamBox.querySelector('.cursor')?.remove();
-        }
-        if (detailEl) detailEl.remove();
+        if (streamBox) streamBox.querySelector('.cursor')?.remove();
+        detailEl?.remove();
+        const icon = data.safe ? '&#10003;' : '&#9888;';
         detailEl = el('div', 'stage-detail',
-          `${data.safe ? '✓' : '⚠'} 安全审查完成 · ${data.issues} 个问题 · 置信度 ${Math.round(data.confidence*100)}%`);
+          `${icon} 安全审查 · ${data.issues} 问题 · 置信度 ${Math.round((data.confidence||0)*100)}%`);
         if (streamBox) streamBox.after(detailEl);
         else if (stageEl) stageEl.after(detailEl);
       }
 
       else if (event === 'done') {
-        const resultArea = document.getElementById(outputEl);
+        const resultArea = document.getElementById(outputId);
         const oldAdvice = resultArea.querySelector('.advice-bubble');
         resultArea.innerHTML = '';
         if (oldAdvice) resultArea.appendChild(oldAdvice);
         renderPlanResult(resultArea, data);
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
   }
 }
 
-function el(tag, cls, html) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (html) e.innerHTML = html;
-  return e;
-}
-
-// ── Render Results ──
+// ═══════════════ RENDER PLAN ═══════════════
 function renderPlanResult(container, data) {
   // Stats bar
   const stats = el('div', 'result-header', '');
@@ -849,28 +1345,31 @@ function renderPlanResult(container, data) {
     `<span class="dot green"></span>置信度 ${Math.round((data.confidence||0)*100)}%`));
   if (data.warnings && data.warnings.length) {
     stats.appendChild(el('div', 'stat-pill',
-      `<span class="dot amber"></span>${data.warnings.length} 个提示`));
+      `<span class="dot amber"></span>${data.warnings.length} 提示`));
   }
   if (data.requires_review) {
     stats.appendChild(el('div', 'stat-pill',
       `<span class="dot red"></span>需人工确认`));
   }
+  stats.appendChild(el('div', 'stat-pill',
+    `<span class="dot green" style="background:var(--steel-light);box-shadow:none"></span>${(data.days||[]).length} 天计划`));
   container.appendChild(stats);
 
   // Warnings
   if (data.warnings && data.warnings.length) {
-    const w = el('div', 'warning-list', data.warnings.map(s => `· ${s}`).join('<br>'));
-    container.appendChild(w);
+    container.appendChild(el('div', 'warning-list',
+      data.warnings.map(s => `· ${s}`).join('<br>')));
   }
 
-  // Plan cards
+  // Day cards
   const days = data.days || [];
-  days.forEach(day => {
+  days.forEach((day, idx) => {
     const card = el('div', 'plan-card open', '');
+    card.style.animationDelay = (0.05 * idx) + 's';
     card.innerHTML = `
       <div class="plan-card-header" onclick="this.parentElement.classList.toggle('open')">
         <span>DAY ${day.day} · ${day.focus || ''}</span>
-        <span style="font-family:var(--font-mono);font-size:12px;color:var(--chalk-dim)">${(day.exercises||[]).length} 动作</span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--chalk-faint);font-weight:400;">${(day.exercises||[]).length} ACTIONS</span>
       </div>
       <div class="plan-card-body">
         ${(day.exercises||[]).map(ex => `
@@ -878,7 +1377,7 @@ function renderPlanResult(container, data) {
             <span class="exercise-name">${ex.name || '?'}</span>
             <span class="exercise-stat">${ex.sets || '?'} 组</span>
             <span class="exercise-stat">${ex.reps || '?'}</span>
-            <span class="exercise-stat">休${ex.rest || '60s'}</span>
+            <span class="exercise-stat">${ex.rest || '60s'}</span>
             ${ex.notes ? `<span class="exercise-note">${ex.notes}</span>` : ''}
           </div>
         `).join('')}
@@ -887,35 +1386,65 @@ function renderPlanResult(container, data) {
     container.appendChild(card);
   });
 
-  // If no structured days, show raw JSON
   if (!days.length && data.raw) {
-    const raw = el('div', 'stream-box', data.raw);
-    container.appendChild(raw);
+    container.appendChild(el('div', 'stream-box', data.raw));
   }
 }
 
-// ── Actions ──
+function renderAnalysisResult(container, data) {
+  const severityColors = { '安全': 'var(--cool-blue)', '注意': 'var(--warn)', '警告': 'var(--danger)' };
+  const color = severityColors[data.severity] || 'var(--chalk)';
+
+  const header = el('div', 'result-header', '');
+  header.appendChild(el('div', 'stat-pill',
+    `<span class="dot" style="background:${color}"></span>严重程度: <b>${data.severity || '未知'}</b>`));
+  if (data.confidence) {
+    header.appendChild(el('div', 'stat-pill',
+      `<span class="dot green"></span>置信度 ${Math.round((data.confidence||0)*100)}%`));
+  }
+  container.appendChild(header);
+
+  const blocks = [
+    { title: '发现的问题', items: (data.issues_found||[]), accent: 'var(--danger)' },
+    { title: '改进建议',   items: (data.suggestions||[]),  accent: 'var(--forge-amber)' },
+  ];
+
+  blocks.forEach((b, i) => {
+    const div = el('div', 'analysis-block', '');
+    div.style.animationDelay = (0.05 * i) + 's';
+    div.innerHTML = `<h4 style="color:${b.accent}">${b.title}</h4>`;
+    const ul = document.createElement('ul');
+    if (b.items.length > 0) {
+      b.items.forEach(item => { const li = document.createElement('li'); li.textContent = item; ul.appendChild(li); });
+    } else {
+      const li = document.createElement('li');
+      li.textContent = '暂无';
+      li.style.color = 'var(--chalk-faint)';
+      ul.appendChild(li);
+    }
+    div.appendChild(ul);
+    container.appendChild(div);
+  });
+}
+
+// ═══════════════ API ACTIONS ═══════════════
+
 async function generatePlan() {
   const btn = document.getElementById('btn-generate');
   btn.disabled = true;
-  btn.textContent = '⟳ 生成中';
+  btn.textContent = '⟳ FORGING...';
   const output = document.getElementById('plan-output');
   output.innerHTML = '';
   output.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   try {
-    const body = {
-      ...getProfile(),
-      query: document.getElementById('plan-query')?.value || ''
-    };
+    const body = { ...getProfile(), query: document.getElementById('plan-query')?.value || '' };
     await streamFrom('/api/generate-plan', body, 'plan-output');
   } catch(e) {
     output.innerHTML = `<div class="live-stage" style="border-left-color:var(--danger)">请求失败: ${e.message}</div>`;
   }
   btn.disabled = false;
   btn.textContent = '▸ 生成计划';
-  // Scroll to top of results
-  output.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function analyzeExercise() {
@@ -952,11 +1481,11 @@ async function analyzeExercise() {
         const { event, data } = JSON.parse(line.slice(6));
 
         if (event === 'stage') {
-          stageEl = el('div', 'live-stage', data);
+          stageEl = el('div', 'live-stage', `<span class="dot-pulse"></span>${data}`);
           output.appendChild(stageEl);
         } else if (event === 'retriever_done') {
-          const d = el('div', 'stage-detail', `检索到 <b>${data.count}</b> 个相关动作参考`);
-          output.appendChild(d);
+          output.appendChild(el('div', 'stage-detail',
+            `检索到 <b>${data.count}</b> 个相关动作参考`));
         } else if (event === 'writer_chunk') {
           if (!streamBox) {
             streamBox = el('div', 'stream-box', '');
@@ -966,8 +1495,8 @@ async function analyzeExercise() {
           streamBox.innerHTML = streamText + '<span class="cursor"></span>';
         } else if (event === 'done') {
           if (streamBox) streamBox.querySelector('.cursor')?.remove();
-          // Show structured analysis below the streamed text
-          if (stageEl) stageEl.remove();
+          stageEl?.remove();
+          output.querySelectorAll('.live-stage, .stage-detail').forEach(e => e.remove());
           const resultDiv = el('div', '', '');
           renderAnalysisResult(resultDiv, data);
           output.appendChild(resultDiv);
@@ -977,35 +1506,6 @@ async function analyzeExercise() {
   } catch(e) {
     output.innerHTML = `<div class="live-stage" style="border-left-color:var(--danger)">请求失败: ${e.message}</div>`;
   }
-}
-
-function renderAnalysisResult(container, data) {
-  const severityColor = { '安全': 'var(--safe)', '注意': 'var(--warn)', '警告': 'var(--danger)' };
-  const color = severityColor[data.severity] || 'var(--chalk)';
-
-  const header = el('div', 'result-header', '');
-  header.appendChild(el('div', 'stat-pill', `<span class="dot" style="background:${color}"></span>严重程度: <b>${data.severity || '未知'}</b>`));
-  if (data.confidence) {
-    header.appendChild(el('div', 'stat-pill', `<span class="dot green"></span>置信度 ${Math.round(data.confidence*100)}%`));
-  }
-  container.appendChild(header);
-
-  const blocks = [
-    { title: '发现的问题', content: (data.issues_found||[]), type: 'list', color: 'var(--danger)' },
-    { title: '改进建议', content: (data.suggestions||[]), type: 'list', color: 'var(--amber)' },
-  ];
-
-  blocks.forEach(b => {
-    const div = el('div', 'analysis-block', '');
-    div.innerHTML = `<h4 style="color:${b.color}">${b.title}</h4>`;
-    if (b.type === 'list') {
-      const list = b.content.length
-        ? b.content.map(i => `<li>${i}</li>`).join('')
-        : '<li style="color:var(--chalk-dim)">暂无</li>';
-      div.innerHTML += `<ul>${list}</ul>`;
-    }
-    container.appendChild(div);
-  });
 }
 
 async function askQuestion() {
@@ -1020,6 +1520,7 @@ async function askQuestion() {
 
   const body = { ...getProfile(), question, session_id: qaSessionId };
   qaTurnCount++;
+
   let stageEl = null, streamBox = null, streamText = '';
 
   try {
@@ -1044,7 +1545,7 @@ async function askQuestion() {
         const { event, data } = JSON.parse(line.slice(6));
 
         if (event === 'stage') {
-          stageEl = el('div', 'live-stage', data);
+          stageEl = el('div', 'live-stage', `<span class="dot-pulse"></span>${data}`);
           output.appendChild(stageEl);
         } else if (event === 'graph_done') {
           const painData = data.pain_data || {};
@@ -1052,17 +1553,15 @@ async function askQuestion() {
           const rehab = painData.suggested_rehab || [];
           if (causes.length || rehab.length) {
             const graphDiv = el('div', 'stage-detail', '');
-            let html = `🔗 知识图谱推理完成`;
-            if (causes.length) html += `<br>关联伤病: ${causes.map(c => c.injury).join('、')}`;
-            if (rehab.length) html += `<br>康复动作: ${rehab.join('、')}`;
-            graphDiv.innerHTML = html;
+            graphDiv.innerHTML = `&#9883; 知识图谱推理完成`;
+            if (causes.length) graphDiv.innerHTML += `<br>关联: ${causes.map(c => c.injury).join('、')}`;
+            if (rehab.length) graphDiv.innerHTML += `<br>康复建议: ${rehab.join('、')}`;
             output.appendChild(graphDiv);
           }
         } else if (event === 'retriever_done') {
           if (data.count > 0) {
-            const d = el('div', 'stage-detail',
-              `检索到 <b>${data.count}</b> 个相关知识条目: ${(data.names||[]).slice(0,5).join('、')}`);
-            output.appendChild(d);
+            output.appendChild(el('div', 'stage-detail',
+              `检索到 <b>${data.count}</b> 个相关知识: ${(data.names||[]).slice(0,5).join('、')}`));
           }
         } else if (event === 'answer_chunk') {
           if (!streamBox) {
@@ -1073,12 +1572,10 @@ async function askQuestion() {
           streamBox.innerHTML = streamText + '<span class="cursor"></span>';
         } else if (event === 'done') {
           if (streamBox) streamBox.querySelector('.cursor')?.remove();
-          // Clear stages, keep answer
           output.querySelectorAll('.live-stage, .stage-detail').forEach(e => e.remove());
-          // Show multi-turn badge after first turn
           if (qaTurnCount >= 1) {
-            document.getElementById('qa-session-badge').style.display = 'inline';
-            document.getElementById('qa-new-session-btn').style.display = 'inline';
+            document.getElementById('qa-session-badge').style.display = 'inline-flex';
+            document.getElementById('qa-new-session-btn').style.display = 'inline-block';
           }
         }
       }

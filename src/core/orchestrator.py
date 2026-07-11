@@ -194,7 +194,7 @@ class Orchestrator:
         # 2. 初步分析 —— 在流水线开始前给出教练式的口头建议
         # 设计意图：LLM 调用耗时较长，先推送一个简短的分析结果让用户有内容可看，
         # 避免用户面对空白页面等待，同时建立教练对话感
-        yield ("stage", "💬 正在分析你的情况...")
+        yield ("stage", "[分析] 正在分析你的情况...")
         advice_prompt = self._build_advice_prompt(profile_dict, query)
         advice_text = ""
         for chunk in self.writer.llm.chat_stream(
@@ -205,20 +205,20 @@ class Orchestrator:
         yield ("advice_done", advice_text)
 
         # 3. 规划器
-        yield ("stage", "🧠 Planner 正在拆解任务...")
+        yield ("stage", "[规划] Planner 正在拆解任务...")
         plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict)
         yield ("planner_done", {"skill": plan.get("skill", "unknown"),
                                  "subtasks": plan.get("subtasks", [])})
 
         # 3. 检索器
-        yield ("stage", "🔍 Retriever 正在检索动作库...")
+        yield ("stage", "[检索] Retriever 正在检索动作库...")
         retrieved = self.retriever.retrieve(plan)
         exercises = retrieved.get("exercises", [])
         yield ("retriever_done", {"count": len(exercises),
                                    "names": [e.get("name", "?") for e in exercises[:8]]})
 
         # 4. Writer —— 流式输出
-        yield ("stage", "✍️ Writer 正在生成训练计划...")
+        yield ("stage", "[生成] Writer 正在生成训练计划...")
         full_text = ""
         for event, data in self.writer.write_plan_stream(
             retrieved, profile_dict, plan.get("skill_config", {})
@@ -249,7 +249,7 @@ class Orchestrator:
                     ex["name"] = ex.pop("movement")
 
         # 5. 事实核查器
-        yield ("stage", "🛡️ FactChecker 正在安全审查...")
+        yield ("stage", "[审查] FactChecker 正在安全审查...")
         check = self.fact_checker.check(result, profile_dict)
         result["warnings"] = [i["issue"] for i in check.get("issues", [])]
         result["requires_review"] = check.get("requires_human_review", False)
@@ -318,11 +318,11 @@ class Orchestrator:
         产出 (event_type, data) 元组，与 generate_plan_stream 模式一致。"""
         profile_dict = profile.model_dump()
 
-        yield ("stage", "🔍 正在检索动作标准规范...")
+        yield ("stage", "[检索] 正在检索动作标准规范...")
         retrieved = self.retriever.retrieve({"subtasks": [exercise_name], "skill_config": {}})
         yield ("retriever_done", {"count": len(retrieved.get("exercises", []))})
 
-        yield ("stage", "🧠 正在分析动作问题...")
+        yield ("stage", "[分析] 正在分析动作问题...")
         full_text = ""
         for event, data in self.writer.write_analysis_stream(
             exercise_name, user_desc, retrieved, profile_dict
@@ -370,7 +370,7 @@ class Orchestrator:
 
         graph_data = None
         if is_pain_q:
-            yield ("stage", "🔗 正在用知识图谱推理伤病关联...")
+            yield ("stage", "[图谱] 正在用知识图谱推理伤病关联...")
             exercise_name = self._extract_exercise_from_question(question)
             if exercise_name:
                 # 调用 MCP 工具进行图谱推理：给定动作+症状，找出可能的伤病原因链
@@ -382,7 +382,7 @@ class Orchestrator:
 
         # === 知识库搜索 ===
         # search_with_fallback 内部实现：向量检索 → 数量不足时降级关键词检索 → RRF 融合 → LLM 重排序
-        yield ("stage", "📚 正在检索健身知识库...")
+        yield ("stage", "[知识库] 正在检索健身知识库...")
         knowledge_chunks = self.knowledge.search_with_fallback(question)
         yield ("knowledge_done", {"count": len(knowledge_chunks)})
 
@@ -394,7 +394,7 @@ class Orchestrator:
                                    "names": [e.get("name", "?") for e in exercises[:6]]})
 
         # === 构建带引用来源和对话上下文的回答提示词 ===
-        yield ("stage", "🧠 正在为你解答...")
+        yield ("stage", "[解答] 正在为你解答...")
         sources_text = ""
         for i, chunk in enumerate(knowledge_chunks, 1):
             snippet = chunk["content"][:400].replace("\n", " ")
@@ -434,7 +434,7 @@ class Orchestrator:
 {"8. 如果用户使用了'改一下''换一个''刚才说的'等指代，请结合对话历史中的上下文理解用户的真正意图。" if conv_context else ""}"""
 
         full_text = ""
-        for chunk in self.writer.llm.chat_stream([{"role": "user", "content": prompt}], temperature=0.5, model="reasoner"):
+        for chunk in self.writer.llm.chat_stream([{"role": "user", "content": prompt}], temperature=0.5):
             full_text += chunk
             yield ("answer_chunk", chunk)
 
