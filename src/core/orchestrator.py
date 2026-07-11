@@ -332,6 +332,9 @@ class Orchestrator:
                 yield ("writer_chunk", data)
             elif event == "done":
                 result = data
+        # 将检索到的参考动作名附加到结果中，供前端展示出处
+        ref_exercises = [e.get("name", "") for e in retrieved.get("exercises", [])[:5]]
+        result["reference_exercises"] = ref_exercises
         yield ("done", result)
 
     def answer_question_stream(self, question: str, profile: UserProfileInput, session_id: str = None):
