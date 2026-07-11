@@ -239,11 +239,12 @@ def run_ragas_eval(
         contexts_list.append(contexts)
 
     # ---- 步骤 2：构造 RAGAS EvaluationDataset ----
-    eval_dataset = EvaluationDataset.from_dict({
-        "question": questions,
-        "answer": answers,
-        "contexts": contexts_list,
-    })
+    # ragas 0.4.x: 字段名改为 user_input / response / retrieved_contexts
+    samples = [
+        {"user_input": q, "response": a, "retrieved_contexts": c}
+        for q, a, c in zip(questions, answers, contexts_list)
+    ]
+    eval_dataset = EvaluationDataset.from_dict(samples)
 
     # ---- 步骤 3：运行 RAGAS 评测 ----
     logger.info(f"Running RAGAS evaluation with {eval_model} as judge...")
@@ -269,7 +270,9 @@ def run_ragas_eval(
         df = result.to_pandas()
         faithfulness_mean = float(df["faithfulness"].mean()) if "faithfulness" in df.columns else 0.0
         answer_relevancy_mean = float(df["answer_relevancy"].mean()) if "answer_relevancy" in df.columns else 0.0
-        context_relevance_mean = float(df["context_relevance"].mean()) if "context_relevance" in df.columns else 0.0
+        # ragas 0.4.x may use "context_relevance" or "context_relevancy"
+        cr_col = "context_relevance" if "context_relevance" in df.columns else "context_relevancy"
+        context_relevance_mean = float(df[cr_col].mean()) if cr_col in df.columns else 0.0
     except Exception:
         faithfulness_mean = float(result.get("faithfulness", 0))
         answer_relevancy_mean = float(result.get("answer_relevancy", 0))
