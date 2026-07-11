@@ -1425,6 +1425,15 @@ function renderAnalysisResult(container, data) {
     div.appendChild(ul);
     container.appendChild(div);
   });
+
+  // 参考来源
+  const refs = data.reference_exercises || [];
+  if (refs.length) {
+    const refDiv = el('div', 'stage-detail', '');
+    refDiv.style.cssText = 'margin-top:16px; font-size:12px; padding:12px 16px;';
+    refDiv.innerHTML = `参考动作标准：${refs.map(r => `<b>${r}</b>`).join('、')}`;
+    container.appendChild(refDiv);
+  }
 }
 
 // ═══════════════ API ACTIONS ═══════════════
@@ -1487,15 +1496,15 @@ async function analyzeExercise() {
           output.appendChild(el('div', 'stage-detail',
             `检索到 <b>${data.count}</b> 个相关动作参考`));
         } else if (event === 'writer_chunk') {
+          // 分析过程产生的是 JSON，不直接展示给用户
+          // 只显示一个简洁的状态提示
           if (!streamBox) {
-            streamBox = el('div', 'stream-box', '');
+            streamBox = el('div', 'live-stage', '<span class="dot-pulse"></span>正在分析动作问题，对比标准规范...');
             output.appendChild(streamBox);
           }
-          streamText += data;
-          streamBox.innerHTML = streamText + '<span class="cursor"></span>';
         } else if (event === 'done') {
-          if (streamBox) streamBox.querySelector('.cursor')?.remove();
           stageEl?.remove();
+          if (streamBox) streamBox.remove();
           output.querySelectorAll('.live-stage, .stage-detail').forEach(e => e.remove());
           const resultDiv = el('div', '', '');
           renderAnalysisResult(resultDiv, data);
