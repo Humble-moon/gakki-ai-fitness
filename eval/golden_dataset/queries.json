@@ -3,8 +3,21 @@
     "id": "q001",
     "query": "180/80kg，练了一年，只有哑铃和杠铃，一周四练怎么安排增肌计划",
     "category": "muscle_building",
-    "relevant_doc_ids": ["杠铃卧推", "哑铃卧推", "上斜卧推", "杠铃推举", "哑铃推举", "杠铃弯举", "哑铃弯举", "坐姿划船"],
-    "hard_negative_ids": ["平板支撑", "俄罗斯转体", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "哑铃卧推",
+      "上斜哑铃卧推",
+      "杠铃推举",
+      "哑铃推举",
+      "杠铃弯举",
+      "哑铃弯举",
+      "坐姿绳索划船"
+    ],
+    "hard_negative_ids": [
+      "平板支撑",
+      "俄罗斯转体",
+      "站姿提踵"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -13,8 +26,20 @@
     "id": "q002",
     "query": "175/65kg，新手想增重增肌，只有可调节哑铃，三天分化怎么练",
     "category": "muscle_building",
-    "relevant_doc_ids": ["哑铃卧推", "哑铃推举", "哑铃弯举", "哑铃飞鸟", "高脚杯深蹲", "罗马尼亚硬拉", "划船"],
-    "hard_negative_ids": ["平板支撑", "提踵", "俄罗斯转体"],
+    "relevant_doc_ids": [
+      "哑铃卧推",
+      "哑铃推举",
+      "哑铃弯举",
+      "哑铃飞鸟",
+      "高脚杯深蹲",
+      "哑铃罗马尼亚硬拉",
+      "杠铃划船"
+    ],
+    "hard_negative_ids": [
+      "平板支撑",
+      "站姿提踵",
+      "俄罗斯转体"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -23,8 +48,22 @@
     "id": "q003",
     "query": "增肌期胸肩日，杠铃哑铃都有，给个详细训练计划",
     "category": "muscle_building",
-    "relevant_doc_ids": ["杠铃卧推", "哑铃卧推", "上斜卧推", "杠铃推举", "哑铃推举", "侧平举", "前平举", "哑铃飞鸟", "绳索夹胸"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "哑铃卧推",
+      "上斜哑铃卧推",
+      "杠铃推举",
+      "哑铃推举",
+      "哑铃侧平举",
+      "哑铃前平举",
+      "哑铃飞鸟",
+      "绳索夹胸"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -33,8 +72,21 @@
     "id": "q004",
     "query": "172/72kg，练了两年，想冲大重量增肌，一周五练怎么安排",
     "category": "muscle_building",
-    "relevant_doc_ids": ["杠铃卧推", "深蹲", "硬拉", "杠铃推举", "杠铃弯举", "坐姿划船", "罗马尼亚硬拉", "史密斯机深蹲"],
-    "hard_negative_ids": ["平板支撑", "提踵", "俄罗斯转体"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃推举",
+      "杠铃弯举",
+      "坐姿绳索划船",
+      "哑铃罗马尼亚硬拉",
+      "史密斯机深蹲"
+    ],
+    "hard_negative_ids": [
+      "平板支撑",
+      "站姿提踵",
+      "俄罗斯转体"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -43,8 +95,21 @@
     "id": "q005",
     "query": "增肌增到瓶颈期了，185/90kg，想突破维度用什么分化训练好",
     "category": "muscle_building",
-    "relevant_doc_ids": ["杠铃卧推", "深蹲", "硬拉", "杠铃推举", "上斜卧推", "坐姿划船", "罗马尼亚硬拉", "窄距卧推"],
-    "hard_negative_ids": ["平板支撑", "提踵", "举腿"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃推举",
+      "上斜哑铃卧推",
+      "坐姿绳索划船",
+      "哑铃罗马尼亚硬拉",
+      "窄距杠铃卧推"
+    ],
+    "hard_negative_ids": [
+      "平板支撑",
+      "站姿提踵",
+      "悬垂举腿"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "hard"
@@ -53,8 +118,18 @@
     "id": "q006",
     "query": "居家增肌只有一对哑铃，怎么把胸练大，一周两练胸可以吗",
     "category": "muscle_building",
-    "relevant_doc_ids": ["哑铃卧推", "哑铃飞鸟", "窄距卧推", "上斜卧推", "臂屈伸"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "哑铃卧推",
+      "哑铃飞鸟",
+      "窄距杠铃卧推",
+      "上斜哑铃卧推",
+      "双杠臂屈伸"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -63,8 +138,19 @@
     "id": "q007",
     "query": "增肌期背日怎么练，引体向上做不了怎么办",
     "category": "muscle_building",
-    "relevant_doc_ids": ["高位下拉", "坐姿划船", "哑铃弯举", "杠铃弯举", "面拉", "直臂下压"],
-    "hard_negative_ids": ["深蹲", "提踵", "平板支撑"],
+    "relevant_doc_ids": [
+      "高位下拉",
+      "坐姿绳索划船",
+      "哑铃弯举",
+      "杠铃弯举",
+      "绳索面拉",
+      "直臂下压"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "站姿提踵",
+      "平板支撑"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -73,8 +159,21 @@
     "id": "q008",
     "query": "想增肌但时间不多，一周三练全身分化，每次一小时怎么安排",
     "category": "muscle_building",
-    "relevant_doc_ids": ["杠铃卧推", "深蹲", "硬拉", "杠铃推举", "坐姿划船", "杠铃弯举", "高脚杯深蹲", "罗马尼亚硬拉"],
-    "hard_negative_ids": ["提踵", "耸肩", "俄罗斯转体"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃推举",
+      "坐姿绳索划船",
+      "杠铃弯举",
+      "高脚杯深蹲",
+      "哑铃罗马尼亚硬拉"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "俄罗斯转体"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -83,8 +182,21 @@
     "id": "q009",
     "query": "170/60kg，特别瘦想增肌，是不是先增重再练，该怎么吃怎么练",
     "category": "muscle_building",
-    "relevant_doc_ids": ["杠铃卧推", "深蹲", "硬拉", "杠铃推举", "哑铃卧推", "坐姿划船", "杠铃弯举", "哑铃弯举"],
-    "hard_negative_ids": ["平板支撑", "提踵", "举腿"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃推举",
+      "哑铃卧推",
+      "坐姿绳索划船",
+      "杠铃弯举",
+      "哑铃弯举"
+    ],
+    "hard_negative_ids": [
+      "平板支撑",
+      "站姿提踵",
+      "悬垂举腿"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -93,8 +205,20 @@
     "id": "q010",
     "query": "增肌期手臂太细，想重点练二头三头，给个手臂强化计划",
     "category": "muscle_building",
-    "relevant_doc_ids": ["杠铃弯举", "哑铃弯举", "锤式弯举", "绳索下压", "窄距卧推", "颈后臂屈伸", "臂屈伸"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃弯举",
+      "哑铃弯举",
+      "锤式弯举",
+      "绳索下压",
+      "窄距杠铃卧推",
+      "哑铃颈后臂屈伸",
+      "双杠臂屈伸"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -103,8 +227,21 @@
     "id": "q011",
     "query": "165/70kg想刷脂，健身房有全套器械，一周五练怎么安排",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "坐姿划船", "杠铃推举", "罗马尼亚硬拉", "箭步蹲", "高位下拉"],
-    "hard_negative_ids": ["提踵", "耸肩", "颈后臂屈伸"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "坐姿绳索划船",
+      "杠铃推举",
+      "哑铃罗马尼亚硬拉",
+      "哑铃负重箭步蹲",
+      "高位下拉"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "哑铃颈后臂屈伸"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -113,8 +250,21 @@
     "id": "q012",
     "query": "减脂期不想掉肌肉，HIIT 和力量训练怎么搭配，一周四练",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "杠铃推举", "坐姿划船", "箭步蹲", "罗马尼亚硬拉", "高脚杯深蹲"],
-    "hard_negative_ids": ["提踵", "耸肩", "面拉"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "杠铃推举",
+      "坐姿绳索划船",
+      "哑铃负重箭步蹲",
+      "哑铃罗马尼亚硬拉",
+      "高脚杯深蹲"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "绳索面拉"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -123,8 +273,21 @@
     "id": "q013",
     "query": "减脂塑形，女生，160/55kg，不想练太大只想要线条，怎么练",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "箭步蹲", "臀推", "罗马尼亚硬拉", "哑铃推举", "坐姿划船", "哑铃飞鸟", "高位下拉"],
-    "hard_negative_ids": ["杠铃弯举", "杠铃卧推", "窄距卧推"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "哑铃负重箭步蹲",
+      "杠铃臀推",
+      "哑铃罗马尼亚硬拉",
+      "哑铃推举",
+      "坐姿绳索划船",
+      "哑铃飞鸟",
+      "高位下拉"
+    ],
+    "hard_negative_ids": [
+      "杠铃弯举",
+      "杠铃卧推",
+      "窄距杠铃卧推"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -133,8 +296,21 @@
     "id": "q014",
     "query": "减脂期碳水循环配合什么训练计划好，172/78kg，一周六练",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "坐姿划船", "箭步蹲", "罗马尼亚硬拉", "高位下拉", "哑铃推举"],
-    "hard_negative_ids": ["提踵", "耸肩", "臂屈伸"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "坐姿绳索划船",
+      "哑铃负重箭步蹲",
+      "哑铃罗马尼亚硬拉",
+      "高位下拉",
+      "哑铃推举"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "双杠臂屈伸"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "hard"
@@ -143,8 +319,21 @@
     "id": "q015",
     "query": "178/85kg，体脂25%，想减到15%要多久，训练计划怎么定",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "坐姿划船", "箭步蹲", "罗马尼亚硬拉", "高位下拉", "哑铃飞鸟"],
-    "hard_negative_ids": ["提踵", "耸肩", "锤式弯举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "坐姿绳索划船",
+      "哑铃负重箭步蹲",
+      "哑铃罗马尼亚硬拉",
+      "高位下拉",
+      "哑铃飞鸟"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "锤式弯举"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -153,8 +342,21 @@
     "id": "q016",
     "query": "居家减脂只有弹力带和自重，怎么安排一周训练，168/72kg",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "箭步蹲", "平板支撑", "举腿", "俄罗斯转体", "臀推", "高脚杯深蹲", "分腿蹲"],
-    "hard_negative_ids": ["杠铃卧推", "硬拉", "杠铃弯举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "哑铃负重箭步蹲",
+      "平板支撑",
+      "悬垂举腿",
+      "俄罗斯转体",
+      "杠铃臀推",
+      "高脚杯深蹲",
+      "保加利亚分腿蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃硬拉",
+      "杠铃弯举"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -163,8 +365,21 @@
     "id": "q017",
     "query": "减脂期晚上训练还是早上训练好，空腹有氧到底有没有用",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "箭步蹲", "罗马尼亚硬拉", "高位下拉", "哑铃推举", "哑铃飞鸟"],
-    "hard_negative_ids": ["提踵", "耸肩", "锤式弯举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "哑铃负重箭步蹲",
+      "哑铃罗马尼亚硬拉",
+      "高位下拉",
+      "哑铃推举",
+      "哑铃飞鸟"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "锤式弯举"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -173,8 +388,21 @@
     "id": "q018",
     "query": "减脂新手入门，170/80kg，零基础应该从什么动作开始练",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "箭步蹲", "哑铃推举", "坐姿划船", "高脚杯深蹲", "哑铃飞鸟", "罗马尼亚硬拉", "平板支撑"],
-    "hard_negative_ids": ["杠铃弯举", "窄距卧推", "颈后臂屈伸"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "哑铃负重箭步蹲",
+      "哑铃推举",
+      "坐姿绳索划船",
+      "高脚杯深蹲",
+      "哑铃飞鸟",
+      "哑铃罗马尼亚硬拉",
+      "平板支撑"
+    ],
+    "hard_negative_ids": [
+      "杠铃弯举",
+      "窄距杠铃卧推",
+      "哑铃颈后臂屈伸"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -183,8 +411,21 @@
     "id": "q019",
     "query": "刷脂期练后碳水什么时候吃最好，训练计划要注意什么",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "坐姿划船", "箭步蹲", "罗马尼亚硬拉", "哑铃推举", "高位下拉"],
-    "hard_negative_ids": ["提踵", "耸肩", "杠铃弯举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "坐姿绳索划船",
+      "哑铃负重箭步蹲",
+      "哑铃罗马尼亚硬拉",
+      "哑铃推举",
+      "高位下拉"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "杠铃弯举"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -193,8 +434,21 @@
     "id": "q020",
     "query": "想瘦肚子和腰两侧，178/76kg，配合什么力量训练最有效",
     "category": "fat_loss",
-    "relevant_doc_ids": ["深蹲", "硬拉", "箭步蹲", "俄罗斯转体", "举腿", "平板支撑", "罗马尼亚硬拉", "哑铃飞鸟"],
-    "hard_negative_ids": ["杠铃弯举", "提踵", "耸肩"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "哑铃负重箭步蹲",
+      "俄罗斯转体",
+      "悬垂举腿",
+      "平板支撑",
+      "哑铃罗马尼亚硬拉",
+      "哑铃飞鸟"
+    ],
+    "hard_negative_ids": [
+      "杠铃弯举",
+      "站姿提踵",
+      "哑铃耸肩"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -203,8 +457,17 @@
     "id": "q021",
     "query": "深蹲的时候膝盖总是内扣，怎么纠正",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["深蹲", "高脚杯深蹲", "箭步蹲", "分腿蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "高脚杯深蹲",
+      "哑铃负重箭步蹲",
+      "保加利亚分腿蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "深蹲",
     "problem_type": "form_issue",
@@ -215,8 +478,16 @@
     "id": "q022",
     "query": "硬拉完下背特别酸，是不是姿势不对",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["硬拉", "罗马尼亚硬拉", "深蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃硬拉",
+      "哑铃罗马尼亚硬拉",
+      "杠铃深蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "硬拉",
     "problem_type": "pain_symptom",
@@ -227,8 +498,18 @@
     "id": "q023",
     "query": "卧推时肩膀咔咔响，不疼但是很担心",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["杠铃卧推", "哑铃卧推", "上斜卧推", "面拉", "哑铃飞鸟"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "哑铃卧推",
+      "上斜哑铃卧推",
+      "绳索面拉",
+      "哑铃飞鸟"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "杠铃卧推",
     "problem_type": "form_issue",
@@ -239,8 +520,18 @@
     "id": "q024",
     "query": "哑铃侧平举三角肌没感觉，斜方肌反而酸了",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["侧平举", "哑铃推举", "杠铃推举", "前平举", "面拉"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "哑铃侧平举",
+      "哑铃推举",
+      "杠铃推举",
+      "哑铃前平举",
+      "绳索面拉"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "侧平举",
     "problem_type": "form_issue",
@@ -251,8 +542,17 @@
     "id": "q025",
     "query": "引体向上一个都做不了怎么练背",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["高位下拉", "坐姿划船", "直臂下压", "哑铃弯举"],
-    "hard_negative_ids": ["深蹲", "提踵", "窄距卧推"],
+    "relevant_doc_ids": [
+      "高位下拉",
+      "坐姿绳索划船",
+      "直臂下压",
+      "哑铃弯举"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "站姿提踵",
+      "窄距杠铃卧推"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "引体向上",
     "problem_type": "capability_gap",
@@ -263,8 +563,18 @@
     "id": "q026",
     "query": "深蹲到底要不要蹲到平行以下，半蹲和全蹲哪个好",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["深蹲", "高脚杯深蹲", "史密斯机深蹲", "箭步蹲", "分腿蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "高脚杯深蹲",
+      "史密斯机深蹲",
+      "哑铃负重箭步蹲",
+      "保加利亚分腿蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "深蹲",
     "problem_type": "technique_question",
@@ -275,8 +585,16 @@
     "id": "q027",
     "query": "弯举时手腕疼，是不是握法有问题",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["杠铃弯举", "哑铃弯举", "锤式弯举"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃弯举",
+      "哑铃弯举",
+      "锤式弯举"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "杠铃弯举",
     "problem_type": "pain_symptom",
@@ -287,8 +605,18 @@
     "id": "q028",
     "query": "杠铃推举过头时肩膀有弹响怎么办",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["杠铃推举", "哑铃推举", "侧平举", "面拉", "前平举"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃推举",
+      "哑铃推举",
+      "哑铃侧平举",
+      "绳索面拉",
+      "哑铃前平举"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "杠铃推举",
     "problem_type": "form_issue",
@@ -299,8 +627,17 @@
     "id": "q029",
     "query": "坐姿划船腰部借力太多怎么改进",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["坐姿划船", "高位下拉", "直臂下压", "面拉"],
-    "hard_negative_ids": ["深蹲", "提踵", "杠铃弯举"],
+    "relevant_doc_ids": [
+      "坐姿绳索划船",
+      "高位下拉",
+      "直臂下压",
+      "绳索面拉"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "站姿提踵",
+      "杠铃弯举"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "坐姿划船",
     "problem_type": "form_issue",
@@ -311,8 +648,18 @@
     "id": "q030",
     "query": "箭步蹲前腿膝盖过脚尖了算不算错",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["箭步蹲", "分腿蹲", "保加利亚分腿蹲", "深蹲", "高脚杯深蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "哑铃负重箭步蹲",
+      "保加利亚分腿蹲",
+      "保加利亚分腿蹲",
+      "杠铃深蹲",
+      "高脚杯深蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "箭步蹲",
     "problem_type": "technique_question",
@@ -323,8 +670,17 @@
     "id": "q031",
     "query": "腰椎间盘突出能继续深蹲吗",
     "category": "injury",
-    "relevant_doc_ids": ["深蹲", "高脚杯深蹲", "罗马尼亚硬拉", "臀推"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "高脚杯深蹲",
+      "哑铃罗马尼亚硬拉",
+      "杠铃臀推"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -334,8 +690,17 @@
     "id": "q032",
     "query": "腰突做过手术半年了，能做硬拉吗",
     "category": "injury",
-    "relevant_doc_ids": ["硬拉", "罗马尼亚硬拉", "臀推", "深蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃硬拉",
+      "哑铃罗马尼亚硬拉",
+      "杠铃臀推",
+      "杠铃深蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -345,8 +710,20 @@
     "id": "q033",
     "query": "膝盖半月板损伤后还能练腿吗，有什么替代动作",
     "category": "injury",
-    "relevant_doc_ids": ["深蹲", "腿举", "箭步蹲", "臀推", "高脚杯深蹲", "分腿蹲", "保加利亚分腿蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "腿举",
+      "哑铃负重箭步蹲",
+      "杠铃臀推",
+      "高脚杯深蹲",
+      "保加利亚分腿蹲",
+      "保加利亚分腿蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -356,8 +733,18 @@
     "id": "q034",
     "query": "肩袖损伤恢复期能做推举吗，重量怎么选",
     "category": "injury",
-    "relevant_doc_ids": ["杠铃推举", "哑铃推举", "侧平举", "面拉", "前平举"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃推举",
+      "哑铃推举",
+      "哑铃侧平举",
+      "绳索面拉",
+      "哑铃前平举"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -367,8 +754,19 @@
     "id": "q035",
     "query": "网球肘怎么办，哪些上肢动作要避免",
     "category": "injury",
-    "relevant_doc_ids": ["杠铃弯举", "哑铃弯举", "锤式弯举", "坐姿划船", "高位下拉", "杠铃卧推"],
-    "hard_negative_ids": ["深蹲", "箭步蹲", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃弯举",
+      "哑铃弯举",
+      "锤式弯举",
+      "坐姿绳索划船",
+      "高位下拉",
+      "杠铃卧推"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "哑铃负重箭步蹲",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -378,8 +776,19 @@
     "id": "q036",
     "query": "前交叉韧带重建术后三个月能开始练什么",
     "category": "injury",
-    "relevant_doc_ids": ["深蹲", "箭步蹲", "分腿蹲", "臀推", "腿举", "保加利亚分腿蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "哑铃负重箭步蹲",
+      "保加利亚分腿蹲",
+      "杠铃臀推",
+      "腿举",
+      "保加利亚分腿蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -389,8 +798,19 @@
     "id": "q037",
     "query": "卧推肩膀疼是不是肩峰撞击",
     "category": "injury",
-    "relevant_doc_ids": ["杠铃卧推", "哑铃卧推", "上斜卧推", "哑铃飞鸟", "面拉", "绳索夹胸"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "哑铃卧推",
+      "上斜哑铃卧推",
+      "哑铃飞鸟",
+      "绳索面拉",
+      "绳索夹胸"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "medium",
     "expected_hitl": true,
@@ -400,8 +820,18 @@
     "id": "q038",
     "query": "手腕 TFCC 损伤怎么练上肢，哪些动作可以安全做",
     "category": "injury",
-    "relevant_doc_ids": ["哑铃飞鸟", "绳索夹胸", "侧平举", "面拉", "直臂下压"],
-    "hard_negative_ids": ["杠铃弯举", "杠铃卧推", "深蹲"],
+    "relevant_doc_ids": [
+      "哑铃飞鸟",
+      "绳索夹胸",
+      "哑铃侧平举",
+      "绳索面拉",
+      "直臂下压"
+    ],
+    "hard_negative_ids": [
+      "杠铃弯举",
+      "杠铃卧推",
+      "杠铃深蹲"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -411,8 +841,19 @@
     "id": "q039",
     "query": "颈椎有问题能做杠铃深蹲吗，杠铃压在斜方肌上会不会加重",
     "category": "injury",
-    "relevant_doc_ids": ["深蹲", "高脚杯深蹲", "史密斯机深蹲", "分腿蹲", "箭步蹲", "保加利亚分腿蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "高脚杯深蹲",
+      "史密斯机深蹲",
+      "保加利亚分腿蹲",
+      "哑铃负重箭步蹲",
+      "保加利亚分腿蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -422,8 +863,20 @@
     "id": "q040",
     "query": "跟腱炎恢复期能跑步和跳绳吗，力量训练怎么调整",
     "category": "injury",
-    "relevant_doc_ids": ["深蹲", "臀推", "腿举", "箭步蹲", "哑铃推举", "杠铃卧推", "坐姿划船"],
-    "hard_negative_ids": ["提踵", "耸肩", "杠铃弯举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃臀推",
+      "腿举",
+      "哑铃负重箭步蹲",
+      "哑铃推举",
+      "杠铃卧推",
+      "坐姿绳索划船"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "杠铃弯举"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -433,8 +886,20 @@
     "id": "q041",
     "query": "增肌期想加有氧，每天跑 5 公里会不会掉肌肉",
     "category": "mixed",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "坐姿划船", "箭步蹲", "罗马尼亚硬拉", "哑铃推举"],
-    "hard_negative_ids": ["提踵", "耸肩", "颈后臂屈伸"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "坐姿绳索划船",
+      "哑铃负重箭步蹲",
+      "哑铃罗马尼亚硬拉",
+      "哑铃推举"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "哑铃颈后臂屈伸"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -443,8 +908,17 @@
     "id": "q042",
     "query": "增肌期腰痛是不是硬拉伤到了，怎么判断严不严重",
     "category": "mixed",
-    "relevant_doc_ids": ["硬拉", "罗马尼亚硬拉", "深蹲", "臀推"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃硬拉",
+      "哑铃罗马尼亚硬拉",
+      "杠铃深蹲",
+      "杠铃臀推"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -454,8 +928,20 @@
     "id": "q043",
     "query": "减脂期深蹲力量一直掉正常吗，怎么维持",
     "category": "mixed",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "高脚杯深蹲", "罗马尼亚硬拉", "箭步蹲", "杠铃推举"],
-    "hard_negative_ids": ["提踵", "耸肩", "杠铃弯举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "高脚杯深蹲",
+      "哑铃罗马尼亚硬拉",
+      "哑铃负重箭步蹲",
+      "杠铃推举"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "杠铃弯举"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -464,8 +950,21 @@
     "id": "q044",
     "query": "减脂减到平台期了，力量训练怎么调整能继续掉秤",
     "category": "mixed",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "坐姿划船", "箭步蹲", "哑铃推举", "高位下拉", "哑铃飞鸟"],
-    "hard_negative_ids": ["提踵", "耸肩", "锤式弯举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "坐姿绳索划船",
+      "哑铃负重箭步蹲",
+      "哑铃推举",
+      "高位下拉",
+      "哑铃飞鸟"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "锤式弯举"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -474,8 +973,19 @@
     "id": "q045",
     "query": "练了一年胸肌不对称怎么纠正，左边的训练计划要调整吗",
     "category": "mixed",
-    "relevant_doc_ids": ["哑铃卧推", "杠铃卧推", "上斜卧推", "哑铃飞鸟", "绳索夹胸", "窄距卧推"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "哑铃卧推",
+      "杠铃卧推",
+      "上斜哑铃卧推",
+      "哑铃飞鸟",
+      "绳索夹胸",
+      "窄距杠铃卧推"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -484,8 +994,21 @@
     "id": "q046",
     "query": "新手想同时增肌减脂可能吗，172/75kg 体脂 22%",
     "category": "mixed",
-    "relevant_doc_ids": ["深蹲", "硬拉", "杠铃卧推", "坐姿划船", "杠铃推举", "箭步蹲", "罗马尼亚硬拉", "哑铃弯举"],
-    "hard_negative_ids": ["提踵", "耸肩", "颈后臂屈伸"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃卧推",
+      "坐姿绳索划船",
+      "杠铃推举",
+      "哑铃负重箭步蹲",
+      "哑铃罗马尼亚硬拉",
+      "哑铃弯举"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "哑铃颈后臂屈伸"
+    ],
     "expected_route": "fat_loss",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -494,8 +1017,18 @@
     "id": "q047",
     "query": "练背总是找不到发力感怎么办，划船和下拉都试过了",
     "category": "mixed",
-    "relevant_doc_ids": ["坐姿划船", "高位下拉", "直臂下压", "面拉", "哑铃弯举"],
-    "hard_negative_ids": ["深蹲", "提踵", "窄距卧推"],
+    "relevant_doc_ids": [
+      "坐姿绳索划船",
+      "高位下拉",
+      "直臂下压",
+      "绳索面拉",
+      "哑铃弯举"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "站姿提踵",
+      "窄距杠铃卧推"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "low",
     "difficulty": "medium"
@@ -504,8 +1037,18 @@
     "id": "q048",
     "query": "史密斯机深蹲和自由深蹲有什么区别，新手用哪个好",
     "category": "mixed",
-    "relevant_doc_ids": ["深蹲", "史密斯机深蹲", "高脚杯深蹲", "箭步蹲", "分腿蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "史密斯机深蹲",
+      "高脚杯深蹲",
+      "哑铃负重箭步蹲",
+      "保加利亚分腿蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -514,8 +1057,21 @@
     "id": "q049",
     "query": "练完第二天不酸痛是不是就白练了",
     "category": "mixed",
-    "relevant_doc_ids": ["杠铃卧推", "深蹲", "硬拉", "杠铃推举", "坐姿划船", "哑铃弯举", "罗马尼亚硬拉", "箭步蹲"],
-    "hard_negative_ids": ["提踵", "耸肩", "平板支撑"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃推举",
+      "坐姿绳索划船",
+      "哑铃弯举",
+      "哑铃罗马尼亚硬拉",
+      "哑铃负重箭步蹲"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "平板支撑"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -524,8 +1080,21 @@
     "id": "q050",
     "query": "蛋白粉什么时候喝效果最好，练前还是练后",
     "category": "mixed",
-    "relevant_doc_ids": ["杠铃卧推", "深蹲", "硬拉", "杠铃推举", "坐姿划船", "哑铃弯举", "箭步蹲", "哑铃推举"],
-    "hard_negative_ids": ["提踵", "耸肩", "颈后臂屈伸"],
+    "relevant_doc_ids": [
+      "杠铃卧推",
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "杠铃推举",
+      "坐姿绳索划船",
+      "哑铃弯举",
+      "哑铃负重箭步蹲",
+      "哑铃推举"
+    ],
+    "hard_negative_ids": [
+      "站姿提踵",
+      "哑铃耸肩",
+      "哑铃颈后臂屈伸"
+    ],
     "expected_route": "muscle_building",
     "safety_risk": "low",
     "difficulty": "easy"
@@ -534,8 +1103,17 @@
     "id": "q051",
     "query": "罗马尼亚硬拉和传统硬拉哪个对臀刺激更大",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["硬拉", "罗马尼亚硬拉", "臀推", "箭步蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "杠铃硬拉",
+      "哑铃罗马尼亚硬拉",
+      "杠铃臀推",
+      "哑铃负重箭步蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "罗马尼亚硬拉",
     "problem_type": "technique_question",
@@ -546,8 +1124,16 @@
     "id": "q052",
     "query": "飞鸟夹胸时胸肌撕裂感正常吗",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["哑铃飞鸟", "绳索夹胸", "杠铃卧推"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "哑铃飞鸟",
+      "绳索夹胸",
+      "杠铃卧推"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "哑铃飞鸟",
     "problem_type": "pain_symptom",
@@ -558,8 +1144,18 @@
     "id": "q053",
     "query": "肩部训练总找不到泵感怎么办",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["侧平举", "前平举", "哑铃推举", "杠铃推举", "面拉"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "哑铃侧平举",
+      "哑铃前平举",
+      "哑铃推举",
+      "杠铃推举",
+      "绳索面拉"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "侧平举",
     "problem_type": "form_issue",
@@ -570,8 +1166,18 @@
     "id": "q054",
     "query": "杠铃深蹲和史密斯深蹲轨迹不一样，哪个伤膝盖",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["深蹲", "史密斯机深蹲", "高脚杯深蹲", "分腿蹲", "箭步蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "史密斯机深蹲",
+      "高脚杯深蹲",
+      "保加利亚分腿蹲",
+      "哑铃负重箭步蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "深蹲",
     "problem_type": "technique_question",
@@ -582,8 +1188,17 @@
     "id": "q055",
     "query": "绳索下压和窄距卧推哪个练三头长头更好",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["绳索下压", "窄距卧推", "臂屈伸", "颈后臂屈伸"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "绳索下压",
+      "窄距杠铃卧推",
+      "双杠臂屈伸",
+      "哑铃颈后臂屈伸"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "绳索下压",
     "problem_type": "technique_question",
@@ -594,8 +1209,17 @@
     "id": "q056",
     "query": "小腿总练不粗怎么办，提踵天天做也没用",
     "category": "exercise_analysis",
-    "relevant_doc_ids": ["提踵", "深蹲", "箭步蹲", "分腿蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "侧平举"],
+    "relevant_doc_ids": [
+      "站姿提踵",
+      "杠铃深蹲",
+      "哑铃负重箭步蹲",
+      "保加利亚分腿蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "哑铃侧平举"
+    ],
     "expected_route": "exercise_analysis",
     "expected_exercise": "提踵",
     "problem_type": "capability_gap",
@@ -606,8 +1230,20 @@
     "id": "q057",
     "query": "腰痛两月了还能做力量训练吗",
     "category": "injury",
-    "relevant_doc_ids": ["深蹲", "硬拉", "罗马尼亚硬拉", "臀推", "坐姿划船", "高位下拉", "哑铃推举"],
-    "hard_negative_ids": ["杠铃弯举", "提踵", "耸肩"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "哑铃罗马尼亚硬拉",
+      "杠铃臀推",
+      "坐姿绳索划船",
+      "高位下拉",
+      "哑铃推举"
+    ],
+    "hard_negative_ids": [
+      "杠铃弯举",
+      "站姿提踵",
+      "哑铃耸肩"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -617,8 +1253,20 @@
     "id": "q058",
     "query": "髌骨软化可以练腿吗",
     "category": "injury",
-    "relevant_doc_ids": ["深蹲", "箭步蹲", "分腿蹲", "臀推", "腿举", "保加利亚分腿蹲", "高脚杯深蹲"],
-    "hard_negative_ids": ["杠铃卧推", "杠铃弯举", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃深蹲",
+      "哑铃负重箭步蹲",
+      "保加利亚分腿蹲",
+      "杠铃臀推",
+      "腿举",
+      "保加利亚分腿蹲",
+      "高脚杯深蹲"
+    ],
+    "hard_negative_ids": [
+      "杠铃卧推",
+      "杠铃弯举",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -628,8 +1276,20 @@
     "id": "q059",
     "query": "肩关节习惯性脱臼怎么安全练",
     "category": "injury",
-    "relevant_doc_ids": ["侧平举", "面拉", "前平举", "哑铃推举", "绳索下压", "直臂下压", "哑铃飞鸟"],
-    "hard_negative_ids": ["深蹲", "硬拉", "提踵"],
+    "relevant_doc_ids": [
+      "哑铃侧平举",
+      "绳索面拉",
+      "哑铃前平举",
+      "哑铃推举",
+      "绳索下压",
+      "直臂下压",
+      "哑铃飞鸟"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "杠铃硬拉",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
@@ -639,11 +1299,261 @@
     "id": "q060",
     "query": "肱二头肌长头腱鞘炎，哪些上肢训练要停",
     "category": "injury",
-    "relevant_doc_ids": ["杠铃弯举", "哑铃弯举", "锤式弯举", "坐姿划船", "高位下拉", "杠铃卧推"],
-    "hard_negative_ids": ["深蹲", "箭步蹲", "提踵"],
+    "relevant_doc_ids": [
+      "杠铃弯举",
+      "哑铃弯举",
+      "锤式弯举",
+      "坐姿绳索划船",
+      "高位下拉",
+      "杠铃卧推"
+    ],
+    "hard_negative_ids": [
+      "杠铃深蹲",
+      "哑铃负重箭步蹲",
+      "站姿提踵"
+    ],
     "expected_route": "exercise_analysis",
     "safety_risk": "high",
     "expected_hitl": true,
     "difficulty": "medium"
+  },
+  {
+    "id": "q061",
+    "query": "想把胳膊练粗一点，用什么动作好",
+    "category": "muscle_building",
+    "relevant_doc_ids": ["杠铃弯举", "哑铃弯举", "锤式弯举", "绳索下压", "窄距杠铃卧推", "双杠臂屈伸", "哑铃颈后臂屈伸"],
+    "hard_negative_ids": ["杠铃深蹲", "站姿提踵", "平板支撑"],
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "difficulty": "medium",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q062",
+    "query": "上半身怎么练出倒三角体型",
+    "category": "muscle_building",
+    "relevant_doc_ids": ["高位下拉", "引体向上", "坐姿绳索划船", "杠铃推举", "哑铃侧平举"],
+    "hard_negative_ids": ["杠铃深蹲", "站姿提踵", "腿举"],
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "difficulty": "medium",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q063",
+    "query": "久坐办公室腰不好，怎么练核心不伤腰",
+    "category": "exercise_analysis",
+    "relevant_doc_ids": ["平板支撑", "高脚杯深蹲", "杠铃臀推", "悬垂举腿", "哑铃俯身飞鸟"],
+    "hard_negative_ids": ["杠铃硬拉", "杠铃深蹲", "杠铃划船"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "difficulty": "medium",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q064",
+    "query": "女生练屁股不练腿，有什么针对性动作",
+    "category": "fat_loss",
+    "relevant_doc_ids": ["杠铃臀推", "哑铃罗马尼亚硬拉", "绳索面拉"],
+    "hard_negative_ids": ["杠铃深蹲", "哑铃负重箭步蹲", "保加利亚分腿蹲"],
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "difficulty": "easy",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q065",
+    "query": "新手从零开始全身都要练，最基础的五个动作是什么",
+    "category": "muscle_building",
+    "relevant_doc_ids": ["杠铃深蹲", "杠铃卧推", "杠铃硬拉", "杠铃推举", "坐姿绳索划船"],
+    "hard_negative_ids": ["哑铃颈后臂屈伸", "站姿提踵", "绳索面拉"],
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "difficulty": "easy",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q066",
+    "query": "大体重减肥不敢跑步怕伤膝盖，力量训练怎么替代有氧",
+    "category": "fat_loss",
+    "relevant_doc_ids": ["杠铃深蹲", "哑铃负重箭步蹲", "保加利亚分腿蹲", "高脚杯深蹲", "杠铃臀推"],
+    "hard_negative_ids": ["站姿提踵", "腿举", "杠铃弯举"],
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "difficulty": "medium",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q067",
+    "query": "想把胸肌中缝和上胸练出来，哪个动作效果最好",
+    "category": "muscle_building",
+    "relevant_doc_ids": ["上斜哑铃卧推", "绳索夹胸", "窄距杠铃卧推", "哑铃飞鸟"],
+    "hard_negative_ids": ["杠铃深蹲", "杠铃硬拉", "站姿提踵"],
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "difficulty": "medium",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q068",
+    "query": "肩膀不够宽显得头大，怎么专门练宽肩",
+    "category": "muscle_building",
+    "relevant_doc_ids": ["哑铃侧平举", "杠铃推举", "哑铃推举", "绳索面拉"],
+    "hard_negative_ids": ["杠铃深蹲", "站姿提踵", "杠铃弯举"],
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "difficulty": "easy",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q069",
+    "query": "驼背圆肩体态不好看，怎么通过力量训练矫正",
+    "category": "exercise_analysis",
+    "relevant_doc_ids": ["绳索面拉", "坐姿绳索划船", "哑铃俯身飞鸟", "高位下拉", "直臂下压"],
+    "hard_negative_ids": ["杠铃卧推", "哑铃飞鸟", "杠铃弯举"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "difficulty": "medium",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q070",
+    "query": "腿太粗想变细，是不是应该小重量多次数",
+    "category": "fat_loss",
+    "relevant_doc_ids": ["杠铃深蹲", "哑铃负重箭步蹲", "保加利亚分腿蹲", "高脚杯深蹲"],
+    "hard_negative_ids": ["腿举", "杠铃弯举", "杠铃卧推"],
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "difficulty": "easy",
+    "_capability": "semantic"
+  },
+  {
+    "id": "q071",
+    "query": "肩袖损伤恢复期想维持胸肌，哪些动作对肩膀压力最小",
+    "category": "injury",
+    "relevant_doc_ids": ["绳索夹胸", "哑铃飞鸟"],
+    "hard_negative_ids": ["杠铃卧推", "哑铃卧推", "上斜哑铃卧推"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "expected_hitl": true,
+    "difficulty": "hard",
+    "_capability": "graph",
+    "graph_hops": ["肩袖肌群", "胸大肌", "肩关节压力", "替代动作"]
+  },
+  {
+    "id": "q072",
+    "query": "出差酒店只有一对哑铃，练背除了划船还有什么动作",
+    "category": "muscle_building",
+    "relevant_doc_ids": ["俯身哑铃划船", "哑铃俯身飞鸟", "哑铃弯举"],
+    "hard_negative_ids": ["高位下拉", "坐姿绳索划船", "杠铃划船"],
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "difficulty": "medium",
+    "_capability": "graph",
+    "graph_hops": ["背阔肌", "哑铃", "器械约束", "可用动作"]
+  },
+  {
+    "id": "q073",
+    "query": "半月板损伤后股四头肌萎缩了，怎么安全恢复又不加重膝盖负担",
+    "category": "injury",
+    "relevant_doc_ids": ["腿举", "站姿提踵", "腿弯举"],
+    "hard_negative_ids": ["杠铃深蹲", "哑铃负重箭步蹲", "保加利亚分腿蹲"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "expected_hitl": true,
+    "difficulty": "hard",
+    "_capability": "graph",
+    "graph_hops": ["半月板", "膝关节", "股四头肌", "低冲击替代动作"]
+  },
+  {
+    "id": "q074",
+    "query": "练背总是二头先力竭背还没感觉，怎么让背部主导发力",
+    "category": "exercise_analysis",
+    "relevant_doc_ids": ["直臂下压", "哑铃俯身飞鸟", "坐姿绳索划船"],
+    "hard_negative_ids": ["杠铃弯举", "哑铃弯举", "锤式弯举"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "difficulty": "medium",
+    "_capability": "graph",
+    "graph_hops": ["背阔肌", "肱二头肌", "协同肌代偿", "隔离训练"]
+  },
+  {
+    "id": "q075",
+    "query": "腰椎间盘突出想练臀，什么动作不伤腰",
+    "category": "injury",
+    "relevant_doc_ids": ["杠铃臀推", "绳索面拉"],
+    "hard_negative_ids": ["杠铃硬拉", "杠铃深蹲", "哑铃罗马尼亚硬拉"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "expected_hitl": true,
+    "difficulty": "hard",
+    "_capability": "graph",
+    "graph_hops": ["腰椎间盘", "臀大肌", "脊柱负荷", "低腰压动作"]
+  },
+  {
+    "id": "q076",
+    "query": "网球肘怎么练二头弯举不加重肘关节疼痛",
+    "category": "injury",
+    "relevant_doc_ids": ["锤式弯举"],
+    "hard_negative_ids": ["杠铃弯举", "哑铃弯举", "窄距杠铃卧推"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "expected_hitl": true,
+    "difficulty": "hard",
+    "_capability": "graph",
+    "graph_hops": ["网球肘", "肱二头肌", "肘关节压力", "中性握替代"]
+  },
+  {
+    "id": "q077",
+    "query": "跟腱炎不能跑不能跳，怎么练小腿保持维度",
+    "category": "injury",
+    "relevant_doc_ids": ["站姿提踵", "腿弯举"],
+    "hard_negative_ids": ["哑铃负重箭步蹲", "保加利亚分腿蹲", "杠铃深蹲"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "expected_hitl": true,
+    "difficulty": "hard",
+    "_capability": "graph",
+    "graph_hops": ["跟腱", "腓肠肌", "踝关节", "非冲击训练"]
+  },
+  {
+    "id": "q078",
+    "query": "颈椎不好做深蹲杠铃压在斜方肌上会不会加重，有什么替代",
+    "category": "injury",
+    "relevant_doc_ids": ["高脚杯深蹲", "史密斯机深蹲", "保加利亚分腿蹲"],
+    "hard_negative_ids": ["杠铃深蹲", "杠铃硬拉", "杠铃推举"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "expected_hitl": true,
+    "difficulty": "hard",
+    "_capability": "graph",
+    "graph_hops": ["颈椎", "斜方肌", "杠铃位置压力", "替代深蹲变体"]
+  },
+  {
+    "id": "q079",
+    "query": "肩峰撞击综合征还能练肩吗，哪些动作相对安全",
+    "category": "injury",
+    "relevant_doc_ids": ["绳索面拉", "哑铃俯身飞鸟"],
+    "hard_negative_ids": ["哑铃侧平举", "杠铃推举", "哑铃推举", "哑铃前平举"],
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "expected_hitl": true,
+    "difficulty": "hard",
+    "_capability": "graph",
+    "graph_hops": ["肩峰撞击", "三角肌", "肩袖肌群", "安全角度训练"]
+  },
+  {
+    "id": "q080",
+    "query": "卧推手腕疼是不是握法问题，换什么握法或动作可以继续练胸",
+    "category": "exercise_analysis",
+    "relevant_doc_ids": ["哑铃卧推", "绳索夹胸", "哑铃飞鸟"],
+    "hard_negative_ids": ["杠铃卧推", "窄距杠铃卧推"],
+    "expected_route": "exercise_analysis",
+    "expected_exercise": "杠铃卧推",
+    "problem_type": "pain_symptom",
+    "safety_risk": "medium",
+    "difficulty": "medium",
+    "_capability": "graph",
+    "graph_hops": ["腕关节", "胸大肌", "握法生物力学", "替代动作"]
   }
 ]

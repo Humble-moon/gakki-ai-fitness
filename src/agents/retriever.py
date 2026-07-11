@@ -73,8 +73,9 @@ class RetrieverAgent:
                 # 统一字段名格式，标记来源为 "mcp"
                 results["exercises"].extend(
                     [{"name": r["name"], "source": "mcp",
-                      "muscles": r["muscles"], "equipment": r["equipment"],
-                      "difficulty": r["difficulty"], "type": r["type"]}
+                      "muscles": r.get("target_muscles", r.get("muscles", [])),
+                      "equipment": r["equipment"], "difficulty": r["difficulty"],
+                      "type": r["type"]}
                      for r in mcp_results]
                 )
         return results

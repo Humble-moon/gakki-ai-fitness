@@ -72,7 +72,10 @@ def build_fact_checker_messages(plan: dict, profile: dict) -> list:
         将完整计划和用户画像一同提交给 LLM 审查。审查结果传给 HITLReview.check()
         做最终决策——低置信度或有 danger 级别问题时触发人工审核流程。
     """
+    user_query = ""
+    if "user_query" in plan:
+        user_query = f"\n用户原始问题：{plan['user_query']}"
     return [
         {"role": "system", "content": FACTCHECKER_SYSTEM},
-        {"role": "user", "content": f"训练计划：{plan}\n用户画像：{profile}"}
+        {"role": "user", "content": f"训练计划：{plan}\n用户画像：{profile}{user_query}"}
     ]

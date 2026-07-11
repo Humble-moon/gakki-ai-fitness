@@ -71,9 +71,9 @@ class FactCheckerAgent:
         result.setdefault("confidence", 0.8)
         result.setdefault("requires_human_review", False)
 
-        # 阶段 2：HITL 规则引擎复查
-        # LLM 的结果作为输入，HITL 在此基础上应用硬编码安全规则
-        review = self.hitl.check(result)
+        # 阶段 2：HITL 规则引擎复查（含确定性伤病-动作冲突检测）
+        # HITL 在 LLM 结果基础上，还会独立检查 plan + profile 中的伤病冲突
+        review = self.hitl.check(result, plan=plan, profile=profile)
         # HITL 的判定覆盖 LLM 的 requires_human_review（以规则引擎为准）
         result["requires_human_review"] = review.needs_review
         result["review_reason"] = review.reason

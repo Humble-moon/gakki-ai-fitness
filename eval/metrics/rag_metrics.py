@@ -24,6 +24,21 @@ import math
 from typing import List, Dict
 
 
+def _name_matches(retrieved: str, relevant_set: set) -> bool:
+    """Check if a retrieved exercise name matches any golden relevant name.
+
+    Primary: exact match (O(1) set lookup).
+    Fallback: substring match — handles cases where golden has "深蹲" but
+    DB returns "杠铃深蹲", or golden was updated but DB still uses a variant.
+    """
+    if retrieved in relevant_set:
+        return True
+    for rel in relevant_set:
+        if rel in retrieved or retrieved in rel:
+            return True
+    return False
+
+
 def precision_at_k(
     retrieved_doc_names: List[str],
     relevant_doc_names: List[str],
@@ -55,8 +70,8 @@ def precision_at_k(
     if not top_k:
         return 0.0  # 检索结果为空
     relevant_set = set(relevant_doc_names)  # 转为 set，O(1) 查找
-    hits = sum(1 for doc in top_k if doc in relevant_set)  # 数命中数
-    return hits / k  # 比例 = 命中数 / K
+    hits = sum(1 for doc in top_k if _name_matches(doc, relevant_set))
+    return hits / k
 
 
 def recall_at_k(
@@ -92,7 +107,7 @@ def recall_at_k(
         return 0.0
     top_k = retrieved_doc_names[:k]
     relevant_set = set(relevant_doc_names)  # set O(1) 查找
-    hits = sum(1 for doc in top_k if doc in relevant_set)
+    hits = sum(1 for doc in top_k if _name_matches(doc, relevant_set))
     return hits / len(relevant_set)  # 比例 = 命中数 / 总相关文档数
 
 
@@ -121,10 +136,20 @@ def mrr(
       float — MRR 值，范围 [0.0, 1.0]
     """
     relevant_set = set(relevant_doc_names)  # O(1) 查找
-    for i, doc in enumerate(retrieved_doc_names, start=1):  # 从 rank=1 开始遍历
-        if doc in relevant_set:
-            return 1.0 / i  # 返回 1/排名，排得越前值越高
+    for i, doc in enumerate(retrieved_doc_names, start=1):
+        if _name_matches(doc, relevant_set):
+            return 1.0 / i
     return 0.0  # 一个相关文档都没找到
+
+
+def _get_relevance(doc: str, relevance_scores: Dict[str, int]) -> int:
+    """Get relevance score with fuzzy name matching fallback."""
+    if doc in relevance_scores:
+        return relevance_scores[doc]
+    for name, score in relevance_scores.items():
+        if name in doc or doc in name:
+            return score
+    return 0
 
 
 def dcg_at_k(
@@ -157,7 +182,7 @@ def dcg_at_k(
     """
     dcg = 0.0
     for i, doc in enumerate(retrieved_doc_names[:k], start=1):  # i 从 1 开始（排名）
-        rel = relevance_scores.get(doc, 0)  # 获取相关度等级，默认 0
+        rel = _get_relevance(doc, relevance_scores)
         dcg += rel / math.log2(i + 1)  # rel 除以 log2(i+1) 实现折损
     return dcg
 
