@@ -105,9 +105,8 @@ class Exercise(Base):
     # 常见错误列表，JSON 数组：["膝盖内扣", "背部弯曲", "重心前移"]
 
     embedding = Column(Vector(EMBEDDING_DIM))
-    # 向量嵌入（512 维），由 bge-small-zh 模型生成
-    # 用于语义相似度搜索：输入用户查询 -> 计算向量 -> 找出最相似的动作
-    # pgvector 扩展提供向量索引和余弦相似度计算
+    # 向量嵌入，维度由 EMBEDDING_DIM 决定（DashScope text-embedding-v4: 1024）
+    # 用于语义相似度搜索，pgvector 提供向量索引和余弦相似度计算
 
 
 # ============================================================
