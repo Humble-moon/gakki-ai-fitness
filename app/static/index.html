@@ -1339,20 +1339,31 @@ async function streamFrom(url, body, outputId) {
 
 // ═══════════════ RENDER PLAN ═══════════════
 function renderPlanResult(container, data) {
+  // Confidence → user-friendly label
+  const conf = data.confidence || 0;
+  let confLabel, confDot, confColor;
+  if (data.requires_review) {
+    confLabel = '建议留意'; confDot = 'amber'; confColor = 'var(--warn)';
+  } else if (conf >= 0.85) {
+    confLabel = 'AI 可信度高'; confDot = 'green'; confColor = 'var(--cool-blue)';
+  } else {
+    confLabel = 'AI 可信度良好'; confDot = 'green'; confColor = 'var(--cool-blue)';
+  }
+
   // Stats bar
   const stats = el('div', 'result-header', '');
   stats.appendChild(el('div', 'stat-pill',
-    `<span class="dot green"></span>置信度 ${Math.round((data.confidence||0)*100)}%`));
+    `<span class="dot ${confDot}"></span>${confLabel}`));
   if (data.warnings && data.warnings.length) {
     stats.appendChild(el('div', 'stat-pill',
-      `<span class="dot amber"></span>${data.warnings.length} 提示`));
+      `<span class="dot amber"></span>${data.warnings.length} 条安全提示`));
   }
   if (data.requires_review) {
     stats.appendChild(el('div', 'stat-pill',
-      `<span class="dot red"></span>需人工确认`));
+      `<span class="dot red"></span>建议咨询专业教练`));
   }
   stats.appendChild(el('div', 'stat-pill',
-    `<span class="dot green" style="background:var(--steel-light);box-shadow:none"></span>${(data.days||[]).length} 天计划`));
+    `<span class="dot" style="background:var(--steel-light);box-shadow:none"></span>${(data.days||[]).length} 天计划`));
   container.appendChild(stats);
 
   // Warnings
@@ -1389,19 +1400,26 @@ function renderPlanResult(container, data) {
   if (!days.length && data.raw) {
     container.appendChild(el('div', 'stream-box', data.raw));
   }
+
+  // Quick action bar
+  const actionBar = el('div', '', '');
+  actionBar.style.cssText = 'display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;';
+  const regenerateBtn = document.createElement('button');
+  regenerateBtn.className = 'btn-secondary';
+  regenerateBtn.textContent = '重新生成';
+  regenerateBtn.onclick = () => { generatePlan(); window.scrollTo({top:0,behavior:'smooth'}); };
+  actionBar.appendChild(regenerateBtn);
+  container.appendChild(actionBar);
 }
 
 function renderAnalysisResult(container, data) {
   const severityColors = { '安全': 'var(--cool-blue)', '注意': 'var(--warn)', '警告': 'var(--danger)' };
   const color = severityColors[data.severity] || 'var(--chalk)';
 
+  const severityLabels = { '安全': '动作安全', '注意': '建议留意', '警告': '存在风险' };
   const header = el('div', 'result-header', '');
   header.appendChild(el('div', 'stat-pill',
-    `<span class="dot" style="background:${color}"></span>严重程度: <b>${data.severity || '未知'}</b>`));
-  if (data.confidence) {
-    header.appendChild(el('div', 'stat-pill',
-      `<span class="dot green"></span>置信度 ${Math.round((data.confidence||0)*100)}%`));
-  }
+    `<span class="dot" style="background:${color}"></span>${severityLabels[data.severity] || data.severity}`));
   container.appendChild(header);
 
   const blocks = [
@@ -1426,12 +1444,12 @@ function renderAnalysisResult(container, data) {
     container.appendChild(div);
   });
 
-  // 参考来源
+  // 参考对比来源
   const refs = data.reference_exercises || [];
   if (refs.length) {
     const refDiv = el('div', 'stage-detail', '');
     refDiv.style.cssText = 'margin-top:16px; font-size:12px; padding:12px 16px;';
-    refDiv.innerHTML = `参考动作标准：${refs.map(r => `<b>${r}</b>`).join('、')}`;
+    refDiv.innerHTML = `对比参考了以下标准动作：${refs.map(r => `<b>${r}</b>`).join('、')}`;
     container.appendChild(refDiv);
   }
 }
@@ -1582,6 +1600,15 @@ async function askQuestion() {
         } else if (event === 'done') {
           if (streamBox) streamBox.querySelector('.cursor')?.remove();
           output.querySelectorAll('.live-stage, .stage-detail').forEach(e => e.remove());
+          // Show knowledge sources if available
+          const sources = data.sources || [];
+          if (sources.length) {
+            const srcDiv = el('div', 'stage-detail', '');
+            srcDiv.style.cssText = 'margin-top:16px;font-size:12px;padding:12px 16px;';
+            srcDiv.innerHTML = '参考来源：' + sources.slice(0,4).map(s =>
+              `<b>《${s.title}》</b>`).join('、');
+            output.appendChild(srcDiv);
+          }
           if (qaTurnCount >= 1) {
             document.getElementById('qa-session-badge').style.display = 'inline-flex';
             document.getElementById('qa-new-session-btn').style.display = 'inline-block';
