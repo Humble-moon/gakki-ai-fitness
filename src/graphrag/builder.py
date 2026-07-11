@@ -39,6 +39,43 @@ from src.storage.neo4j_client import Neo4jClient
 from src.llm.provider import LLMProvider
 
 
+# ============================================================================
+# 常见训练错误 → 潜在伤病映射表
+# 用于在知识图谱中建立"错误动作 → 可能导致的伤病"关系
+# ============================================================================
+_ERROR_INJURY_MAP = {
+    "膝盖内扣": "膝关节损伤",
+    "膝盖过伸": "膝关节过度伸展",
+    "下背弯曲": "腰椎间盘突出",
+    "背部弯曲": "腰椎损伤",
+    "腰部弯曲": "腰椎损伤",
+    "含胸": "肩关节损伤",
+    "耸肩": "肩袖损伤",
+    "肩部前倾": "肩袖损伤",
+    "手肘锁死": "肘关节过度伸展",
+    "手腕弯曲": "腕关节损伤",
+    "头部前倾": "颈椎损伤",
+    "重心偏移": "肌肉拉伤",
+    "过度弓腰": "腰椎损伤",
+    "核心松弛": "腰椎损伤",
+    "脚踝内翻": "踝关节扭伤",
+    "膝盖超过脚尖": "膝关节压力过大",
+    "骨盆前倾": "下背痛",
+    "过度后仰": "腰椎损伤",
+    "速度过快": "肌肉拉伤",
+    "重量过大": "肌肉拉伤",
+    "热身不足": "肌肉拉伤",
+    "活动范围不足": "关节僵硬",
+}
+
+def _error_to_injury(error: str) -> str | None:
+    """将常见训练错误映射到潜在伤病类型。"""
+    for pattern, injury in _ERROR_INJURY_MAP.items():
+        if pattern in error:
+            return injury
+    return None
+
+
 class GraphBuilder:
     """Neo4j 知识图谱构建器。
 
@@ -159,7 +196,6 @@ class GraphBuilder:
                 )
 
             # 步骤 3：创建 Equipment 节点和 REQUIRES 关系
-            # 一对一：一个动作对应一套器材（若有）
             if ex.get("equipment"):
                 self.neo4j.run(
                     """
@@ -169,6 +205,22 @@ class GraphBuilder:
                     """,
                     {"equip": ex["equipment"], "ex_name": ex["name"]},
                 )
+
+            # 步骤 4：从常见错误推导潜在伤病，创建 Injury 节点和 MAY_CAUSE 关系
+            # 这样用户问"深蹲膝盖疼"时，图谱能推理出深蹲可能伤膝盖
+            errors = ex.get("common_errors", [])
+            if isinstance(errors, list):
+                for err in errors:
+                    injury = _error_to_injury(err)
+                    if injury:
+                        self.neo4j.run(
+                            """
+                            MERGE (i:Injury {name: $injury})
+                            MERGE (e:Exercise {name: $ex_name})
+                            MERGE (e)-[:MAY_CAUSE]->(i)
+                            """,
+                            {"injury": injury, "ex_name": ex["name"]},
+                        )
 
     # =====================================================================
     # 从非结构化文本提取知识
