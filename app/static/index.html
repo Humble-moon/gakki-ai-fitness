@@ -650,6 +650,118 @@ body::after {
   box-shadow: 0 0 6px var(--cool-blue-dim);
 }
 
+/* ── Progress Bar ── */
+.progress-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 0;
+  animation: fadeSlideIn 0.3s var(--ease-out);
+}
+
+.progress-step {
+  flex: 1;
+  height: 3px;
+  background: var(--steel);
+  border-radius: 2px;
+  transition: all 0.4s var(--ease-out);
+  position: relative;
+}
+
+.progress-step.done { background: var(--cool-blue); }
+
+.progress-step.active {
+  background: var(--forge-amber);
+  box-shadow: 0 0 8px var(--forge-amber-glow);
+  animation: stepPulse 1.5s ease-in-out infinite;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--chalk-faint);
+  letter-spacing: 1px;
+}
+
+.progress-label span.active { color: var(--forge-amber); }
+.progress-label span.done { color: var(--cool-blue); }
+
+/* ── Iteration Buttons ── */
+.iterate-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--steel);
+}
+
+.iterate-chip {
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: 1px solid var(--steel);
+  background: transparent;
+  color: var(--chalk-dim);
+  transition: all 0.2s var(--ease-out);
+}
+
+.iterate-chip:hover {
+  border-color: var(--forge-amber);
+  color: var(--forge-amber);
+  background: var(--forge-amber-dim);
+  transform: translateY(-1px);
+}
+
+/* ── History Panel ── */
+.history-panel {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--steel);
+}
+
+.history-panel h4 {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--chalk-dim);
+  margin-bottom: 12px;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  font-size: 13px;
+}
+
+.history-item:hover {
+  border-color: var(--steel-light);
+  background: var(--bg-card-hover);
+  transform: translateX(4px);
+}
+
+.history-item .hi-date { color: var(--chalk-faint); font-family: var(--font-mono); font-size: 11px; }
+.history-item .hi-goals { color: var(--chalk-dim); }
+
+@keyframes stepPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* ── Responsive features ── */
 @media (max-width: 900px) {
   .feature-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1045,6 +1157,11 @@ body::after {
             <div class="sys-stat-item"><span class="ss-dot"></span> 智能安全检测</div>
             <div class="sys-stat-item"><span class="ss-dot"></span> 支持多轮对话</div>
           </div>
+
+          <div class="history-panel" id="history-panel" style="display:none">
+            <h4>最近生成的历史</h4>
+            <div id="history-list"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1165,6 +1282,9 @@ const SCENE_EQUIPMENT = {
 let qaSessionId = 'qa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 let qaTurnCount = 0;
 
+// Load history on page load
+document.addEventListener('DOMContentLoaded', () => { loadHistory(); });
+
 function newQaSession() {
   qaSessionId = 'qa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
   qaTurnCount = 0;
@@ -1184,6 +1304,107 @@ function newQaSession() {
         <span class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">深蹲膝盖疼有哪些替代动作？</span>
       </div>
     </div>`;
+}
+
+// ── Progress Bar ──
+const PLAN_STEPS = ['分析', '规划', '检索', '生成', '审查'];
+
+function showProgress(outputId) {
+  const output = document.getElementById(outputId);
+  const bar = el('div', 'progress-bar', '');
+  const labels = el('div', 'progress-label', '');
+  PLAN_STEPS.forEach((s, i) => {
+    const step = el('div', 'progress-step', '');
+    step.id = `pstep-${i}`;
+    bar.appendChild(step);
+    const label = el('span', '', s);
+    label.id = `plabel-${i}`;
+    labels.appendChild(label);
+  });
+  output.innerHTML = '';
+  output.appendChild(labels);
+  output.appendChild(bar);
+  // Activate first step
+  setProgress(0);
+}
+
+function setProgress(n) {
+  for (let i = 0; i < PLAN_STEPS.length; i++) {
+    const step = document.getElementById(`pstep-${i}`);
+    const label = document.getElementById(`plabel-${i}`);
+    if (!step) continue;
+    step.className = 'progress-step';
+    if (label) label.className = '';
+    if (i < n) { step.classList.add('done'); if (label) label.classList.add('done'); }
+    if (i === n) { step.classList.add('active'); if (label) label.classList.add('active'); }
+  }
+}
+
+// ── History ──
+function savePlanToHistory(profile, planData) {
+  try {
+    const history = JSON.parse(localStorage.getItem('ironmind_history') || '[]');
+    history.unshift({
+      date: new Date().toLocaleString('zh-CN'),
+      goal: profile.goal,
+      days: (planData.days || []).length,
+      plan: planData,
+      profile: profile,
+    });
+    if (history.length > 10) history.length = 10;
+    localStorage.setItem('ironmind_history', JSON.stringify(history));
+  } catch(e) {}
+}
+
+function loadHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem('ironmind_history') || '[]');
+    const panel = document.getElementById('history-panel');
+    if (!panel || !history.length) { if (panel) panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    const list = document.getElementById('history-list');
+    list.innerHTML = history.map((h, i) => `
+      <div class="history-item" onclick="restorePlan(${i})">
+        <span class="hi-goals">${h.goal} · ${h.days}天计划</span>
+        <span class="hi-date">${h.date}</span>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+function restorePlan(idx) {
+  try {
+    const history = JSON.parse(localStorage.getItem('ironmind_history') || '[]');
+    const h = history[idx];
+    if (!h) return;
+    // Fill sidebar
+    const p = h.profile;
+    document.getElementById('height').value = p.height || 180;
+    document.getElementById('weight').value = p.weight || 80;
+    document.getElementById('years').value = p.training_years || 1;
+    document.getElementById('goal').value = p.goal || '增肌';
+    document.getElementById('days').value = p.days_per_week || 4;
+    // Render plan
+    const output = document.getElementById('plan-output');
+    output.innerHTML = '';
+    renderPlanResult(output, h.plan);
+    output.scrollIntoView({ behavior: 'smooth' });
+  } catch(e) {}
+}
+
+// ── Plan Iteration ──
+function iteratePlan(action) {
+  const q = document.getElementById('plan-query');
+  const current = q.value || '';
+  const hints = {
+    'harder': '请加大训练强度，增加组数或重量',
+    'easier': '请降低训练难度，适合新手',
+    'swap': '请换一批不同的训练动作',
+    'focus': '请更加聚焦核心目标肌群',
+  };
+  q.value = current ? `${current}，${hints[action]}` : hints[action];
+  q.scrollIntoView({ behavior: 'smooth' });
+  generatePlan();
 }
 
 // ── Helpers ──
@@ -1234,7 +1455,7 @@ function switchTab(name) {
 }
 
 // ═══════════════ SSE STREAMING ═══════════════
-async function streamFrom(url, body, outputId) {
+async function streamFrom(url, body, outputId, mode) {
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1271,6 +1492,14 @@ async function streamFrom(url, body, outputId) {
         if (oldAdvice) resultArea.appendChild(oldAdvice);
         stageEl = el('div', 'live-stage', `<span class="dot-pulse"></span>${data}`);
         resultArea.appendChild(stageEl);
+        // Update progress for plan mode
+        if (mode === 'plan') {
+          const d = String(data);
+          if (d.includes('[规划]')) setProgress(1);
+          else if (d.includes('[检索]')) setProgress(2);
+          else if (d.includes('[生成]')) setProgress(3);
+          else if (d.includes('[审查]')) setProgress(4);
+        }
       }
 
       else if (event === 'advice_chunk') {
@@ -1331,6 +1560,21 @@ async function streamFrom(url, body, outputId) {
         resultArea.innerHTML = '';
         if (oldAdvice) resultArea.appendChild(oldAdvice);
         renderPlanResult(resultArea, data);
+        // Add iteration buttons
+        if (mode === 'plan') {
+          const iterBar = el('div', 'iterate-bar', '');
+          iterBar.innerHTML = `
+            <span style="font-size:11px;color:var(--chalk-faint);font-family:var(--font-mono);display:flex;align-items:center;gap:4px">不满意？</span>
+            <button class="iterate-chip" onclick="iteratePlan('swap')">换一批动作</button>
+            <button class="iterate-chip" onclick="iteratePlan('harder')">加大强度</button>
+            <button class="iterate-chip" onclick="iteratePlan('easier')">降低难度</button>
+            <button class="iterate-chip" onclick="iteratePlan('focus')">聚焦核心</button>
+          `;
+          resultArea.appendChild(iterBar);
+          // Save to history
+          savePlanToHistory(getProfile(), data);
+          loadHistory();
+        }
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
@@ -1461,12 +1705,15 @@ async function generatePlan() {
   btn.disabled = true;
   btn.textContent = '⟳ FORGING...';
   const output = document.getElementById('plan-output');
-  output.innerHTML = '';
+  showProgress('plan-output');
   output.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  const profile = getProfile();
   try {
-    const body = { ...getProfile(), query: document.getElementById('plan-query')?.value || '' };
-    await streamFrom('/api/generate-plan', body, 'plan-output');
+    const body = { ...profile, query: document.getElementById('plan-query')?.value || '' };
+    await streamFrom('/api/generate-plan', body, 'plan-output', 'plan');
+    // Save to history after successful generation
+    // The plan data is stored on the output element during streaming
   } catch(e) {
     output.innerHTML = `<div class="live-stage" style="border-left-color:var(--danger)">请求失败: ${e.message}</div>`;
   }
