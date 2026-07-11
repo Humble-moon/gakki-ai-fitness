@@ -32,20 +32,13 @@ class Neo4jClient:
         self.driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
     def run(self, query: str, params: dict = None):
-        """
-        执行 Cypher 查询，返回原始 Result 对象
+        """执行 Cypher 写操作（CREATE/MERGE/DELETE），返回消耗计数。
 
-        输入参数：
-            query  : str  - Cypher 查询语句（Neo4j 的 SQL 等价物，如 MATCH/CREATE/MERGE）
-            params : dict - 查询参数字典，可选
-        返回值：
-            neo4j.Result 对象 - 包含原始游标，可通过迭代获取 Record
-
-        使用场景：
-            需要流式处理大量结果时使用，避免一次性加载全部数据到内存
+        对于读操作请使用 query() 方法获取完整结果列表。
         """
         with self.driver.session() as session:
-            return session.run(query, params or {})
+            result = session.run(query, params or {})
+            return result.consume()  # 返回 SummaryCounters
 
     def query(self, query: str, params: dict = None):
         """

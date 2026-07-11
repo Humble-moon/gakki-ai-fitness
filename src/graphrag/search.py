@@ -171,7 +171,8 @@ class GraphSearch:
         """
         results = self.neo4j.query(
             """
-            MATCH (e:Exercise {name: $name})-[:MAY_CAUSE]->(i:Injury)
+            MATCH (e:Exercise)-[:MAY_CAUSE]->(i:Injury)
+            WHERE e.name CONTAINS $name
             RETURN i.name AS injury
             """,
             {"name": exercise},
