@@ -25,7 +25,7 @@ from pathlib import Path
 # 将项目根目录加入 Python 模块搜索路径，确保 src.* 导入正常
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -282,6 +282,59 @@ def ask_question(req: QuestionRequest):
         _stream_events(orch.answer_question_stream(req.question, profile, req.session_id)),
         media_type="text/event-stream"
     )
+
+
+@app.post("/api/upload-document")
+async def upload_document(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+):
+    """上传 PDF/Word/MD 文档，解析并存入 session 级文档库。
+
+    参数：
+        file: 上传文件（PDF/Word/MD，最大 20MB）
+        session_id: 当前会话 ID（必填）
+
+    返回：
+        JSON: {"document_id", "filename", "file_type", "total_chars",
+               "page_count", "title", "has_text", "error"}
+    """
+    from src.parsers import parse_file
+    from src.storage.document_store import MAX_FILE_SIZE
+
+    # 读文件内容
+    content = await file.read()
+
+    # 大小检查
+    if len(content) > MAX_FILE_SIZE:
+        return {"error": f"文件过大（{len(content)/1024/1024:.1f}MB），限制 {MAX_FILE_SIZE/1024/1024:.0f}MB"}
+
+    # 解析
+    parsed = parse_file(content, file.filename or "unknown")
+
+    # 存入文档库
+    doc_id = orch.documents.save(
+        session_id=session_id,
+        filename=parsed.filename,
+        file_type=parsed.file_type,
+        file_size=len(content),
+        full_text=parsed.full_text,
+        page_count=parsed.page_count,
+        title=parsed.title,
+        has_text=parsed.has_text,
+        parse_error=parsed.error or "",
+    )
+
+    return {
+        "document_id": doc_id,
+        "filename": parsed.filename,
+        "file_type": parsed.file_type,
+        "total_chars": parsed.total_chars,
+        "page_count": parsed.page_count,
+        "title": parsed.title,
+        "has_text": parsed.has_text,
+        "error": parsed.error,
+    }
 
 
 @app.get("/")

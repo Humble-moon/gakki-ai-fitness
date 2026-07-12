@@ -173,6 +173,45 @@ class TrainingPlan(Base):
 
 
 # ============================================================
+# 用户上传文档表 (user_documents)
+# 存储用户上传的 PDF/Word/MD 文档的解析结果
+# ============================================================
+class UserDocument(Base):
+    __tablename__ = "user_documents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(128), nullable=False, index=True)
+    filename = Column(String(256), nullable=False)
+    file_type = Column(String(16), nullable=False)    # pdf / docx / md
+    file_size = Column(Integer, default=0)            # 字节数
+    raw_content = Column(Text, default="")            # 解析后的纯文本全文
+    page_count = Column(Integer, default=1)
+    title = Column(String(256), default="")           # 文档标题
+    has_text = Column(Integer, default=1)             # 0=扫描件无文字, 1=正常
+    parse_error = Column(String(512), default="")     # 解析错误信息
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============================================================
+# 文档切块表 (document_chunks)
+# 独立于 knowledge_chunks，确保用户文档和公共知识库检索隔离
+# ============================================================
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(Integer, nullable=False, index=True)
+    session_id = Column(String(128), nullable=False, index=True)
+    chunk_index = Column(Integer, default=0)
+    content = Column(Text, nullable=False)            # 已注入标题路径+页码上下文
+    chunk_type = Column(String(16), default="text")   # "text" | "table"
+    title_path = Column(String(512), default="")      # 章节路径
+    page_number = Column(Integer, default=1)
+    embedding = Column(Vector(EMBEDDING_DIM))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============================================================
 # 数据库引擎和会话工厂
 # ============================================================
 # create_engine 创建全局唯一的数据库连接引擎，管理连接池
