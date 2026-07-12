@@ -451,6 +451,82 @@ body::after {
   vertical-align: text-bottom;
 }
 
+/* ── Chat Messages (Q&A tab) ── */
+.qa-chat-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 4px;
+  scroll-behavior: smooth;
+}
+.qa-chat-container::-webkit-scrollbar { width: 4px; }
+.qa-chat-container::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 2px; }
+
+.chat-turn {
+  margin-bottom: 20px;
+  animation: fadeSlideIn 0.3s var(--ease-out);
+}
+.chat-user-bubble {
+  background: var(--forge-amber-dim);
+  border: 1px solid rgba(255,107,53,0.15);
+  padding: 14px 18px;
+  border-radius: var(--radius-md) var(--radius-md) 4px var(--radius-md);
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--chalk);
+  margin-left: auto;
+  max-width: 85%;
+  width: fit-content;
+}
+.chat-user-bubble .user-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--forge-amber);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+  display: block;
+}
+.chat-ai-bubble {
+  background: linear-gradient(135deg, rgba(0,201,160,0.04), rgba(255,107,53,0.03));
+  border-left: 3px solid var(--cool-blue);
+  padding: 18px 22px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--chalk);
+  position: relative;
+}
+.chat-ai-bubble .cursor {
+  display: inline-block;
+  width: 2px; height: 16px;
+  background: var(--cool-blue);
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+.chat-ai-bubble .ai-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cool-blue);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  display: block;
+}
+.chat-sources {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--steel);
+  font-size: 11px;
+  color: var(--chalk-dim);
+  font-family: var(--font-mono);
+}
+.chat-sources b { color: var(--cool-blue); }
+
 /* ── Stream Box ── */
 .stream-box {
   background: var(--bg-card);
@@ -1236,7 +1312,8 @@ body::after {
         <button class="btn-secondary" id="qa-new-session-btn" onclick="newQaSession()" style="display:none;">新对话</button>
       </div>
       <div id="qa-output" style="margin-top:24px">
-        <div class="welcome-area">
+        <div class="qa-chat-container" id="qa-chat"></div>
+        <div class="welcome-area" id="qa-welcome">
           <div class="empty-state">
             <div class="icon-ring">&#10033;</div>
             <h3>Knowledge Forge</h3>
@@ -1279,6 +1356,13 @@ body::after {
 </div>
 
 <script>
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
 /* ================================================================
    IRON MIND — Client-side logic (API calls, SSE streaming, rendering)
    ================================================================ */
@@ -1311,6 +1395,10 @@ function newQaSession() {
   qaSessionId = globalSessionId;
   qaTurnCount = 0;
   document.getElementById('uploaded-files').innerHTML = '';
+  const welcome = document.getElementById('qa-welcome');
+  const chat = document.getElementById('qa-chat');
+  if (welcome) welcome.style.display = '';
+  if (chat) chat.innerHTML = '';
   document.getElementById('qa-session-badge').style.display = 'none';
   document.getElementById('qa-new-session-btn').style.display = 'none';
   document.getElementById('qa-output').innerHTML = `
@@ -1853,27 +1941,44 @@ function handleFileDrop(e) {
 
 function removeFile() {
   document.getElementById('uploaded-files').innerHTML = '';
+  const welcome = document.getElementById('qa-welcome');
+  const chat = document.getElementById('qa-chat');
+  if (welcome) welcome.style.display = '';
+  if (chat) chat.innerHTML = '';
 }
 
 async function askQuestion() {
-  const output = document.getElementById('qa-output');
   const question = document.getElementById('qa-query')?.value?.trim();
-  if (!question) {
-    output.innerHTML = '<div class="live-stage" style="border-left-color:var(--danger)">请输入你的健身问题</div>';
-    return;
-  }
+  if (!question) return;
 
-  output.innerHTML = '';
+  // Hide welcome, show chat
+  const welcome = document.getElementById('qa-welcome');
+  const chat = document.getElementById('qa-chat');
+  if (welcome) welcome.style.display = 'none';
+
+  // Create this turn: user bubble + AI bubble
+  const turn = el('div', 'chat-turn', '');
+  turn.innerHTML = `<div class="chat-user-bubble"><span class="user-label">YOU</span>${escapeHtml(question)}</div>`;
+  const aiBubble = el('div', 'chat-ai-bubble',
+    '<span class="ai-label">IRON MIND</span><span class="cursor"></span>');
+  turn.appendChild(aiBubble);
+  chat.appendChild(turn);
+
+  // Brief stage indicator
+  let stageEl = el('div', 'stage-detail', '');
+  stageEl.style.cssText = 'margin:0 0 8px 0;font-size:11px;padding:6px 12px;';
+  stageEl.innerHTML = '<span class="dot-pulse" style="display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:var(--forge-amber);animation:dotPulse 1.2s infinite;"></span>检索中...';
+  turn.appendChild(stageEl);
+  chat.scrollTop = chat.scrollHeight;
 
   const body = { ...getProfile(), question, session_id: qaSessionId };
   qaTurnCount++;
-
-  let stageEl = null, streamBox = null, streamText = '';
+  let streamText = '';
+  let stageGone = false;
 
   try {
     const resp = await fetch('/api/ask-question', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const reader = resp.body.getReader();
@@ -1886,48 +1991,24 @@ async function askQuestion() {
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         const { event, data } = JSON.parse(line.slice(6));
-
-        if (event === 'stage') {
-          stageEl = el('div', 'live-stage', `<span class="dot-pulse"></span>${data}`);
-          output.appendChild(stageEl);
-        } else if (event === 'graph_done') {
-          const painData = data.pain_data || {};
-          const causes = painData.possible_causes || [];
-          const rehab = painData.suggested_rehab || [];
-          if (causes.length || rehab.length) {
-            const graphDiv = el('div', 'stage-detail', '');
-            graphDiv.innerHTML = `&#9883; 知识图谱推理完成`;
-            if (causes.length) graphDiv.innerHTML += `<br>关联: ${causes.map(c => c.injury).join('、')}`;
-            if (rehab.length) graphDiv.innerHTML += `<br>康复建议: ${rehab.join('、')}`;
-            output.appendChild(graphDiv);
-          }
-        } else if (event === 'retriever_done') {
-          if (data.count > 0) {
-            output.appendChild(el('div', 'stage-detail',
-              `检索到 <b>${data.count}</b> 个相关知识: ${(data.names||[]).slice(0,5).join('、')}`));
-          }
-        } else if (event === 'answer_chunk') {
-          if (!streamBox) {
-            streamBox = el('div', 'advice-bubble', '');
-            output.appendChild(streamBox);
-          }
+        if (event === 'answer_chunk') {
+          if (!stageGone) { stageEl.remove(); stageGone = true; }
           streamText += data;
-          streamBox.innerHTML = streamText + '<span class="cursor"></span>';
+          aiBubble.innerHTML = '<span class="ai-label">IRON MIND</span>' + streamText + '<span class="cursor"></span>';
+          chat.scrollTop = chat.scrollHeight;
         } else if (event === 'done') {
-          if (streamBox) streamBox.querySelector('.cursor')?.remove();
-          output.querySelectorAll('.live-stage, .stage-detail').forEach(e => e.remove());
-          // Show knowledge sources if available
+          if (!stageGone) { stageEl.remove(); stageGone = true; }
+          aiBubble.querySelector('.cursor')?.remove();
           const sources = data.sources || [];
           if (sources.length) {
-            const srcDiv = el('div', 'stage-detail', '');
-            srcDiv.style.cssText = 'margin-top:16px;font-size:12px;padding:12px 16px;';
-            srcDiv.innerHTML = '参考来源：' + sources.slice(0,4).map(s =>
-              `<b>《${s.title}》</b>`).join('、');
-            output.appendChild(srcDiv);
+            const srcDiv = el('div', 'chat-sources', '');
+            let srcHtml = '参考来源：' + sources.slice(0,4).map(s => '<b>《' + s.title + '》</b>').join('、');
+            if (data.doc_chunks > 0) srcHtml += ' + <b>' + data.doc_chunks + '</b> 段文件内容';
+            srcDiv.innerHTML = srcHtml;
+            turn.appendChild(srcDiv);
           }
           if (qaTurnCount >= 1) {
             document.getElementById('qa-session-badge').style.display = 'inline-flex';
@@ -1937,8 +2018,11 @@ async function askQuestion() {
       }
     }
   } catch(e) {
-    output.innerHTML = `<div class="live-stage" style="border-left-color:var(--danger)">请求失败: ${e.message}</div>`;
+    if (!stageGone) stageEl.remove();
+    aiBubble.innerHTML = '<span class="ai-label">IRON MIND</span><span style="color:var(--danger)">请求失败: ' + escapeHtml(e.message) + '</span>';
   }
+  document.getElementById('qa-query').value = '';
+  chat.scrollTop = chat.scrollHeight;
 }
 </script>
 </body>
