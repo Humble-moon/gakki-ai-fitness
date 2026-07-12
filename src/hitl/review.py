@@ -45,7 +45,7 @@ INJURY_EXERCISE_CONFLICTS = {
     "TFCC": ["弯举", "卧推", "推举"],
     "颈": ["深蹲", "推举", "杠铃"],
     "踝": ["提踵", "跳跃", "深蹲", "箭步蹲"],
-    "跟腱": ["提踵", "跳跃"],
+    "跟腱": ["提踵", "跳跃", "小腿", "跑步", "跳绳"],
     "手术": ["深蹲", "硬拉", "卧推", "推举", "划船"],  # 术后所有大重量复合动作都禁
     "术后": ["深蹲", "硬拉", "卧推", "推举", "划船"],
     "重建": ["深蹲", "硬拉", "卧推", "推举", "划船", "箭步蹲"],
@@ -142,6 +142,7 @@ class HITLReview:
 
         遍历 profile["injuries"] 和 plan["days"][*]["exercises"][*]["name"]，
         用 INJURY_EXERCISE_CONFLICTS 表做 substring 匹配。
+        同时检查 query_text 中是否提到了禁止动作（用户可能在询问危险动作）。
         任何冲突都直接返回 danger 级别问题。
         """
         injuries = profile.get("injuries", [])
@@ -173,6 +174,7 @@ class HITLReview:
             # 检查每个伤病关键词 → 冲突动作
             for keyword, forbidden_exercises in INJURY_EXERCISE_CONFLICTS.items():
                 if keyword in injury_lower or keyword in query_text:
+                    # 1. 检查 plan 中的已知动作名
                     for ex_name in exercise_names:
                         for forbidden in forbidden_exercises:
                             if forbidden in ex_name:
@@ -182,17 +184,32 @@ class HITLReview:
                                 )
                                 break  # 每个动作只报一次
 
+                    # 2. 也检查 query 文本中是否提到了禁止动作
+                    # 例如用户问"跟腱炎怎么练小腿"，query 中提到"小腿"→推测为提踵类动作→触发冲突
+                    for forbidden in forbidden_exercises:
+                        if forbidden in query_text:
+                            issues.append(
+                                f"[规则引擎] 用户查询含伤病「{injury}」，"
+                                f"且提到高风险动作「{forbidden}」（触发词: {keyword}），建议人工审核"
+                            )
+
         # 检查 query_text 中是否包含高危伤病关键词
         for keyword in CRITICAL_INJURY_KEYWORDS:
             if keyword in query_text:
                 # 对所有涉及的动作都标记
                 for ex_name in exercise_names:
-                    if ex_name not in [i for i in issues]:
-                        # 至少报一次高危
-                        issues.append(
-                            f"[规则引擎] 用户描述含高危关键词「{keyword}」，"
-                            f"计划中的「{ex_name}」需人工确认安全性"
-                        )
+                    issue_text = (
+                        f"[规则引擎] 用户描述含高危关键词「{keyword}」，"
+                        f"计划中的「{ex_name}」需人工确认安全性"
+                    )
+                    if issue_text not in issues:
+                        issues.append(issue_text)
+                if not exercise_names:
+                    # 没有具体动作名也要报（高危关键词本身就值得关注）
+                    issues.append(
+                        f"[规则引擎] 用户描述含高危关键词「{keyword}」，"
+                        f"请人工审核训练方案安全性"
+                    )
                 break  # 只报一次高危
 
         # 去重

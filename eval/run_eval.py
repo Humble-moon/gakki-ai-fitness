@@ -253,6 +253,24 @@ def _extract_exercise_for_eval(query: str) -> str:
     for ex in common_exercises:
         if ex in query:
             return ex
+
+    # 身体部位 → 对应动作映射（当 query 中没有明确动作名时推测）
+    body_part_to_exercise = {
+        "小腿": "站姿提踵",
+        "腹": "平板支撑",
+        "核心": "平板支撑",
+        "臀": "臀推",
+        "大腿": "深蹲",
+        "二头": "哑铃弯举",
+        "三头": "绳索下压",
+        "胸": "杠铃卧推",
+        "背": "杠铃划船",
+        "肩": "哑铃推举",
+    }
+    for body_part, exercise in body_part_to_exercise.items():
+        if body_part in query:
+            return exercise
+
     return "杠铃深蹲"  # 默认用深蹲（常见动作，比"测试动作"更真实）
 
 
