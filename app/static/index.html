@@ -1278,15 +1278,25 @@ const SCENE_EQUIPMENT = {
   '户外':   ['自重', '弹力带', '单杠'],
 };
 
-// ── Multi-turn QA session ──
-let qaSessionId = 'qa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+// ── Multi-turn session (all tabs) ──
+// 全局会话 ID：计划生成/动作分析/知识问答 共享同一个 session
+// 这样用户在任意 tab 的操作历史都能被 LLM 感知到
+const APP_SESSION_KEY = 'ironmind_session_id';
+let globalSessionId = localStorage.getItem(APP_SESSION_KEY) ||
+  'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+localStorage.setItem(APP_SESSION_KEY, globalSessionId);
+
+// ── Multi-turn QA session (legacy, kept for qa-specific UI) ──
+let qaSessionId = globalSessionId;  // Q&A shares the global session
 let qaTurnCount = 0;
 
 // Load history on page load
 document.addEventListener('DOMContentLoaded', () => { loadHistory(); });
 
 function newQaSession() {
-  qaSessionId = 'qa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  globalSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  localStorage.setItem(APP_SESSION_KEY, globalSessionId);
+  qaSessionId = globalSessionId;
   qaTurnCount = 0;
   document.getElementById('qa-session-badge').style.display = 'none';
   document.getElementById('qa-new-session-btn').style.display = 'none';
@@ -1710,7 +1720,7 @@ async function generatePlan() {
 
   const profile = getProfile();
   try {
-    const body = { ...profile, query: document.getElementById('plan-query')?.value || '' };
+    const body = { ...profile, query: document.getElementById('plan-query')?.value || '', session_id: globalSessionId };
     await streamFrom('/api/generate-plan', body, 'plan-output', 'plan');
     // Save to history after successful generation
     // The plan data is stored on the output element during streaming
@@ -1728,7 +1738,8 @@ async function analyzeExercise() {
   const body = {
     ...getProfile(),
     exercise_name: document.getElementById('ex-name').value || '哑铃卧推',
-    user_description: document.getElementById('ex-desc').value || ''
+    user_description: document.getElementById('ex-desc').value || '',
+    session_id: globalSessionId
   };
 
   let stageEl = null, streamBox = null, streamText = '';

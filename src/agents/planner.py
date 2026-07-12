@@ -29,12 +29,15 @@ class PlannerAgent:
         self.llm = LLMProvider()
         self.skills = SkillRegistry()
 
-    def plan(self, user_input: str, profile: dict) -> dict:
+    def plan(self, user_input: str, profile: dict,
+             conv_context: str = "", plan_context: str = "") -> dict:
         """根据用户输入和画像生成任务规划。
 
         输入：
             user_input: str — 用户的自由文本输入，如 "为增肌目标生成训练计划"
             profile: dict — 用户画像字典（身高/体重/训练年限/伤病等）
+            conv_context: str — 多轮对话历史上下文（来自 ConversationManager）
+            plan_context: str — 上一轮训练计划摘要（用于"修改计划"场景）
         输出：
             dict — 包含以下字段：
                 - "subtasks": list[str] — LLM 拆解出的子任务列表，如 ["胸部训练", "背部训练"]
@@ -54,8 +57,12 @@ class PlannerAgent:
         # 1. 技能匹配：根据用户输入关键词自动识别训练目标类型
         skill_name = self.skills.match(user_input)
         skill = self.skills.get(skill_name)
-        # 2. 构建 LLM 提示词（包含 system prompt + 用户画像 + 需求描述）
-        messages = build_planner_messages(user_input, profile)
+        # 2. 构建 LLM 提示词（含多轮上下文注入）
+        messages = build_planner_messages(
+            user_input, profile,
+            conv_context=conv_context,
+            plan_context=plan_context,
+        )
         # 3. 调用 LLM 拆解任务，chat_with_json_mode 强制返回合法 JSON
         plan = self.llm.chat_with_json_mode(messages)
         # 4. 将技能模板信息注入到规划结果中，供下游使用

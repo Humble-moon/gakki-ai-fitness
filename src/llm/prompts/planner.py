@@ -35,7 +35,8 @@ PLANNER_SYSTEM = """你是健身训练计划编排专家。根据用户的身体
 """
 
 
-def build_planner_messages(user_input: str, profile: dict) -> list:
+def build_planner_messages(user_input: str, profile: dict,
+                          conv_context: str = "", plan_context: str = "") -> list:
     """
     构造发送给 Planner Agent 的消息列表。
 
@@ -44,6 +45,8 @@ def build_planner_messages(user_input: str, profile: dict) -> list:
         profile: dict     - 用户画像字典，通常包含：
                             身高(height)、体重(weight)、训练水平(level)、
                             伤病史(injuries)、可用器械(equipment)、目标(goal)等
+        conv_context: str - 多轮对话历史上下文（可选）
+        plan_context: str - 上一轮训练计划摘要（可选，用于"修改计划"场景）
 
     返回值：
         list             - OpenAI 格式的 messages 列表，可直接传给 LLMProvider.chat()
@@ -52,8 +55,15 @@ def build_planner_messages(user_input: str, profile: dict) -> list:
         将 user_input 和 profile 拼接成一条 user 消息，让 LLM 在 system prompt
         的指导下完成"任务拆解"工作。profile 以 Python dict 的字符串形式直接
         拼接，因为 LLM 能很好地理解这种格式。
+        如果提供了多轮对话上下文和计划摘要，注入到 user 消息中帮助 LLM
+        理解用户的修改意图。
     """
+    user_msg = f"用户信息：{profile}\n用户请求：{user_input}"
+    if conv_context:
+        user_msg = f"{conv_context}\n\n{user_msg}"
+    if plan_context:
+        user_msg += f"\n\n【当前训练计划（用户可能要修改它）】\n{plan_context}"
     return [
         {"role": "system", "content": PLANNER_SYSTEM},
-        {"role": "user", "content": f"用户信息：{profile}\n用户请求：{user_input}"}
+        {"role": "user", "content": user_msg}
     ]

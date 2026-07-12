@@ -73,6 +73,8 @@ class PlanRequest(BaseModel):
     # 伤病史列表，默认空
     query: str = ""
     # 自然语言查询，为空时使用默认模板
+    session_id: Optional[str] = None
+    # 会话 ID，用于多轮对话（修改计划时说"把第二天改成哑铃动作"）
 
 
 class AnalysisRequest(BaseModel):
@@ -99,6 +101,8 @@ class AnalysisRequest(BaseModel):
     # 要分析的动作名称，如 "杠铃深蹲"
     user_description: str = ""
     # 用户对自己做动作时的感受描述
+    session_id: Optional[str] = None
+    # 会话 ID，用于多轮对话上下文
 
 
 class QuestionRequest(BaseModel):
@@ -196,7 +200,7 @@ def generate_plan(req: PlanRequest):
         days_per_week=req.days_per_week, injuries=req.injuries
     )
     return StreamingResponse(
-        _stream_events(orch.generate_plan_stream(profile, req.query)),
+        _stream_events(orch.generate_plan_stream(profile, req.query, req.session_id)),
         media_type="text/event-stream"
     )
 
@@ -214,6 +218,7 @@ def analyze_exercise(req: AnalysisRequest):
         - exercise_name: str     动作名称
         - user_description: str  用户感受描述
         - height: float, weight: float, ...  用户身体参数
+        - session_id: str|None   会话 ID（多轮对话）
 
     响应（SSE 流）：
         事件类型：
@@ -233,7 +238,8 @@ def analyze_exercise(req: AnalysisRequest):
         days_per_week=req.days_per_week, injuries=req.injuries
     )
     return StreamingResponse(
-        _stream_events(orch.analyze_exercise_stream(req.exercise_name, req.user_description, profile)),
+        _stream_events(orch.analyze_exercise_stream(
+            req.exercise_name, req.user_description, profile, req.session_id)),
         media_type="text/event-stream"
     )
 
