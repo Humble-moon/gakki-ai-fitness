@@ -460,7 +460,16 @@ class Orchestrator:
         # === 构建带引用来源和对话上下文的回答提示词 ===
         yield ("stage", "[解答] 正在为你解答...")
         sources_text = ""
-        for i, chunk in enumerate(knowledge_chunks, 1):
+        # 过滤低相关性 chunk：LLM 重排序分数 >= 6/10 的才纳入上下文
+        RELEVANCE_THRESHOLD = 6
+        relevant_sources = [
+            c for c in knowledge_chunks
+            if (c.get("rerank_score") or c.get("rrf_score") or 0) >= RELEVANCE_THRESHOLD
+        ]
+        if not relevant_sources:
+            relevant_sources = knowledge_chunks[:2]  # 兜底：至少保留 2 条
+            sources_text = "（以下知识库内容仅供参考，相关性可能不高）\n"
+        for i, chunk in enumerate(relevant_sources, 1):
             snippet = chunk["content"][:400].replace("\n", " ")
             sources_text += f"\n[来源{i}] 《{chunk['title']}》：{snippet}\n"
 
@@ -502,7 +511,7 @@ class Orchestrator:
 2. 解释原因（解剖/生理层面，但用大白话说）
 3. 给出 2-3 条可执行的建议
 4. 如果涉及危险信号，明确建议就医
-5. 回答中引用知识库来源时用 [来源N] 标注
+5. 用自己的话自然回答，不要在正文里写 [来源N] 或类似标记（来源信息会单独展示给用户）
 6. 200-350 字，口语化，像教练在聊天
 7. 纯文字段落，不用 markdown
 {"8. 如果用户使用了'改一下''换一个''刚才说的'等指代，请结合对话历史中的上下文理解用户的真正意图。" if conv_context else ""}"""
@@ -518,17 +527,17 @@ class Orchestrator:
             self.conversation.add_turn(session_id, "assistant", full_text[:500])
 
         # === 构建引用来源列表 ===
-        # 提取知识库文档的标题、文件名和相关性分数，返回给前端做引用标注
+        # 只返回实际在回答中可能被引用的高相关性来源
         source_citations = [
-            {"title": c["title"], "source_file": c["source_file"],
+            {"title": c["title"], "source_file": c.get("source_file", ""),
              "score": c.get("rerank_score") or c.get("rrf_score", 0)}
-            for c in knowledge_chunks
+            for c in relevant_sources
         ]
 
         yield ("done", {
             "answer": full_text,
             "sources": source_citations,
-            "knowledge_count": len(knowledge_chunks),
+            "knowledge_count": len(relevant_sources),
             "exercise_count": len(exercises),
             "graph_data": graph_data,
             "session_id": session_id,
