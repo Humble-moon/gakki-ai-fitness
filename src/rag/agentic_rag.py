@@ -54,7 +54,7 @@ from src.rag.vector_search import VectorSearch
 from src.rag.keyword_search import KeywordSearch
 from src.llm.provider import LLMProvider
 from src.llm.prompts.retriever import build_retriever_eval_messages
-from src.config import AGENTIC_RAG_MAX_RETRIES
+from src.config import AGENTIC_RAG_MAX_RETRIES, REWRITE_MODEL
 
 
 class AgenticRAG:
@@ -133,8 +133,8 @@ class AgenticRAG:
                 # 构建评估消息：告诉 LLM 原始查询是什么、检索到了什么
                 # 只传前 10 条避免超出 LLM 上下文窗口
                 eval_msgs = build_retriever_eval_messages(query, combined[:10])
-                # 调用 LLM 返回 JSON：{"quality_score": 0.85, "rewritten_query": "..."}
-                eval_result = self.llm.chat_with_json_mode(eval_msgs)
+                # 调用小模型做检索评估 + 查询改写（REWRITE_MODEL，独立配置，默认 deepseek-chat）
+                eval_result = self.llm.chat_with_json_mode(eval_msgs, model=REWRITE_MODEL)
 
                 # quality_score: LLM 对当前检索结果的评分（0~1）
                 # 0.7 是经验阈值：健身领域的查询通常需要较高精度

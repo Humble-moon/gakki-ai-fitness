@@ -162,3 +162,9 @@ AGENTIC_RAG_MAX_RETRIES = 3
 HITL_CONFIDENCE_THRESHOLD = 0.7
 # 人工介入（Human-in-the-Loop）阈值：
 # 当 AI 对分析结果的置信度 < 0.7 时，标记为需要人工审核
+
+REWRITE_MODEL = os.getenv("REWRITE_MODEL", "deepseek-chat")
+# 查询改写专用模型。Agentic RAG 的检索评估 + 查询改写环节使用此模型。
+# 设计意图：改写是高频低成本操作，不需要大模型，用小的便宜模型即可。
+# 默认 deepseek-chat（DeepSeek 目前最小可用模型），后续可换为更便宜的模型。
+# 用法：配置独立的 LLM_REWRITE_* 或在 .env 设 REWRITE_MODEL=deepseek-chat
