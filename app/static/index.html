@@ -1218,6 +1218,18 @@ body::after {
     <!-- Q&A Tab -->
     <div class="tab-content" id="tab-qa">
       <textarea class="query-input" id="qa-query" placeholder="输入你的健身问题，如：硬拉的时候下背酸正常吗？减脂期怎么安排碳水？" style="margin-bottom:8px"></textarea>
+      <!-- File Upload Area -->
+      <div id="file-upload-area" style="margin-bottom:10px; border:1px dashed var(--steel-light); border-radius:var(--radius-md); padding:12px 16px; cursor:pointer; transition:all .2s; background:var(--bg-card); display:flex; align-items:center; gap:10px;"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="this.style.borderColor='var(--forge-amber)';this.style.background='var(--forge-amber-dim)';return false"
+           ondragleave="this.style.borderColor='var(--steel-light)';this.style.background='var(--bg-card)';return false"
+           ondrop="handleFileDrop(event);this.style.borderColor='var(--steel-light)';this.style.background='var(--bg-card)';return false">
+        <span style="font-size:20px;color:var(--chalk-dim);">&#128206;</span>
+        <span style="font-size:12px;color:var(--chalk-dim);">上传体检报告/训练日志 (PDF/Word/MD, 20MB)</span>
+        <input type="file" id="file-input" accept=".pdf,.docx,.doc,.md,.txt" style="display:none"
+               onchange="uploadFile()"/>
+      </div>
+      <div id="uploaded-files" style="margin-bottom:10px;"></div>
       <div style="display:flex; gap:10px; align-items:center;">
         <button class="btn-generate" onclick="askQuestion()" style="flex:0 0 auto; width:auto;">▸ 提问</button>
         <span class="session-badge" id="qa-session-badge" style="display:none;">多轮对话中</span>
@@ -1298,6 +1310,7 @@ function newQaSession() {
   localStorage.setItem(APP_SESSION_KEY, globalSessionId);
   qaSessionId = globalSessionId;
   qaTurnCount = 0;
+  document.getElementById('uploaded-files').innerHTML = '';
   document.getElementById('qa-session-badge').style.display = 'none';
   document.getElementById('qa-new-session-btn').style.display = 'none';
   document.getElementById('qa-output').innerHTML = `
@@ -1791,6 +1804,55 @@ async function analyzeExercise() {
   } catch(e) {
     output.innerHTML = `<div class="live-stage" style="border-left-color:var(--danger)">请求失败: ${e.message}</div>`;
   }
+}
+
+// ── File Upload ──
+async function uploadFile() {
+  const input = document.getElementById('file-input');
+  const file = input.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('session_id', globalSessionId);
+
+  // Show uploading state
+  const area = document.getElementById('uploaded-files');
+  area.innerHTML = `<div style="font-size:12px;color:var(--chalk-dim);padding:4px 0;">⏳ 正在解析 ${file.name}...</div>`;
+
+  try {
+    const resp = await fetch('/api/upload-document', { method: 'POST', body: formData });
+    const result = await resp.json();
+
+    if (result.error && !result.has_text) {
+      area.innerHTML = `<div style="font-size:12px;color:var(--warn);padding:4px 0;">
+        ⚠ ${file.name}: ${result.error || '无法提取文字，可能是扫描件'}</div>`;
+    } else if (result.has_text) {
+      area.innerHTML = `<div style="font-size:12px;color:var(--cool-blue);padding:4px 0;display:flex;align-items:center;gap:8px;">
+        <span>📄 ${result.title || file.name}</span>
+        <span style="color:var(--chalk-dim)">${result.total_chars} 字 · ${result.page_count} 页</span>
+        <span onclick="removeFile()" style="cursor:pointer;color:var(--chalk-dim);margin-left:auto;" title="移除">✕</span>
+      </div>`;
+    } else {
+      area.innerHTML = `<div style="font-size:12px;color:var(--danger);">✕ ${file.name}: ${result.error || '解析失败'}</div>`;
+    }
+  } catch(e) {
+    area.innerHTML = `<div style="font-size:12px;color:var(--danger);">✕ 上传失败: ${e.message}</div>`;
+  }
+  input.value = '';
+}
+
+function handleFileDrop(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    document.getElementById('file-input').files = e.dataTransfer.files;
+    uploadFile();
+  }
+}
+
+function removeFile() {
+  document.getElementById('uploaded-files').innerHTML = '';
 }
 
 async function askQuestion() {

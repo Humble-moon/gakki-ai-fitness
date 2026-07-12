@@ -32,6 +32,7 @@ from src.memory.conversation import ConversationManager
 from src.skills.registry import SkillRegistry
 from src.a2a.messaging import MessageBus, Task, Artifact
 from src.models.schemas import UserProfileInput
+from src.storage.document_store import DocumentStore
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class Orchestrator:
         self.bus = MessageBus()
         self.knowledge = KnowledgeSearch()
         self.conversation = ConversationManager()
+        self.documents = DocumentStore()
 
     def generate_plan(self, profile: UserProfileInput, query: str = "") -> dict:
         """【同步版】根据用户画像和查询生成完整的训练计划。
@@ -433,10 +435,20 @@ class Orchestrator:
                 yield ("graph_done", graph_data)
 
         # === 知识库搜索 ===
-        # search_with_fallback 内部实现：向量检索 → 数量不足时降级关键词检索 → RRF 融合 → LLM 重排序
         yield ("stage", "[知识库] 正在检索健身知识库...")
         knowledge_chunks = self.knowledge.search_with_fallback(question)
         yield ("knowledge_done", {"count": len(knowledge_chunks)})
+
+        # === 用户文档搜索（如果 session 中有上传文件）===
+        doc_chunks = []
+        doc_list = []
+        if session_id:
+            doc_chunks = self.documents.search(question, session_id, top_k=5)
+            doc_list = self.documents.get_documents_for_session(session_id)
+            if doc_chunks:
+                yield ("knowledge_done", {"count": len(knowledge_chunks),
+                                          "doc_chunks": len(doc_chunks),
+                                          "doc_files": len(doc_list)})
 
         # === 动作数据库检索 ===
         # 即使是一般性问题，也检索相关动作作为回答的参考素材
@@ -451,6 +463,13 @@ class Orchestrator:
         for i, chunk in enumerate(knowledge_chunks, 1):
             snippet = chunk["content"][:400].replace("\n", " ")
             sources_text += f"\n[来源{i}] 《{chunk['title']}》：{snippet}\n"
+
+        # === 用户上传文档的 chunk 注入 ===
+        doc_sources_text = ""
+        if doc_chunks:
+            for i, chunk in enumerate(doc_chunks, 1):
+                snippet = chunk["content"][:400].replace("\n", " ")
+                doc_sources_text += f"\n[你的文件-{i}] {snippet}\n"
 
         # === 多轮对话：注入历史上下文 ===
         # 先记录本轮用户输入，再获取历史摘要。
@@ -471,6 +490,9 @@ class Orchestrator:
 
 知识库相关文档：
 {sources_text if sources_text else '（未找到直接相关的知识库文档，请基于专业知识回答）'}
+
+{"【用户上传的文件内容】" if doc_sources_text else ""}
+{doc_sources_text if doc_sources_text else ""}
 
 相关动作参考：
 {exercises[:5] if exercises else '无特定动作关联'}
@@ -510,6 +532,8 @@ class Orchestrator:
             "exercise_count": len(exercises),
             "graph_data": graph_data,
             "session_id": session_id,
+            "doc_chunks": len(doc_chunks),
+            "doc_files": len(doc_list),
         })
 
     def _extract_exercise_from_question(self, question: str) -> str | None:
