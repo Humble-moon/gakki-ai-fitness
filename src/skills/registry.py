@@ -158,29 +158,100 @@ class SkillRegistry:
         """
         根据用户输入文本匹配最佳技能名称。
 
-        参数：
-            user_input: str  - 用户的原始输入文本
+        核心逻辑（五层匹配体系，按优先级从高到低）：
+        【第 0 层】高危医疗关键词 → 无条件 exercise_analysis（安全底线）
+        【第 1 层】疼痛/安全/功能障碍信号 → 即使有训练目标词也优先分析（安全第一）
+        【第 2 层】训练目标关键词 → "增肌"/"减脂"等强意图信号
+        【第 3 层】健身目标/姿态矫正补充触发词 → 口语化表达兜底
+        【第 4 层】通用分析触发词 → 语义较弱，放在最后
 
-        返回值：
-            str | None       - 匹配到的技能名称（如 "muscle_building"），
-                              无匹配时默认返回 "muscle_building"（即永远不返回 None）
-
-        核心逻辑：
-        1. 遍历所有技能的触发词列表。
-        2. 对每个触发词，用子串匹配（trigger in user_input）检查。
-        3. 命中第一个匹配的技能就立即返回（短路匹配）。
-           这意味着触发词可能有优先级问题——如果两个技能的触发词有重叠，
-           先注册的技能优先被匹配。
-        4. 无任何匹配时，默认兜底返回 "muscle_building"。
-
-        为什么默认返回增肌而不是返回 None：
-        健身场景下用户说不清具体需求的概率很高（如只发"给我一个计划"），
-        此时增肌是最常见的默认需求。返回 None 会导致流程中断，用户体验差。
+        设计取舍：关键词匹配有天花板（~92-95%）。剩余歧义 query（如
+        "同时增肌减脂可能吗"）需要 LLM 判断，但占比较低不值得加 API 调用成本。
         """
-        for name, skill in self.skills.items():
-            for trigger in skill.triggers:
-                if trigger in user_input:
-                    return name
+        # === 第 0 层：高危医疗关键词（命中 = 直接 exercise_analysis）===
+        MEDICAL_EMERGENCY = [
+            "间盘", "腰突", "半月板", "髌骨", "脱臼",
+            "腱鞘炎", "网球肘", "肩峰撞击", "跟腱炎", "TFCC",
+            "手术", "术后", "重建", "炎症", "撕裂感", "弹响", "咔咔响",
+            "损伤", "恢复期", "骨折",
+        ]
+        for keyword in MEDICAL_EMERGENCY:
+            if keyword in user_input:
+                return "exercise_analysis"
+
+        # === 第 1 层：疼痛/伤病安全信号（无条件优先）===
+        # "增肌期腰痛" → 安全优先，路由到分析
+        PAIN_AND_INJURY = [
+            "疼", "痛", "不舒服", "伤到",
+        ]
+        if any(t in user_input for t in PAIN_AND_INJURY):
+            return "exercise_analysis"
+
+        # === 第 1.5 层：功能/神经肌肉连接信号（仅在无训练目标时触发）===
+        # "引体向上做不了"→ 功能障碍分析；但"增肌期...做不了"→ 目标优先
+        # 这些词暗示动作执行问题，但不像疼痛那样是安全红线
+        has_dysfunction_signal = any(
+            t in user_input for t in ["做不了", "没感觉", "发力感", "找不到", "力竭"]
+        )
+
+        # === 第 2 层：训练目标关键词 ===
+        # fat_loss 先检查（因为"瘦"可能和"增肌"共存）
+        has_fat_loss = any(
+            t in user_input for t in ["减脂", "减重", "刷脂", "体脂", "减肥"]
+        )
+        has_muscle_gain = any(
+            t in user_input for t in ["增肌", "增重", "变大", "维度", "增肌塑形"]
+        )
+
+        # "特别瘦想增肌"：有"增肌"时"瘦"不应触发减脂
+        if has_muscle_gain:
+            return "muscle_building"
+
+        if has_fat_loss:
+            return "fat_loss"
+
+        # "瘦"单独出现（如"腿太粗想变细"），且无增肌意图
+        if "瘦" in user_input:
+            return "fat_loss"
+
+        # === 第 2.5 层：功能障碍信号（无训练目标时 → exercise_analysis）===
+        if has_dysfunction_signal:
+            return "exercise_analysis"
+
+        # === 第 3 层：健身目标/姿态补充触发词（口语化表达）===
+        MUSCLE_BUILDING_SUPP = [
+            "练粗", "练大", "练背", "练胸", "胸肌", "背肌",
+            "胳膊粗", "倒三角",
+        ]
+        if any(t in user_input for t in MUSCLE_BUILDING_SUPP):
+            return "muscle_building"
+
+        FAT_LOSS_SUPP = [
+            "变细", "燃脂", "有氧减", "减减",
+        ]
+        if any(t in user_input for t in FAT_LOSS_SUPP):
+            return "fat_loss"
+
+        POSTURE_TRIGGERS = [
+            "体态", "驼背", "圆肩", "矫正", "骨盆", "前倾", "后倾",
+        ]
+        if any(t in user_input for t in POSTURE_TRIGGERS):
+            return "exercise_analysis"
+
+        # === 第 4 层：通用分析触发词（最弱信号，放在最后）===
+        GENERIC_ANALYSIS_TRIGGERS = [
+            "姿势", "纠正", "借力", "错误", "不对",
+            "泵感", "怎么练",
+            "是不是", "怎么办", "哪个更", "哪个好", "哪个", "区别",
+            "能不能", "会不会加重", "怎么纠正", "怎么改进",
+            "怎么判断", "怎么安全",
+            "算不算",
+            "动作",
+        ]
+        for trigger in GENERIC_ANALYSIS_TRIGGERS:
+            if trigger in user_input:
+                return "exercise_analysis"
+
         # 无匹配时兜底使用增肌技能（最常用场景）
         return "muscle_building"
 
