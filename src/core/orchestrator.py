@@ -156,12 +156,14 @@ class Orchestrator:
         task.complete()
         return result
 
-    def generate_plan_stream(self, profile: UserProfileInput, query: str = ""):
+    def generate_plan_stream(self, profile: UserProfileInput, query: str = "",
+                             session_id: str = None):
         """【流式版】逐阶段产出 (stage, data) 元组，供前端通过 SSE 实时更新 UI。
 
         输入：
             profile: UserProfileInput — 用户画像
             query: str — 用户补充描述
+            session_id: str | None — 会话 ID，非 None 时启用多轮对话
         产出（Generator）：
             Generator[(str, any)] — 每个阶段产出一个或多个元组：
                 - ("stage", str)          → 当前阶段描述，前端显示为进度提示
@@ -184,18 +186,32 @@ class Orchestrator:
         """
         profile_dict = profile.model_dump()
 
-        # 1. 检查缓存
-        cached = self.cache.get(profile_dict, query)
-        if cached:
-            yield ("cache_hit", cached)
-            yield ("done", cached)
-            return
+        # === 多轮对话：注入历史上下文 ===
+        conv_context = ""
+        plan_context = ""
+        if session_id:
+            user_turn_preview = query[:200] if query else "生成训练计划"
+            self.conversation.add_turn(session_id, "user", user_turn_preview)
+            conv_context = self.conversation.build_context_for_prompt(session_id, query or "")
+            # 获取上一轮生成的计划，用于"把第二天改成哑铃"这类修改请求
+            plan_context = self.conversation.get_plan_state(session_id) or ""
+
+        # 1. 检查缓存（多轮对话场景跳过缓存，因为每次修改都需要重新生成）
+        if not session_id:
+            cached = self.cache.get(profile_dict, query)
+            if cached:
+                yield ("cache_hit", cached)
+                yield ("done", cached)
+                return
 
         # 2. 初步分析 —— 在流水线开始前给出教练式的口头建议
         # 设计意图：LLM 调用耗时较长，先推送一个简短的分析结果让用户有内容可看，
         # 避免用户面对空白页面等待，同时建立教练对话感
         yield ("stage", "[分析] 正在分析你的情况...")
-        advice_prompt = self._build_advice_prompt(profile_dict, query)
+        advice_context = ""
+        if plan_context:
+            advice_context = f"\n\n用户之前已经有了一个训练计划：\n{plan_context}\n用户现在说：{query}\n请结合这个上下文给出建议。"
+        advice_prompt = self._build_advice_prompt(profile_dict, query) + advice_context
         advice_text = ""
         for chunk in self.writer.llm.chat_stream(
             [{"role": "user", "content": advice_prompt}], temperature=0.5
@@ -204,9 +220,14 @@ class Orchestrator:
             yield ("advice_chunk", chunk)
         yield ("advice_done", advice_text)
 
-        # 3. 规划器
+        # 3. 规划器 —— 多轮场景下注入历史上下文和已有计划
         yield ("stage", "[规划] Planner 正在拆解任务...")
-        plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict)
+        plan = self.planner.plan(
+            query or f"为{profile.goal}目标生成训练计划",
+            profile_dict,
+            conv_context=conv_context,
+            plan_context=plan_context,
+        )
         yield ("planner_done", {"skill": plan.get("skill", "unknown"),
                                  "subtasks": plan.get("subtasks", [])})
 
@@ -217,11 +238,16 @@ class Orchestrator:
         yield ("retriever_done", {"count": len(exercises),
                                    "names": [e.get("name", "?") for e in exercises[:8]]})
 
-        # 4. Writer —— 流式输出
+        # 4. Writer —— 流式输出，多轮场景下注入已有计划上下文
         yield ("stage", "[生成] Writer 正在生成训练计划...")
+        writer_extra = {}
+        if plan_context:
+            writer_extra["plan_context"] = plan_context
+            writer_extra["user_query"] = query
         full_text = ""
         for event, data in self.writer.write_plan_stream(
-            retrieved, profile_dict, plan.get("skill_config", {})
+            retrieved, profile_dict, plan.get("skill_config", {}),
+            **writer_extra,
         ):
             if event == "chunk":
                 full_text += data
@@ -258,8 +284,16 @@ class Orchestrator:
                                    "issues": len(check.get("issues", [])),
                                    "confidence": check.get("confidence", 0)})
 
-        # 6. 写入缓存
-        self.cache.set(profile_dict, query, result)
+        # === 多轮对话：保存计划状态 + 助手回复到对话历史 ===
+        if session_id:
+            plan_summary = self._summarize_plan_for_context(result)
+            self.conversation.set_plan_state(session_id, plan_summary)
+            assistant_preview = self._summarize_plan_for_context(result)
+            self.conversation.add_turn(session_id, "assistant", assistant_preview[:500])
+
+        # 6. 写入缓存（多轮对话跳过缓存）
+        if not session_id:
+            self.cache.set(profile_dict, query, result)
         yield ("done", result)
 
     def _build_advice_prompt(self, profile: dict, query: str) -> str:
@@ -313,10 +347,19 @@ class Orchestrator:
         return self.writer.write_analysis(exercise_name, user_desc, retrieved, profile_dict)
 
     def analyze_exercise_stream(self, exercise_name: str, user_desc: str,
-                                profile: UserProfileInput):
+                                profile: UserProfileInput, session_id: str = None):
         """【流式版】动作分析 —— 逐阶段产出进度事件，供前端 SSE 实时渲染。
         产出 (event_type, data) 元组，与 generate_plan_stream 模式一致。"""
         profile_dict = profile.model_dump()
+
+        # === 多轮对话：注入历史上下文 ===
+        conv_context = ""
+        if session_id:
+            self.conversation.add_turn(session_id, "user",
+                                       f"分析动作：{exercise_name} — {user_desc}"[:200])
+            conv_context = self.conversation.build_context_for_prompt(
+                session_id, f"分析{exercise_name}：{user_desc}"
+            )
 
         yield ("stage", "[检索] 正在检索动作标准规范...")
         retrieved = self.retriever.retrieve({"subtasks": [exercise_name], "skill_config": {}})
@@ -325,7 +368,8 @@ class Orchestrator:
         yield ("stage", "[分析] 正在分析动作问题...")
         full_text = ""
         for event, data in self.writer.write_analysis_stream(
-            exercise_name, user_desc, retrieved, profile_dict
+            exercise_name, user_desc, retrieved, profile_dict,
+            conv_context=conv_context,
         ):
             if event == "chunk":
                 full_text += data
@@ -335,6 +379,11 @@ class Orchestrator:
         # 将检索到的参考动作名附加到结果中，供前端展示出处
         ref_exercises = [e.get("name", "") for e in retrieved.get("exercises", [])[:5]]
         result["reference_exercises"] = ref_exercises
+
+        # === 多轮对话：保存助手回复 ===
+        if session_id:
+            self.conversation.add_turn(session_id, "assistant", full_text[:500])
+
         yield ("done", result)
 
     def answer_question_stream(self, question: str, profile: UserProfileInput, session_id: str = None):
@@ -488,3 +537,25 @@ class Orchestrator:
             if ex in question:
                 return ex
         return None
+
+    def _summarize_plan_for_context(self, plan: dict) -> str:
+        """【私有方法】从训练计划提取摘要，供多轮对话的 plan_state 存储。
+
+        输入：
+            plan: dict — 完整的训练计划结果（含 days 列表）
+        输出：
+            str — "第1天(胸+三头): 杠铃卧推/哑铃飞鸟... 第2天(背+二头): ..." 格式的摘要
+        """
+        days = plan.get("days", [])
+        if not days:
+            return ""
+        parts = []
+        for d in days:
+            day_num = d.get("day", "?")
+            focus = d.get("focus", "")
+            exercises = d.get("exercises", [])
+            ex_names = [e.get("name", "?") for e in exercises[:6]]
+            ex_str = "/".join(ex_names)
+            label = f"第{day_num}天" + (f"({focus})" if focus else "")
+            parts.append(f"{label}: {ex_str}")
+        return " | ".join(parts)

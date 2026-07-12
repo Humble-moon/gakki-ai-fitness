@@ -209,6 +209,29 @@ class ConversationManager:
 （注意：理解当前问题时，请结合对话历史中的上下文。如果用户说"改一下""换一个"，回顾历史找到上一轮讨论的是什么。）
 """
 
+    def set_plan_state(self, session_id: str, plan_summary: str):
+        """存储当前训练计划摘要，供多轮对话中的计划修改请求使用。
+
+        当用户说"把第二天改成哑铃动作"时，系统需要知道"第二天"当前是什么内容。
+        此方法将生成的计划摘要持久化到 Redis，后续请求可通过 get_plan_state() 获取。
+
+        参数：
+            session_id: str    - 会话唯一标识
+            plan_summary: str  - 计划摘要文本（包含每天的关键动作列表，不超过 800 字符）
+        """
+        self.redis.set(f"conv:{session_id}:plan", plan_summary[:800], ex=SESSION_TTL)
+
+    def get_plan_state(self, session_id: str) -> str | None:
+        """获取当前会话中的训练计划摘要。
+
+        参数：
+            session_id: str - 会话唯一标识
+
+        返回值：
+            str | None - 计划摘要文本，没有则返回 None
+        """
+        return self.redis.get(f"conv:{session_id}:plan")
+
     # ------------------------------------------------------------------
     # 内部方法
     # ------------------------------------------------------------------

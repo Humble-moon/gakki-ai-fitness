@@ -60,10 +60,13 @@ class WriterAgent:
         plan_json["user_id"] = profile.get("id", 0)
         return plan_json
 
-    def write_plan_stream(self, retrieved: dict, profile: dict, plan_config: dict) -> Generator:
+    def write_plan_stream(self, retrieved: dict, profile: dict, plan_config: dict,
+                          plan_context: str = "", user_query: str = "") -> Generator:
         """【流式版】逐 token 产出训练计划。每次产出 (event_type, data) 元组。
 
         输入：同 write_plan
+            plan_context: str — 上一轮计划摘要（多轮对话中用户要修改的计划）
+            user_query: str — 用户当前的修改请求
         产出（Generator）：
             ("chunk", str) — LLM 生成的文本片段（逐 token）
             ("done", dict) — 解析完成后的训练计划 JSON
@@ -77,6 +80,14 @@ class WriterAgent:
         messages = build_writer_messages(
             retrieved.get("exercises", []), profile, goal
         )
+        # 多轮对话：注入已有计划上下文，让 LLM 基于原计划做修改而非从零生成
+        if plan_context:
+            context_hint = (
+                f"\n\n【重要】用户之前已经有一个训练计划：\n{plan_context}\n"
+                f"用户现在的修改请求是：{user_query}\n"
+                f"请在此计划基础上进行修改，保留未涉及的部分，只调整用户要求改的部分。"
+            )
+            messages[-1]["content"] += context_hint
         full_text = ""
         for chunk in self.llm.chat_stream(messages, temperature=0.3, model="reasoner"):
             full_text += chunk
@@ -137,7 +148,8 @@ class WriterAgent:
         return result
 
     def write_analysis_stream(self, exercise_name: str, user_desc: str,
-                              retrieved: dict, profile: dict) -> Generator:
+                              retrieved: dict, profile: dict,
+                              conv_context: str = "") -> Generator:
         """【流式版】逐块输出动作分析结果。产出 (event_type, data) 元组。
 
         与同步版的区别和 write_plan_stream 类似：
@@ -158,6 +170,8 @@ class WriterAgent:
   "suggestions": ["改进1", "改进2"],
   "confidence": 0.0-1.0
 }}"""
+        if conv_context:
+            prompt = f"{conv_context}\n\n{prompt}"
         full_text = ""
         for chunk in self.llm.chat_stream([{"role": "user", "content": prompt}], temperature=0.3):
             full_text += chunk
