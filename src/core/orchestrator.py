@@ -101,7 +101,7 @@ class Orchestrator:
         # 3. 检索器 —— 根据 Planner 产出的子任务逐条检索动作数据
         retrieved = self.retriever.retrieve(plan)
 
-        # 4. 通过 A2A 消息总线调用 Writer —— 记录任务流转，便于调试和监控
+        # 4. Writer（首次生成）→ 归一化
         task = Task(
             task_id=f"write_{profile_dict.get('id', 0)}",
             from_agent="orchestrator", to_agent="writer",
@@ -114,48 +114,76 @@ class Orchestrator:
         result = self.writer.write_plan(
             retrieved, profile_dict, plan.get("skill_config", {})
         )
-        # === 归一化 LLM 输出 ===
-        # 不同 LLM 可能返回不同的 JSON 键名（如 weekly_plan / schedule / plan），
-        # 这里统一将所有变体映射为标准的 "days" 键，确保下游代码无需适配多种键名
-        days_data = None
-        for key in ("weekly_plan", "weekly_schedule", "days", "schedule", "plan"):
-            if key in result:
-                days_data = result.pop(key)
-                break
-        if days_data:
-            result["days"] = days_data
-        # 归一化每个动作的内部字段名：rest_seconds→rest, exercise→name, movement→name
-        for day in result.get("days", []):
-            for ex in day.get("exercises", []):
-                if "rest_seconds" in ex and "rest" not in ex:
-                    ex["rest"] = f"{ex.pop('rest_seconds')}s"
-                # 训练动作名称键归一化 —— LLM 可能用 "exercise"、"movement" 或 "name"
-                if "exercise" in ex and "name" not in ex:
-                    ex["name"] = ex.pop("exercise")
-                if "movement" in ex and "name" not in ex:
-                    ex["name"] = ex.pop("movement")
-        # 将生成产物封装为 Artifact，挂载到 Task 上用于追踪
-        artifact = Artifact(
+        result = self._normalize_plan(result)
+        task.add_artifact(Artifact(
             artifact_id=task.task_id, artifact_type="training_plan", content=result
-        )
-        task.add_artifact(artifact)
+        ))
 
-        # 5. 事实核查器 —— 通过 A2A 总线发送核查任务，然后同步等待结果
-        fc_task = Task(
-            task_id=f"check_{profile_dict.get('id', 0)}",
-            from_agent="writer", to_agent="fact_checker",
-            task_type="safety_check", payload={"plan": result, "profile": profile_dict}
-        )
-        self.bus.send(fc_task)
+        # 5. FactChecker 审查 + Writer 修正回路
+        # 设计意图：FactChecker 发现问题后，不直接返回带警告的计划给用户，
+        # 而是把问题退回给 Writer 重写。Writer 根据反馈有针对性地替换危险动作、
+        # 调整不合理配置，然后 FactChecker 再次审查。最多重试 3 次。
+        MAX_RETRIES = 3
+        rewrite_count = 0
+        all_checks = []  # 记录每次审查结果，用于最终汇总
+
         check = self.fact_checker.check(result, profile_dict)
-        # 将核查结果写入 plan 的顶层字段，方便前端直接展示
-        result["warnings"] = [i["issue"] for i in check.get("issues", [])]
-        result["requires_review"] = check.get("requires_human_review", False)
-        result["confidence"] = check.get("confidence", 0)
+        all_checks.append(check)
+
+        while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < MAX_RETRIES:
+            logger.info(
+                f"FactChecker found {len(check.get('issues', []))} issue(s), "
+                f"rewrite attempt {rewrite_count + 1}/{MAX_RETRIES}"
+            )
+            # Writer 根据 FactChecker 反馈重写
+            result = self.writer.rewrite_plan(
+                result, check.get("issues", []), retrieved, profile_dict
+            )
+            result = self._normalize_plan(result)
+            rewrite_count += 1
+
+            # 再次审查
+            check = self.fact_checker.check(result, profile_dict)
+            all_checks.append(check)
+
+        # 汇总所有轮次的警告（去重）
+        all_issues = []
+        seen = set()
+        for c in all_checks:
+            for issue in c.get("issues", []):
+                key = issue.get("issue", str(issue))
+                if key not in seen:
+                    seen.add(key)
+                    all_issues.append(key)
+
+        result["warnings"] = all_issues
+        result["requires_review"] = any(c.get("requires_human_review", False) for c in all_checks)
+        result["confidence"] = min(c.get("confidence", 0) for c in all_checks)
+        result["rewrite_count"] = rewrite_count
 
         # 6. 写入缓存并返回 —— 下次相同/相似输入可直接命中，减少 LLM 调用
         self.cache.set(profile_dict, query, result)
         task.complete()
+        return result
+
+    def _normalize_plan(self, result: dict) -> dict:
+        """归一化 LLM 输出的训练计划 JSON。
+
+        不同 LLM 可能返回不同的键名（weekly_plan / schedule / plan / days），
+        这里统一映射为 "days"。同时归一化动作内部字段名。
+        """
+        for key in ("weekly_plan", "weekly_schedule", "days", "schedule", "plan"):
+            if key in result:
+                result["days"] = result.pop(key)
+                break
+        for day in result.get("days", []):
+            for ex in day.get("exercises", []):
+                if "rest_seconds" in ex and "rest" not in ex:
+                    ex["rest"] = f"{ex.pop('rest_seconds')}s"
+                if "exercise" in ex and "name" not in ex:
+                    ex["name"] = ex.pop("exercise")
+                if "movement" in ex and "name" not in ex:
+                    ex["name"] = ex.pop("movement")
         return result
 
     def generate_plan_stream(self, profile: UserProfileInput, query: str = "",
@@ -257,34 +285,47 @@ class Orchestrator:
             elif event == "done":
                 result = data
         yield ("writer_done_raw", full_text)
+        result = self._normalize_plan(result)
 
-        # === 归一化输出格式 ===
-        # 逻辑与同步版完全一致，确保流式版产出的数据结构与同步版兼容
-        days_data = None
-        for key in ("weekly_plan", "weekly_schedule", "days", "schedule", "plan"):
-            if key in result:
-                days_data = result.pop(key)
-                break
-        if days_data:
-            result["days"] = days_data
-        for day in result.get("days", []):
-            for ex in day.get("exercises", []):
-                if "rest_seconds" in ex and "rest" not in ex:
-                    ex["rest"] = f"{ex.pop('rest_seconds')}s"
-                if "exercise" in ex and "name" not in ex:
-                    ex["name"] = ex.pop("exercise")
-                if "movement" in ex and "name" not in ex:
-                    ex["name"] = ex.pop("movement")
+        # 5. FactChecker 审查 + Writer 修正回路（流式版）
+        MAX_RETRIES = 3
+        rewrite_count = 0
+        all_checks = []
 
-        # 5. 事实核查器
-        yield ("stage", "[审查] FactChecker 正在安全审查...")
         check = self.fact_checker.check(result, profile_dict)
-        result["warnings"] = [i["issue"] for i in check.get("issues", [])]
-        result["requires_review"] = check.get("requires_human_review", False)
-        result["confidence"] = check.get("confidence", 0)
+        all_checks.append(check)
         yield ("factcheck_done", {"safe": check.get("is_safe", True),
                                    "issues": len(check.get("issues", [])),
                                    "confidence": check.get("confidence", 0)})
+
+        while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < MAX_RETRIES:
+            yield ("stage", f"[修正] 安全检查发现 {len(check.get('issues', []))} 个问题，第 {rewrite_count + 1} 次重写...")
+            result = self.writer.rewrite_plan(
+                result, check.get("issues", []), retrieved, profile_dict
+            )
+            result = self._normalize_plan(result)
+            rewrite_count += 1
+
+            check = self.fact_checker.check(result, profile_dict)
+            all_checks.append(check)
+            yield ("factcheck_done", {"safe": check.get("is_safe", True),
+                                       "issues": len(check.get("issues", [])),
+                                       "confidence": check.get("confidence", 0)})
+
+        # 汇总所有轮次警告
+        all_issues = []
+        seen = set()
+        for c in all_checks:
+            for issue in c.get("issues", []):
+                key = issue.get("issue", str(issue))
+                if key not in seen:
+                    seen.add(key)
+                    all_issues.append(key)
+
+        result["warnings"] = all_issues
+        result["requires_review"] = any(c.get("requires_human_review", False) for c in all_checks)
+        result["confidence"] = min(c.get("confidence", 0) for c in all_checks)
+        result["rewrite_count"] = rewrite_count
 
         # === 多轮对话：保存计划状态 + 助手回复到对话历史 ===
         if session_id:

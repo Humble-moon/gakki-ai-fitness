@@ -57,7 +57,7 @@ class DocumentStore:
 
         # 3. 切块
         if has_text and full_text.strip():
-            chunks = chunk_text(full_text, title=title)
+            chunks = chunk_text(full_text)
             logger.info(f"Document {doc_id}: {len(chunks)} chunks from {len(full_text)} chars")
 
             # 4. embedding + 写入 document_chunks
