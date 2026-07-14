@@ -79,6 +79,11 @@ class SemanticCache:
     def __init__(self):
         self.redis = RedisClient()
         self.emb = EmbeddingService()
+        # 命中率统计（单进程内存计数，重启清零）
+        self._hits_exact: int = 0
+        self._hits_semantic: int = 0
+        self._misses: int = 0
+        self._sets: int = 0
 
     # ------------------------------------------------------------------
     # 缓存键
@@ -178,11 +183,17 @@ class SemanticCache:
         # 第一级：精确匹配（< 1ms）
         result = self._exact_get(profile, query)
         if result:
+            self._hits_exact += 1
             logger.debug("Exact cache hit")
             return result
 
         # 第二级：语义相似度匹配（~50ms）
-        return self._semantic_get(query)
+        result = self._semantic_get(query)
+        if result:
+            self._hits_semantic += 1
+        else:
+            self._misses += 1
+        return result
 
     def set(self, profile: dict, query: str, result: dict):
         """写入缓存，同时存储 query embedding 供语义匹配使用。
@@ -194,3 +205,26 @@ class SemanticCache:
         query_vec = self.emb.embed(query)
         entry = {"_embedding": query_vec, "result": result}
         self.redis.set(cache_key, json.dumps(entry, ensure_ascii=False), ex=3600)
+        self._sets += 1
+
+    # ------------------------------------------------------------------
+    # 统计接口
+    # ------------------------------------------------------------------
+
+    def get_stats(self) -> dict:
+        """返回缓存命中率统计数据，供 /admin/metrics 端点使用。"""
+        total_lookups = self._hits_exact + self._hits_semantic + self._misses
+        total_hits = self._hits_exact + self._hits_semantic
+        return {
+            "cache": {
+                "hits_exact": self._hits_exact,
+                "hits_semantic": self._hits_semantic,
+                "hits_total": total_hits,
+                "misses": self._misses,
+                "sets": self._sets,
+                "total_lookups": total_lookups,
+                "hit_rate_exact": round(self._hits_exact / total_lookups, 4) if total_lookups else 0,
+                "hit_rate_semantic": round(self._hits_semantic / total_lookups, 4) if total_lookups else 0,
+                "hit_rate_total": round(total_hits / total_lookups, 4) if total_lookups else 0,
+            }
+        }
