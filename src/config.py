@@ -168,3 +168,21 @@ REWRITE_MODEL = os.getenv("REWRITE_MODEL", "deepseek-chat")
 # 设计意图：改写是高频低成本操作，不需要大模型，用小的便宜模型即可。
 # 默认 deepseek-chat（DeepSeek 目前最小可用模型），后续可换为更便宜的模型。
 # 用法：配置独立的 LLM_REWRITE_* 或在 .env 设 REWRITE_MODEL=deepseek-chat
+
+# ============================================================
+# 模型定价（元/1K tokens），用于开发侧成本追踪
+# 说明：这些价格仅用于内部开发日志，不暴露给前端用户。
+#       价格来源为各模型官网公开定价，请以实际账单为准。
+#       input 价格 + output 价格，这里取加权均值简化计算。
+# ============================================================
+MODEL_PRICE_PER_1K = {
+    # DeepSeek 官方定价（2026.07）
+    "deepseek-chat":     0.002,   # ¥0.002/1K tokens（均值）
+    "deepseek-reasoner": 0.004,   # ¥0.004/1K tokens（推理模型略贵）
+    # 阿里云 DashScope 定价（2026.07）
+    "qwen-turbo":        0.0008,  # ¥0.0008/1K tokens（轻量模型）
+    "qwen-plus":         0.002,   # ¥0.002/1K tokens
+    "qwen-max":          0.02,    # ¥0.02/1K tokens（最强模型）
+    # Embedding 模型
+    "text-embedding-v4": 0.0005,  # ¥0.0005/1K tokens
+}
