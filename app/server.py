@@ -353,6 +353,41 @@ async def index():
 
 
 # ============================================================
+# 开发运维端点（不暴露给前端用户）
+# ============================================================
+
+@app.get("/admin/metrics")
+async def admin_metrics():
+    """
+    GET /admin/metrics - 开发侧观测数据
+
+    返回缓存命中率、LLM 成本等运维指标。仅开发人员使用，不在前端 UI 中展示。
+    使用方式：浏览器打开 http://localhost:8503/admin/metrics
+
+    返回格式：
+    {
+      "cache": {
+        "hits_exact": 12,        // 精确匹配命中次数
+        "hits_semantic": 3,      // 语义相似度命中次数
+        "hits_total": 15,        // 总命中次数
+        "misses": 8,             // 未命中次数
+        "sets": 23,              // 写入缓存次数
+        "total_lookups": 23,     // 总查询次数
+        "hit_rate_exact": 0.52,  // 精确命中率
+        "hit_rate_semantic": 0.13, // 语义命中率
+        "hit_rate_total": 0.65   // 总命中率
+      },
+      "cost": { ... }            // LLM 成本统计
+    }
+    """
+    from src.llm.cost_tracker import cost_tracker
+    return {
+        **orch.cache.get_stats(),
+        "cost": cost_tracker.get_stats(),
+    }
+
+
+# ============================================================
 # 直接启动入口
 # ============================================================
 if __name__ == "__main__":
