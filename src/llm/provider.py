@@ -27,10 +27,14 @@
 """
 
 from __future__ import annotations
+import logging
 from dataclasses import dataclass
 from typing import Generator
 from openai import OpenAI
 from src.config import LLM_CONFIGS, LLM_DEFAULT_MODEL, DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
+from src.llm.cost_tracker import cost_tracker
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -133,10 +137,12 @@ class LLMProvider:
             messages=messages,
             temperature=temperature,
         )
+        tokens = resp.usage.total_tokens if resp.usage else 0
+        cost_tracker.record(actual_model, tokens, extra="chat")
         return LLMResponse(
             content=resp.choices[0].message.content,
             model=resp.model,
-            tokens=resp.usage.total_tokens,
+            tokens=tokens,
         )
 
     def chat_stream(self, messages: list, temperature: float = 0.3,
@@ -155,10 +161,16 @@ class LLMProvider:
             temperature=temperature,
             stream=True,
         )
+        total_content = []
         for chunk in stream:
             delta = chunk.choices[0].delta
             if delta.content:
+                total_content.append(delta.content)
                 yield delta.content
+        # 流式完成后的成本估算（~1.5 字符/token for 中英文混合）
+        output_text = "".join(total_content)
+        estimated_tokens = max(1, len(output_text) // 2)
+        cost_tracker.record(actual_model, estimated_tokens, extra="stream")
 
     def chat_with_json_mode(self, messages: list,
                              model: str = None) -> dict:

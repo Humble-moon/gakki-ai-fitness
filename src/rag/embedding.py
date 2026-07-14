@@ -25,6 +25,7 @@ from src.config import (
     EMBEDDING_MODEL,
     EMBEDDING_DIM,
 )
+from src.llm.cost_tracker import cost_tracker
 
 
 class EmbeddingService:
@@ -48,6 +49,8 @@ class EmbeddingService:
             model=EMBEDDING_MODEL,
             input=text,
         )
+        tokens = resp.usage.total_tokens if resp.usage else len(text) // 2
+        cost_tracker.record(EMBEDDING_MODEL, tokens, extra="embed")
         return resp.data[0].embedding
 
     def embed_batch(self, texts: list) -> list:
@@ -56,15 +59,18 @@ class EmbeddingService:
         """
         all_vecs = []
         batch_size = 20  # 留余量
+        total_tokens = 0
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
             resp = self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
                 input=batch,
             )
+            total_tokens += resp.usage.total_tokens if resp.usage else len("".join(batch)) // 2
             # 按 index 排序确保顺序
             sorted_data = sorted(resp.data, key=lambda d: d.index)
             all_vecs.extend([d.embedding for d in sorted_data])
+        cost_tracker.record(EMBEDDING_MODEL, total_tokens, extra=f"embed_batch x{len(texts)}")
         return all_vecs
 
     def similarity(self, vec1: list, vec2: list) -> float:
