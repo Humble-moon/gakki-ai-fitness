@@ -149,6 +149,15 @@ EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
 # 因为不同模型的向量空间不兼容。
 
 # ============================================================
+# LLM 降级链（Resilience）
+# 主模型不可用时，按此顺序尝试备用模型。逗号分隔的别名列表。
+# 例: LLM_FALLBACK_CHAIN=default,fast  → 先试 default，失败后试 fast
+# 不配置则只使用当前活跃模型，不做自动降级。
+# ============================================================
+_RAW_FALLBACK = os.getenv("LLM_FALLBACK_CHAIN", "")
+LLM_FALLBACK_CHAIN = [a.strip() for a in _RAW_FALLBACK.split(",") if a.strip()] if _RAW_FALLBACK else []
+
+# ============================================================
 # 业务逻辑参数
 # ============================================================
 CACHE_SIMILARITY_THRESHOLD = 0.92
