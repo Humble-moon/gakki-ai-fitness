@@ -33,8 +33,8 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 | 模型 | deepseek-chat + deepseek-reasoner 双模型架构 |
 | RAG | 向量检索 + 关键词检索 → RRF 融合 → LLM Re-rank |
 | 知识图谱 | Neo4j + Cypher（动作→肌肉→器械→伤病 四类实体） |
-| 向量化 | BGE-small-zh（512 维，本地 CPU 推理） |
-| 缓存 | FAISS + Redis Semantic Cache |
+| 向量化 | DashScope text-embedding-v4（1024 维，API 调用） |
+| 缓存 | Redis 语义缓存（二级命中：精确 + 余弦相似度扫描） |
 | 安全 | FactChecker 双重校验 + HITL 人在回路 |
 | 评测 | 60 条 Golden Dataset + 三组消融实验 |
 | 前端 | FastAPI + SSE + 暗黑工业风 HTML/CSS/JS |
@@ -95,7 +95,7 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge
 │   ├── rag/                      # RAG 五层检索体系
 │   │   ├── agentic_rag.py        # 自评改写迭代检索
 │   │   ├── knowledge_search.py   # RRF 融合 + LLM Re-rank
-│   │   └── semantic_cache.py     # FAISS + Redis 缓存
+│   │   └── semantic_cache.py     # Redis 语义缓存（二级命中）
 │   ├── graphrag/                 # Neo4j 知识图谱检索
 │   ├── llm/                      # LLMProvider 多模型管理
 │   │   └── provider.py           # chat + chat_stream + JSON mode

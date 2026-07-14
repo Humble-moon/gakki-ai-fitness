@@ -108,6 +108,70 @@ class WriterAgent:
         result["user_id"] = profile.get("id", 0)
         yield ("done", result)
 
+    def _parse_json_output(self, content: str) -> dict:
+        """从 LLM 流式输出中解析 JSON，剥离 markdown 代码块。"""
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+        try:
+            result = json.loads(content.strip())
+        except json.JSONDecodeError:
+            result = {"raw": content}
+        result["plan_id"] = str(uuid.uuid4())[:8]
+        result["user_id"] = 0
+        return result
+
+    def rewrite_plan(self, original_plan: dict, issues: list[dict],
+                     retrieved: dict, profile: dict) -> dict:
+        """根据 FactChecker 的反馈，针对性地重写训练计划中有问题的部分。
+
+        输入：
+            original_plan: dict — 上一次生成的计划（需要修正）
+            issues: list[dict] — FactChecker 发现的问题列表
+            retrieved: dict — 检索到的动作库数据
+            profile: dict — 用户画像
+        输出：
+            dict — 修正后的训练计划 JSON
+
+        与 write_plan 的区别：
+            - 不是从零生成，而是在原计划基础上"修修补补"
+            - 只改动 FactChecker 指出的问题部分，保留其他内容不变
+            - 如果某个动作被标记为危险，从动作库中找安全的替代
+        """
+        goal = profile.get("goal", "增肌")
+        issues_text = "\n".join(
+            f"- {i.get('issue', str(i))}（严重程度: {i.get('severity', '未知')}）"
+            for i in issues
+        )
+
+        fix_prompt = f"""你之前生成的训练计划存在以下安全问题，请修正：
+
+{issues_text}
+
+原计划内容：
+{json.dumps(original_plan, ensure_ascii=False, indent=2)}
+
+修正要求：
+1. 只改动有问题的地方，其他部分原样保留
+2. 如果某个动作有安全风险，从可用动作库里找安全的替代动作
+3. 如果用户的伤病涉及某些部位，完全避开相关动作
+4. 修正后的计划必须仍然是 {profile.get('days_per_week', original_plan.get('days_per_week', 4))} 天
+5. 输出完整的修正后计划 JSON（不是只输出修改的部分）
+
+目标：{goal}
+用户画像：{profile}
+可用动作：{retrieved.get('exercises', [])}"""
+
+        messages = [
+            {"role": "system", "content": "你是训练计划修正专家。根据安全检查的反馈，修正计划中的问题。"},
+            {"role": "user", "content": fix_prompt}
+        ]
+        result = self.llm.chat_with_json_mode(messages, model="reasoner")
+        result["plan_id"] = original_plan.get("plan_id", str(uuid.uuid4())[:8])
+        result["user_id"] = profile.get("id", 0)
+        return result
+
     def write_analysis(self, exercise_name: str, user_desc: str,
                        retrieved: dict, profile: dict) -> dict:
         """【同步版】分析单个动作的规范性和问题。
