@@ -55,10 +55,10 @@ class EmbeddingService:
 
     def embed_batch(self, texts: list) -> list:
         """批量文本 → 向量列表。
-        DashScope 单次最多 25 条，这里分批处理。
+        DashScope text-embedding-v4 单次最多 10 条，这里分批处理。
         """
         all_vecs = []
-        batch_size = 20  # 留余量
+        batch_size = 10  # API 硬限制
         total_tokens = 0
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
