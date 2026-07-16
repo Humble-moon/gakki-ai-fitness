@@ -256,17 +256,38 @@ class SkillRegistry:
         return "muscle_building"
 
     def get(self, name: str) -> Skill | None:
-        """
-        按技能名称获取技能完整配置。
-
-        参数：
-            name: str  - 技能名称（如 "muscle_building"）
-
-        返回值：
-            Skill | None  - Skill 对象，不存在时返回 None
-
-        使用场景：
-        match() 返回技能名称后，调用 get() 获取该技能的 retrieval_filters
-        和 plan_template，然后传递给后续的 Retriever / Writer 流程。
-        """
+        """按技能名称获取技能完整配置。"""
         return self.skills.get(name)
+
+    def describe_all(self) -> str:
+        """将所有技能描述为 LLM prompt 可用的文本，供 Planner LLM 自主选择。
+
+        返回值示例：
+            - muscle_building: 增肌训练计划。用户想增肌/变大/增重/增加维度时选择。
+              检索过滤 rep_range=6-12, rest=60-90s，计划模板=四分化/五分化。
+            - fat_loss: 减脂训练计划。用户想减脂/减重/瘦身/刷脂时选择。
+              检索过滤 rep_range=12-15, rest=30-60s，计划模板=上下肢分化/全身。
+            - exercise_analysis: 动作分析与安全诊断。用户描述动作问题/疼痛/伤病/姿势纠正时选择。
+              无检索过滤，计划模板=分析报告。
+        """
+        descriptions = {
+            "muscle_building": (
+                "增肌训练计划。用户想增肌/变大/增重/增加维度时选择。"
+                "检索过滤 rep_range=6-12, rest=60-90s，计划模板=四分化/五分化。"
+            ),
+            "fat_loss": (
+                "减脂训练计划。用户想减脂/减重/瘦身/刷脂/塑形时选择。"
+                "检索过滤 rep_range=12-15, rest=30-60s，计划模板=上下肢分化/全身。"
+            ),
+            "exercise_analysis": (
+                "动作分析与安全诊断。用户描述动作问题/疼痛/伤病/姿势纠正/"
+                "体态矫正时选择。无检索过滤，计划模板=分析报告。"
+                "安全优先规则：涉及伤病/疼痛/功能障碍时必须选此技能，"
+                "即使同时提到增肌或减脂目标。"
+            ),
+        }
+        lines = []
+        for name in self.skills:
+            if name in descriptions:
+                lines.append(f"- {name}: {descriptions[name]}")
+        return "\n".join(lines)

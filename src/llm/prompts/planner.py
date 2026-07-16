@@ -23,47 +23,54 @@
 #   - output_format: 最终输出类型的标签（增肌计划/减脂计划/动作分析）
 #   - constraints: 硬约束条件，如"仅哑铃""排除肩伤动作"，Writer 必须遵守
 # ---------------------------------------------------------------------------
-PLANNER_SYSTEM = """你是健身训练计划编排专家。根据用户的身体数据、训练目标和可用器械，分解任务并决定需要检索哪些信息。
+PLANNER_SYSTEM = """你是健身训练计划编排专家。根据用户的身体数据、训练目标和可用器械，完成两件事：
+1. 从可用技能列表中选择最匹配的技能
+2. 将用户需求拆解为子任务
+
+可用技能列表：
+{skill_descriptions}
 
 输出 JSON 格式：
-{
+{{
+  "skill": "muscle_building" | "fat_loss" | "exercise_analysis",
+  "skill_reasoning": "选择该技能的原因（一句话）",
   "subtasks": ["检索推类动作", "检索拉类动作", "检索腿部动作"],
   "retrieval_strategy": "vector" | "keyword" | "graph" | "all",
   "output_format": "增肌计划" | "减脂计划" | "动作分析",
   "constraints": ["仅哑铃动作", "排除肩伤风险动作"]
-}
-"""
+}}
+
+选择技能的规则：
+- 涉及伤病/疼痛/功能障碍/体态矫正 → exercise_analysis（安全优先，即使同时提增肌/减脂）
+- 涉及减脂/减重/瘦/刷脂 → fat_loss
+- 涉及增肌/增重/变大/维度 → muscle_building
+- 无明确目标 → muscle_building（默认）"""
+
 
 
 def build_planner_messages(user_input: str, profile: dict,
+                          skill_descriptions: str = "",
                           conv_context: str = "", plan_context: str = "") -> list:
     """
     构造发送给 Planner Agent 的消息列表。
 
     参数：
-        user_input: str  - 用户的原始输入，例如 "帮我设计一个增肌计划，只有哑铃"
-        profile: dict     - 用户画像字典，通常包含：
-                            身高(height)、体重(weight)、训练水平(level)、
-                            伤病史(injuries)、可用器械(equipment)、目标(goal)等
-        conv_context: str - 多轮对话历史上下文（可选）
-        plan_context: str - 上一轮训练计划摘要（可选，用于"修改计划"场景）
+        user_input: str       - 用户的原始输入
+        profile: dict          - 用户画像字典
+        skill_descriptions: str - 可用技能描述文本（来自 SkillRegistry.describe_all()）
+        conv_context: str      - 多轮对话历史上下文（可选）
+        plan_context: str      - 上一轮训练计划摘要（可选）
 
     返回值：
-        list             - OpenAI 格式的 messages 列表，可直接传给 LLMProvider.chat()
-
-    核心逻辑：
-        将 user_input 和 profile 拼接成一条 user 消息，让 LLM 在 system prompt
-        的指导下完成"任务拆解"工作。profile 以 Python dict 的字符串形式直接
-        拼接，因为 LLM 能很好地理解这种格式。
-        如果提供了多轮对话上下文和计划摘要，注入到 user 消息中帮助 LLM
-        理解用户的修改意图。
+        list - OpenAI 格式的 messages 列表
     """
+    system = PLANNER_SYSTEM.format(skill_descriptions=skill_descriptions or "无可用技能描述")
     user_msg = f"用户信息：{profile}\n用户请求：{user_input}"
     if conv_context:
         user_msg = f"{conv_context}\n\n{user_msg}"
     if plan_context:
         user_msg += f"\n\n【当前训练计划（用户可能要修改它）】\n{plan_context}"
     return [
-        {"role": "system", "content": PLANNER_SYSTEM},
+        {"role": "system", "content": system},
         {"role": "user", "content": user_msg}
     ]
