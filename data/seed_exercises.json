@@ -1,158 +1,1766 @@
 [
-  {"name": "哑铃卧推", "exercise_type": "复合", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["胸大肌", "三角肌前束", "肱三头肌"],
-   "description": "平躺于凳上，双手持哑铃推起至手臂伸直，缓慢下放至胸部两侧。",
-   "common_errors": ["手肘打得太开(超过45度)", "哑铃下放过低导致肩关节压力"]},
-  {"name": "杠铃深蹲", "exercise_type": "复合", "difficulty": "中级", "equipment": "杠铃",
-   "target_muscles": ["股四头肌", "臀大肌", "腘绳肌"],
-   "description": "杠铃置于斜方肌上，双脚与肩同宽，下蹲至大腿与地面平行。",
-   "common_errors": ["膝盖内扣", "脚跟抬起", "下背拱起"]},
-  {"name": "引体向上", "exercise_type": "复合", "difficulty": "中级", "equipment": "自重",
-   "target_muscles": ["背阔肌", "肱二头肌"],
-   "description": "双手握杠，身体悬挂，用背部力量将身体拉起至下巴过杠。",
-   "common_errors": ["借助身体摆动", "没有完全下放"]},
-  {"name": "哑铃侧平举", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["三角肌中束"],
-   "description": "站姿，双手持哑铃于体侧，向两侧平举至肩高。",
-   "common_errors": ["耸肩借力斜方肌", "手臂完全伸直"]},
-  {"name": "杠铃硬拉", "exercise_type": "复合", "difficulty": "高级", "equipment": "杠铃",
-   "target_muscles": ["臀大肌", "腘绳肌", "竖脊肌"],
-   "description": "杠铃置于脚前，屈膝俯身双手握杠，挺髋站起。",
-   "common_errors": ["下背拱起", "杠铃离身体过远", "起始位置臀部过低"]},
-  {"name": "绳索下压", "exercise_type": "孤立", "difficulty": "初级", "equipment": "绳索",
-   "target_muscles": ["肱三头肌"],
-   "description": "面对龙门架，双手握绳索，下压至手臂伸直。",
-   "common_errors": ["肘部前移", "身体晃动借力"]},
-  {"name": "哑铃弯举", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["肱二头肌"],
-   "description": "站姿或坐姿，双手持哑铃，弯举至肩前。",
-   "common_errors": ["身体后仰借力", "下放过快"]},
-  {"name": "腿举", "exercise_type": "复合", "difficulty": "初级", "equipment": "腿举机",
-   "target_muscles": ["股四头肌", "臀大肌"],
-   "description": "坐于腿举机，双脚置于踏板上，蹬起至腿伸直。",
-   "common_errors": ["膝盖完全锁死", "下放幅度不够"]},
-  {"name": "哑铃推举", "exercise_type": "复合", "difficulty": "中级", "equipment": "哑铃",
-   "target_muscles": ["三角肌前束", "三角肌中束", "肱三头肌"],
-   "description": "坐姿，哑铃于肩部两侧，推举至头顶。",
-   "common_errors": ["下背过度反弓", "哑铃在最低点低于肩部"]},
-  {"name": "俯身哑铃划船", "exercise_type": "复合", "difficulty": "中级", "equipment": "哑铃",
-   "target_muscles": ["背阔肌", "菱形肌", "肱二头肌"],
-   "description": "俯身，一只手撑凳，另一只手持哑铃拉至体侧。",
-   "common_errors": ["上身旋转借力", "肩膀耸起", "弧度不够完整"]},
-  {"name": "高脚杯深蹲", "exercise_type": "复合", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["股四头肌", "臀大肌"],
-   "description": "双手托哑铃于胸前，下蹲时保持躯干直立。替代杠铃深蹲的入门动作。",
-   "common_errors": ["膝盖内扣", "上半身前倾过多"]},
-  {"name": "哑铃罗马尼亚硬拉", "exercise_type": "复合", "difficulty": "中级", "equipment": "哑铃",
-   "target_muscles": ["腘绳肌", "臀大肌", "竖脊肌"],
-   "description": "双手持哑铃于体前，微屈膝，髋部后移俯身。对下背压力小于杠铃硬拉。",
-   "common_errors": ["膝盖锁死", "下背拱起"]},
-  {"name": "杠铃卧推", "exercise_type": "复合", "difficulty": "中级", "equipment": "杠铃",
-   "target_muscles": ["胸大肌", "三角肌前束", "肱三头肌"],
-   "description": "平躺卧推凳，握距略宽于肩，杠铃下放至胸骨位置后推起。",
-   "common_errors": ["臀部离凳", "杠铃弹胸借力", "握距过宽伤肩"]},
-  {"name": "哑铃飞鸟", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["胸大肌"],
-   "description": "平躺凳上，双手持哑铃于胸上方，微屈肘向两侧打开至胸肌有拉伸感后合拢。",
-   "common_errors": ["手臂伸太直", "哑铃下放过低", "重量过大导致借力"]},
-  {"name": "双杠臂屈伸", "exercise_type": "复合", "difficulty": "中级", "equipment": "自重",
-   "target_muscles": ["胸大肌下部", "肱三头肌", "三角肌前束"],
-   "description": "双手撑双杠，身体前倾，屈肘下放至肩低于肘，推起至手臂伸直。",
-   "common_errors": ["下放幅度不够", "肩部前引", "身体晃动"]},
-  {"name": "上斜哑铃卧推", "exercise_type": "复合", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["胸大肌上部", "三角肌前束", "肱三头肌"],
-   "description": "凳调至30-45度，双手持哑铃推起，集中刺激上胸。",
-   "common_errors": ["角度太高变成练肩", "哑铃下放太低"]},
-  {"name": "杠铃划船", "exercise_type": "复合", "difficulty": "中级", "equipment": "杠铃",
-   "target_muscles": ["背阔肌", "菱形肌", "斜方肌中下部", "肱二头肌"],
-   "description": "俯身至躯干接近水平，正手或反手握杠铃，沿大腿前侧拉至下腹。",
-   "common_errors": ["上身抬起借力", "下背拱起", "杠铃轨迹不贴腿"]},
-  {"name": "坐姿绳索划船", "exercise_type": "复合", "difficulty": "初级", "equipment": "绳索",
-   "target_muscles": ["背阔肌", "菱形肌", "肱二头肌"],
-   "description": "坐姿双脚蹬踏板，双手握V把，背部发力拉至腹部，夹紧肩胛骨。",
-   "common_errors": ["身体后仰借力", "只用二头拉", "回放时含胸"]},
-  {"name": "高位下拉", "exercise_type": "复合", "difficulty": "初级", "equipment": "绳索",
-   "target_muscles": ["背阔肌", "肱二头肌"],
-   "description": "坐姿双手宽握横杆，背部发力下拉至锁骨位置，控制回放。",
-   "common_errors": ["身体后仰借力", "下拉到颈后", "握距过宽"]},
-  {"name": "直臂下压", "exercise_type": "孤立", "difficulty": "初级", "equipment": "绳索",
-   "target_muscles": ["背阔肌", "大圆肌"],
-   "description": "站姿面对龙门架，双手直臂握横杆，从肩高下压至大腿前侧。",
-   "common_errors": ["屈臂借力", "上身摆动", "重量过大"]},
-  {"name": "杠铃推举", "exercise_type": "复合", "difficulty": "中级", "equipment": "杠铃",
-   "target_muscles": ["三角肌前束", "三角肌中束", "肱三头肌"],
-   "description": "站姿或坐姿，杠铃置于锁骨前，推举至头顶正上方。",
-   "common_errors": ["下背过度反弓", "杠铃轨迹不直", "推到颈后"]},
-  {"name": "哑铃前平举", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["三角肌前束"],
-   "description": "站姿双手持哑铃于体前，直臂前举至与肩同高。",
-   "common_errors": ["身体摆动借力", "举过肩高", "速度过快"]},
-  {"name": "哑铃俯身飞鸟", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["三角肌后束", "菱形肌"],
-   "description": "俯身至躯干接近水平，双手持哑铃向两侧打开至与肩同高。",
-   "common_errors": ["上身抬起借力", "手臂伸太直", "重量过大"]},
-  {"name": "绳索面拉", "exercise_type": "孤立", "difficulty": "初级", "equipment": "绳索",
-   "target_muscles": ["三角肌后束", "肩袖肌群"],
-   "description": "面对龙门架，绳索调至面部高度，双手拉向面部并外旋。",
-   "common_errors": ["重量过大", "没有外旋", "身体后仰"]},
-  {"name": "杠铃弯举", "exercise_type": "孤立", "difficulty": "初级", "equipment": "杠铃",
-   "target_muscles": ["肱二头肌"],
-   "description": "站姿双手反握杠铃，上臂固定，弯举至肩前。",
-   "common_errors": ["身体后仰借力", "下放过快", "手腕屈伸"]},
-  {"name": "锤式弯举", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["肱二头肌", "肱肌", "肱桡肌"],
-   "description": "站姿双手对握哑铃，像握锤子一样，弯举至肩前。",
-   "common_errors": ["身体摆动", "手腕旋转", "下放过快"]},
-  {"name": "窄距杠铃卧推", "exercise_type": "复合", "difficulty": "中级", "equipment": "杠铃",
-   "target_muscles": ["肱三头肌", "胸大肌", "三角肌前束"],
-   "description": "平躺，握距与肩同宽或略窄，杠铃下放至下胸，推起时肘贴身体。",
-   "common_errors": ["握距过窄伤腕", "肘部向外打开"]},
-  {"name": "哑铃颈后臂屈伸", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["肱三头肌长头"],
-   "description": "坐姿，单手持哑铃从颈后伸直至头顶。",
-   "common_errors": ["肘部外展", "重量过大", "下放过低"]},
-  {"name": "保加利亚分腿蹲", "exercise_type": "复合", "difficulty": "中级", "equipment": "哑铃",
-   "target_muscles": ["股四头肌", "臀大肌", "腘绳肌"],
-   "description": "后脚置于凳上，前脚在前，双手持哑铃下蹲至前大腿与地面平行。",
-   "common_errors": ["前膝过脚尖", "身体前倾", "重心不稳"]},
-  {"name": "杠铃臀推", "exercise_type": "孤立", "difficulty": "中级", "equipment": "杠铃",
-   "target_muscles": ["臀大肌", "腘绳肌"],
-   "description": "上背靠凳，杠铃置于髋部，顶髋至身体与地面平行。",
-   "common_errors": ["过度伸展腰椎", "只用下背发力", "脚位置不对"]},
-  {"name": "腿弯举", "exercise_type": "孤立", "difficulty": "初级", "equipment": "腿举机",
-   "target_muscles": ["腘绳肌"],
-   "description": "俯卧于腿弯举机，脚踝勾住滚轴，弯举至最大幅度。",
-   "common_errors": ["爆发力启动", "幅度不够", "臀部翘起"]},
-  {"name": "站姿提踵", "exercise_type": "孤立", "difficulty": "初级", "equipment": "自重",
-   "target_muscles": ["腓肠肌", "比目鱼肌"],
-   "description": "站姿前脚掌踩台阶边缘，踮脚至最高点后缓慢下放。",
-   "common_errors": ["速度过快", "幅度不够", "膝盖弯曲"]},
-  {"name": "哑铃耸肩", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["斜方肌上部"],
-   "description": "站姿双手持哑铃于体侧，肩膀直接向上耸起，停顿后下放。",
-   "common_errors": ["画圈式耸肩", "身体摆动借力", "含胸"]},
-  {"name": "平板支撑", "exercise_type": "孤立", "difficulty": "初级", "equipment": "自重",
-   "target_muscles": ["腹直肌", "腹横肌", "核心肌群"],
-   "description": "俯卧，肘撑地，身体呈一直线，保持核心收紧。",
-   "common_errors": ["塌腰", "臀部过高", "憋气"]},
-  {"name": "悬垂举腿", "exercise_type": "孤立", "difficulty": "中级", "equipment": "自重",
-   "target_muscles": ["腹直肌", "髋屈肌"],
-   "description": "双手悬挂于单杠，双腿直腿或屈膝上举至与地面平行。",
-   "common_errors": ["身体摆动", "惯性借力", "腿没控制下放"]},
-  {"name": "俄罗斯转体", "exercise_type": "孤立", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["腹斜肌", "腹直肌"],
-   "description": "坐姿双脚离地，双手持哑铃左右旋转躯干。",
-   "common_errors": ["只用肩膀转", "速度过快", "含胸"]},
-  {"name": "绳索夹胸", "exercise_type": "孤立", "difficulty": "初级", "equipment": "绳索",
-   "target_muscles": ["胸大肌", "胸肌中缝"],
-   "description": "站于龙门架中央，双手握高位绳索，向胸前下方合拢。",
-   "common_errors": ["手臂伸太直", "重量过大", "身体前倾借力"]},
-  {"name": "哑铃负重箭步蹲", "exercise_type": "复合", "difficulty": "初级", "equipment": "哑铃",
-   "target_muscles": ["股四头肌", "臀大肌", "腘绳肌"],
-   "description": "双手持哑铃，交替向前迈步下蹲至前后膝均呈90度。",
-   "common_errors": ["前膝超过脚尖", "身体前倾", "步幅过小"]},
-  {"name": "史密斯机深蹲", "exercise_type": "复合", "difficulty": "初级", "equipment": "杠铃",
-   "target_muscles": ["股四头肌", "臀大肌", "腘绳肌"],
-   "description": "杠铃置于史密斯机轨道中，双脚稍前于身体，沿轨道下蹲。对新手比自由杠铃深蹲更安全。",
-   "common_errors": ["脚站位太前/太后", "膝盖超过脚尖", "没有蹲到平行"]}
+  {
+    "name": "哑铃卧推",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "胸大肌",
+      "三角肌前束",
+      "肱三头肌"
+    ],
+    "description": "平躺于凳上，双手持哑铃推起至手臂伸直，缓慢下放至胸部两侧。",
+    "common_errors": [
+      "手肘打得太开(超过45度)",
+      "哑铃下放过低导致肩关节压力"
+    ]
+  },
+  {
+    "name": "杠铃深蹲",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "杠铃置于斜方肌上，双脚与肩同宽，下蹲至大腿与地面平行。",
+    "common_errors": [
+      "膝盖内扣",
+      "脚跟抬起",
+      "下背拱起"
+    ]
+  },
+  {
+    "name": "引体向上",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "背阔肌",
+      "肱二头肌"
+    ],
+    "description": "双手握杠，身体悬挂，用背部力量将身体拉起至下巴过杠。",
+    "common_errors": [
+      "借助身体摆动",
+      "没有完全下放"
+    ]
+  },
+  {
+    "name": "哑铃侧平举",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "三角肌中束"
+    ],
+    "description": "站姿，双手持哑铃于体侧，向两侧平举至肩高。",
+    "common_errors": [
+      "耸肩借力斜方肌",
+      "手臂完全伸直"
+    ]
+  },
+  {
+    "name": "杠铃硬拉",
+    "exercise_type": "复合",
+    "difficulty": "高级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "臀大肌",
+      "腘绳肌",
+      "竖脊肌"
+    ],
+    "description": "杠铃置于脚前，屈膝俯身双手握杠，挺髋站起。",
+    "common_errors": [
+      "下背拱起",
+      "杠铃离身体过远",
+      "起始位置臀部过低"
+    ]
+  },
+  {
+    "name": "绳索下压",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "肱三头肌"
+    ],
+    "description": "面对龙门架，双手握绳索，下压至手臂伸直。",
+    "common_errors": [
+      "肘部前移",
+      "身体晃动借力"
+    ]
+  },
+  {
+    "name": "哑铃弯举",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "肱二头肌"
+    ],
+    "description": "站姿或坐姿，双手持哑铃，弯举至肩前。",
+    "common_errors": [
+      "身体后仰借力",
+      "下放过快"
+    ]
+  },
+  {
+    "name": "腿举",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "腿举机",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌"
+    ],
+    "description": "坐于腿举机，双脚置于踏板上，蹬起至腿伸直。",
+    "common_errors": [
+      "膝盖完全锁死",
+      "下放幅度不够"
+    ]
+  },
+  {
+    "name": "哑铃推举",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "三角肌前束",
+      "三角肌中束",
+      "肱三头肌"
+    ],
+    "description": "坐姿，哑铃于肩部两侧，推举至头顶。",
+    "common_errors": [
+      "下背过度反弓",
+      "哑铃在最低点低于肩部"
+    ]
+  },
+  {
+    "name": "俯身哑铃划船",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "背阔肌",
+      "菱形肌",
+      "肱二头肌"
+    ],
+    "description": "俯身，一只手撑凳，另一只手持哑铃拉至体侧。",
+    "common_errors": [
+      "上身旋转借力",
+      "肩膀耸起",
+      "弧度不够完整"
+    ]
+  },
+  {
+    "name": "高脚杯深蹲",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌"
+    ],
+    "description": "双手托哑铃于胸前，下蹲时保持躯干直立。替代杠铃深蹲的入门动作。",
+    "common_errors": [
+      "膝盖内扣",
+      "上半身前倾过多"
+    ]
+  },
+  {
+    "name": "哑铃罗马尼亚硬拉",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "腘绳肌",
+      "臀大肌",
+      "竖脊肌"
+    ],
+    "description": "双手持哑铃于体前，微屈膝，髋部后移俯身。对下背压力小于杠铃硬拉。",
+    "common_errors": [
+      "膝盖锁死",
+      "下背拱起"
+    ]
+  },
+  {
+    "name": "杠铃卧推",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "胸大肌",
+      "三角肌前束",
+      "肱三头肌"
+    ],
+    "description": "平躺卧推凳，握距略宽于肩，杠铃下放至胸骨位置后推起。",
+    "common_errors": [
+      "臀部离凳",
+      "杠铃弹胸借力",
+      "握距过宽伤肩"
+    ]
+  },
+  {
+    "name": "哑铃飞鸟",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "胸大肌"
+    ],
+    "description": "平躺凳上，双手持哑铃于胸上方，微屈肘向两侧打开至胸肌有拉伸感后合拢。",
+    "common_errors": [
+      "手臂伸太直",
+      "哑铃下放过低",
+      "重量过大导致借力"
+    ]
+  },
+  {
+    "name": "双杠臂屈伸",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "胸大肌下部",
+      "肱三头肌",
+      "三角肌前束"
+    ],
+    "description": "双手撑双杠，身体前倾，屈肘下放至肩低于肘，推起至手臂伸直。",
+    "common_errors": [
+      "下放幅度不够",
+      "肩部前引",
+      "身体晃动"
+    ]
+  },
+  {
+    "name": "上斜哑铃卧推",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "胸大肌上部",
+      "三角肌前束",
+      "肱三头肌"
+    ],
+    "description": "凳调至30-45度，双手持哑铃推起，集中刺激上胸。",
+    "common_errors": [
+      "角度太高变成练肩",
+      "哑铃下放太低"
+    ]
+  },
+  {
+    "name": "杠铃划船",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "背阔肌",
+      "菱形肌",
+      "斜方肌中下部",
+      "肱二头肌"
+    ],
+    "description": "俯身至躯干接近水平，正手或反手握杠铃，沿大腿前侧拉至下腹。",
+    "common_errors": [
+      "上身抬起借力",
+      "下背拱起",
+      "杠铃轨迹不贴腿"
+    ]
+  },
+  {
+    "name": "坐姿绳索划船",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "背阔肌",
+      "菱形肌",
+      "肱二头肌"
+    ],
+    "description": "坐姿双脚蹬踏板，双手握V把，背部发力拉至腹部，夹紧肩胛骨。",
+    "common_errors": [
+      "身体后仰借力",
+      "只用二头拉",
+      "回放时含胸"
+    ]
+  },
+  {
+    "name": "高位下拉",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "背阔肌",
+      "肱二头肌"
+    ],
+    "description": "坐姿双手宽握横杆，背部发力下拉至锁骨位置，控制回放。",
+    "common_errors": [
+      "身体后仰借力",
+      "下拉到颈后",
+      "握距过宽"
+    ]
+  },
+  {
+    "name": "直臂下压",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "背阔肌",
+      "大圆肌"
+    ],
+    "description": "站姿面对龙门架，双手直臂握横杆，从肩高下压至大腿前侧。",
+    "common_errors": [
+      "屈臂借力",
+      "上身摆动",
+      "重量过大"
+    ]
+  },
+  {
+    "name": "杠铃推举",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "三角肌前束",
+      "三角肌中束",
+      "肱三头肌"
+    ],
+    "description": "站姿或坐姿，杠铃置于锁骨前，推举至头顶正上方。",
+    "common_errors": [
+      "下背过度反弓",
+      "杠铃轨迹不直",
+      "推到颈后"
+    ]
+  },
+  {
+    "name": "哑铃前平举",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "三角肌前束"
+    ],
+    "description": "站姿双手持哑铃于体前，直臂前举至与肩同高。",
+    "common_errors": [
+      "身体摆动借力",
+      "举过肩高",
+      "速度过快"
+    ]
+  },
+  {
+    "name": "哑铃俯身飞鸟",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "三角肌后束",
+      "菱形肌"
+    ],
+    "description": "俯身至躯干接近水平，双手持哑铃向两侧打开至与肩同高。",
+    "common_errors": [
+      "上身抬起借力",
+      "手臂伸太直",
+      "重量过大"
+    ]
+  },
+  {
+    "name": "绳索面拉",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "三角肌后束",
+      "肩袖肌群"
+    ],
+    "description": "面对龙门架，绳索调至面部高度，双手拉向面部并外旋。",
+    "common_errors": [
+      "重量过大",
+      "没有外旋",
+      "身体后仰"
+    ]
+  },
+  {
+    "name": "杠铃弯举",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "肱二头肌"
+    ],
+    "description": "站姿双手反握杠铃，上臂固定，弯举至肩前。",
+    "common_errors": [
+      "身体后仰借力",
+      "下放过快",
+      "手腕屈伸"
+    ]
+  },
+  {
+    "name": "锤式弯举",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "肱二头肌",
+      "肱肌",
+      "肱桡肌"
+    ],
+    "description": "站姿双手对握哑铃，像握锤子一样，弯举至肩前。",
+    "common_errors": [
+      "身体摆动",
+      "手腕旋转",
+      "下放过快"
+    ]
+  },
+  {
+    "name": "窄距杠铃卧推",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "肱三头肌",
+      "胸大肌",
+      "三角肌前束"
+    ],
+    "description": "平躺，握距与肩同宽或略窄，杠铃下放至下胸，推起时肘贴身体。",
+    "common_errors": [
+      "握距过窄伤腕",
+      "肘部向外打开"
+    ]
+  },
+  {
+    "name": "哑铃颈后臂屈伸",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "肱三头肌长头"
+    ],
+    "description": "坐姿，单手持哑铃从颈后伸直至头顶。",
+    "common_errors": [
+      "肘部外展",
+      "重量过大",
+      "下放过低"
+    ]
+  },
+  {
+    "name": "保加利亚分腿蹲",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "后脚置于凳上，前脚在前，双手持哑铃下蹲至前大腿与地面平行。",
+    "common_errors": [
+      "前膝过脚尖",
+      "身体前倾",
+      "重心不稳"
+    ]
+  },
+  {
+    "name": "杠铃臀推",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "上背靠凳，杠铃置于髋部，顶髋至身体与地面平行。",
+    "common_errors": [
+      "过度伸展腰椎",
+      "只用下背发力",
+      "脚位置不对"
+    ]
+  },
+  {
+    "name": "腿弯举",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "腿举机",
+    "target_muscles": [
+      "腘绳肌"
+    ],
+    "description": "俯卧于腿弯举机，脚踝勾住滚轴，弯举至最大幅度。",
+    "common_errors": [
+      "爆发力启动",
+      "幅度不够",
+      "臀部翘起"
+    ]
+  },
+  {
+    "name": "站姿提踵",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "腓肠肌",
+      "比目鱼肌"
+    ],
+    "description": "站姿前脚掌踩台阶边缘，踮脚至最高点后缓慢下放。",
+    "common_errors": [
+      "速度过快",
+      "幅度不够",
+      "膝盖弯曲"
+    ]
+  },
+  {
+    "name": "哑铃耸肩",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "斜方肌上部"
+    ],
+    "description": "站姿双手持哑铃于体侧，肩膀直接向上耸起，停顿后下放。",
+    "common_errors": [
+      "画圈式耸肩",
+      "身体摆动借力",
+      "含胸"
+    ]
+  },
+  {
+    "name": "平板支撑",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "腹直肌",
+      "腹横肌",
+      "核心肌群"
+    ],
+    "description": "俯卧，肘撑地，身体呈一直线，保持核心收紧。",
+    "common_errors": [
+      "塌腰",
+      "臀部过高",
+      "憋气"
+    ]
+  },
+  {
+    "name": "悬垂举腿",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "腹直肌",
+      "髋屈肌"
+    ],
+    "description": "双手悬挂于单杠，双腿直腿或屈膝上举至与地面平行。",
+    "common_errors": [
+      "身体摆动",
+      "惯性借力",
+      "腿没控制下放"
+    ]
+  },
+  {
+    "name": "俄罗斯转体",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "腹斜肌",
+      "腹直肌"
+    ],
+    "description": "坐姿双脚离地，双手持哑铃左右旋转躯干。",
+    "common_errors": [
+      "只用肩膀转",
+      "速度过快",
+      "含胸"
+    ]
+  },
+  {
+    "name": "绳索夹胸",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "胸大肌",
+      "胸肌中缝"
+    ],
+    "description": "站于龙门架中央，双手握高位绳索，向胸前下方合拢。",
+    "common_errors": [
+      "手臂伸太直",
+      "重量过大",
+      "身体前倾借力"
+    ]
+  },
+  {
+    "name": "哑铃负重箭步蹲",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "双手持哑铃，交替向前迈步下蹲至前后膝均呈90度。",
+    "common_errors": [
+      "前膝超过脚尖",
+      "身体前倾",
+      "步幅过小"
+    ]
+  },
+  {
+    "name": "史密斯机深蹲",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "杠铃置于史密斯机轨道中，双脚稍前于身体，沿轨道下蹲。对新手比自由杠铃深蹲更安全。",
+    "common_errors": [
+      "脚站位太前/太后",
+      "膝盖超过脚尖",
+      "没有蹲到平行"
+    ]
+  },
+  {
+    "name": "坐姿腿屈伸",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "股四头肌"
+    ],
+    "description": "坐在腿屈伸机上，背部贴紧靠垫，双手握把手。以股四头肌发力缓慢伸直双腿至最高点，顶峰收缩1-2秒，然后缓慢下放至起始位置。",
+    "common_errors": [
+      "抬起时身体后仰借力",
+      "下放速度过快失去控制",
+      "膝盖超伸锁死关节"
+    ]
+  },
+  {
+    "name": "北欧降",
+    "exercise_type": "孤立",
+    "difficulty": "高级",
+    "equipment": "自重",
+    "target_muscles": [
+      "腘绳肌",
+      "臀大肌"
+    ],
+    "description": "跪姿，脚踝固定于器械或同伴按压下。保持躯干挺直，缓慢向前倾斜身体，用腘绳肌控制下降速度，直到接近地面后用手撑地推回起始位。",
+    "common_errors": [
+      "臀部过早后移导致发力错误",
+      "下降速度过快失去控制",
+      "背部弯曲代偿"
+    ]
+  },
+  {
+    "name": "单腿臀桥变式",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "仰卧，双手放于体侧，一条腿弯曲踩地，另一条腿伸直抬起。臀部发力向上顶起至身体呈直线，顶峰收缩后缓慢下放。",
+    "common_errors": [
+      "腰部过度反弓代偿",
+      "抬起腿晃动失去稳定",
+      "下放时臀部完全触地放松"
+    ]
+  },
+  {
+    "name": "坐姿提踵",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "腓肠肌",
+      "比目鱼肌"
+    ],
+    "description": "坐在提踵机上，大腿置于垫板下，脚掌踩在踏板上。以小腿发力向上踮起脚尖至最高点，停顿后缓慢下放至最低点拉伸。",
+    "common_errors": [
+      "动作幅度过小未充分拉伸",
+      "脚跟抬起时膝盖晃动",
+      "借助惯性弹动而非控制发力"
+    ]
+  },
+  {
+    "name": "农夫行走提踵",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "腓肠肌",
+      "比目鱼肌",
+      "核心肌群"
+    ],
+    "description": "双手各持一只哑铃于体侧，自然站立。保持躯干稳定，缓慢踮起脚尖至最高点，停顿1秒后缓慢放下，重复进行行走或原地提踵。",
+    "common_errors": [
+      "身体前倾或后仰失去平衡",
+      "提踵速度过快缺乏控制",
+      "膝盖弯曲过多代偿"
+    ]
+  },
+  {
+    "name": "坐姿髋内收",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "内收肌群"
+    ],
+    "description": "坐在髋内收机上，双腿外侧抵住挡板，背部贴紧靠垫。以大腿内侧发力缓慢向内夹拢双腿至挡板接触，顶峰收缩后缓慢还原。",
+    "common_errors": [
+      "使用爆发力快速夹腿",
+      "上半身晃动借力",
+      "还原时完全放松导致器械撞击"
+    ]
+  },
+  {
+    "name": "站姿髋外展",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "臀中肌",
+      "臀小肌"
+    ],
+    "description": "面对龙门架站立，将绳索脚环套于一侧脚踝，双手扶稳把手。保持躯干稳定，以臀部发力向外侧抬起腿部至最高点，缓慢下放。",
+    "common_errors": [
+      "身体向对侧倾斜借力",
+      "抬腿时骨盆旋转",
+      "动作幅度过小未充分激活肌肉"
+    ]
+  },
+  {
+    "name": "史密斯机保加利亚分腿蹲",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "史密斯机",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "将史密斯机杠铃置于肩部，后脚搭在后方凳面上。前腿弯曲下蹲至大腿与地面平行，保持膝盖不超过脚尖，然后发力站起。",
+    "common_errors": [
+      "前腿膝盖过度前移超过脚尖",
+      "后脚位置不稳定导致晃动",
+      "上半身前倾过度代偿"
+    ]
+  },
+  {
+    "name": "哈克机深蹲",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "哈克机",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "站在哈克机上，双肩抵住肩垫，双脚与肩同宽置于踏板上。缓慢下蹲至大腿与地面平行或更低，保持背部贴紧靠垫，然后发力站起。",
+    "common_errors": [
+      "下蹲时膝盖内扣",
+      "背部离开靠垫导致腰椎压力",
+      "下蹲幅度过浅未充分刺激"
+    ]
+  },
+  {
+    "name": "哈克机提踵",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "哈克机",
+    "target_muscles": [
+      "腓肠肌",
+      "比目鱼肌"
+    ],
+    "description": "站在哈克机上，双肩抵住肩垫，脚掌前部踩在踏板边缘，脚跟悬空。以小腿发力向上踮起脚尖至最高点，停顿后缓慢下放至最低点。",
+    "common_errors": [
+      "膝盖弯曲过多借力",
+      "动作幅度过小未充分拉伸",
+      "身体前倾导致重心不稳"
+    ]
+  },
+  {
+    "name": "反向山羊挺身",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "下背",
+      "臀大肌",
+      "腘绳肌"
+    ],
+    "description": "俯卧于山羊挺身机上，髋部卡在垫子上，双手抱胸或置于头后，保持背部挺直，以腰部为轴心向上抬起上半身至与地面平行，然后缓慢下放至起始位置。",
+    "common_errors": [
+      "过度拱起下背",
+      "使用惯性甩动身体",
+      "颈部过度后仰"
+    ]
+  },
+  {
+    "name": "哑铃单臂划船",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "背阔肌",
+      "斜方肌中下部",
+      "肱二头肌"
+    ],
+    "description": "单膝跪在平凳上，同侧手支撑身体，另一侧手握哑铃，保持背部挺直，将哑铃沿身体侧面向后上方拉起至肘部超过背部，顶峰收缩后缓慢下放。",
+    "common_errors": [
+      "身体旋转借力",
+      "含胸驼背",
+      "手臂过度外展"
+    ]
+  },
+  {
+    "name": "反握高位下拉",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "背阔肌下部",
+      "肱二头肌",
+      "菱形肌"
+    ],
+    "description": "坐于高位下拉机前，双手反握（掌心朝向自己）宽于肩宽的横杆，挺胸沉肩，背部微后倾，将横杆向下拉至上胸部，肘部贴近身体，然后控制性回放。",
+    "common_errors": [
+      "身体过度后仰",
+      "耸肩代偿",
+      "下拉时肘部外展"
+    ]
+  },
+  {
+    "name": "T杆划船",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "背阔肌",
+      "斜方肌中下部",
+      "竖脊肌"
+    ],
+    "description": "跨坐于T杆划船机或使用杠铃加V把，双脚踩稳，屈髋屈膝俯身至躯干接近平行地面，双手握住把手，将重量向腹部方向拉起，肘部后夹，顶峰收缩后缓慢下放。",
+    "common_errors": [
+      "背部弯曲",
+      "利用惯性提拉",
+      "肘部过度外展"
+    ]
+  },
+  {
+    "name": "潘德勒划船",
+    "exercise_type": "复合",
+    "difficulty": "高级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "背阔肌",
+      "斜方肌",
+      "竖脊肌"
+    ],
+    "description": "双脚与肩同宽站立，俯身至躯干与地面平行，双手正握杠铃，从地面开始每次动作，爆发力将杠铃向上拉至下胸位置，肘部向后，然后控制性放回地面。",
+    "common_errors": [
+      "背部拱起",
+      "利用身体晃动借力",
+      "杠铃未完全触地"
+    ]
+  },
+  {
+    "name": "窄距高位下拉",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "背阔肌下部",
+      "菱形肌",
+      "肱二头肌"
+    ],
+    "description": "坐于高位下拉机前，使用窄距把手（掌心相对或对握），挺胸沉肩，背部微后倾，将把手向下拉至上胸位置，肘部贴近身体两侧，缓慢回放至手臂伸直。",
+    "common_errors": [
+      "耸肩代偿",
+      "下拉时身体过度后仰",
+      "回放时完全放松肩胛"
+    ]
+  },
+  {
+    "name": "下斜哑铃飞鸟",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "下胸",
+      "胸大肌"
+    ],
+    "description": "仰卧于下斜凳上，双手各持哑铃，手臂微屈。控制哑铃向两侧下放至胸肌拉伸感明显，然后沿弧线向上夹拢至哑铃接近触碰，顶峰收缩1秒。",
+    "common_errors": [
+      "手臂完全伸直导致肘关节压力过大",
+      "下放过低失去张力",
+      "使用惯性借力而非胸肌发力"
+    ]
+  },
+  {
+    "name": "器械夹胸（蝴蝶机）",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "胸大肌",
+      "胸中缝"
+    ],
+    "description": "坐于蝴蝶机椅上，双手握住手柄，肘部微屈。呼气将手柄向胸前夹拢至两肘几乎触碰，感受胸肌收缩，吸气缓慢还原至起始位置。",
+    "common_errors": [
+      "肘关节过度弯曲变成推的动作",
+      "肩部耸起代偿",
+      "还原速度过快失去控制"
+    ]
+  },
+  {
+    "name": "负重俯卧撑",
+    "exercise_type": "复合",
+    "difficulty": "高级",
+    "equipment": "杠铃片或负重背心",
+    "target_muscles": [
+      "胸大肌",
+      "肱三头肌",
+      "三角肌前束"
+    ],
+    "description": "将杠铃片置于背部或穿负重背心，双手略宽于肩撑地，身体成直线。屈肘下降至胸部接近地面，发力推起至手臂伸直，全程保持核心收紧。",
+    "common_errors": [
+      "腰部下塌或臀部过高",
+      "下降深度不足",
+      "负重放置不稳导致重心偏移"
+    ]
+  },
+  {
+    "name": "下斜窄距俯卧撑",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "下胸",
+      "肱三头肌",
+      "胸大肌"
+    ],
+    "description": "双脚置于凳子或台阶上，双手与肩同宽撑地，指尖朝前。屈肘使胸部靠近双手，肘部贴近身体，发力推起至手臂微屈，重点感受下胸收缩。",
+    "common_errors": [
+      "双手间距过窄导致手腕压力过大",
+      "臀部过高使下胸受力减少",
+      "肘部外展过多变成普通俯卧撑"
+    ]
+  },
+  {
+    "name": "反向蝴蝶机飞鸟",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "三角肌后束",
+      "菱形肌",
+      "斜方肌中束"
+    ],
+    "description": "面对蝴蝶机坐姿，胸部贴靠椅背，双手对握手柄，手臂微屈，向后水平打开至肩胛骨收紧，缓慢还原。",
+    "common_errors": [
+      "含胸驼背导致借力",
+      "手臂过度伸直增加肘关节压力",
+      "使用爆发力甩动重量"
+    ]
+  },
+  {
+    "name": "单臂绳索侧平举",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "三角肌中束"
+    ],
+    "description": "侧对龙门架，单手握低位绳索手柄，保持身体稳定，手臂微屈向侧上方平举至与肩同高，控制下落。",
+    "common_errors": [
+      "身体晃动借力",
+      "耸肩代偿",
+      "手臂抬得过高导致斜方肌过度参与"
+    ]
+  },
+  {
+    "name": "古巴旋转",
+    "exercise_type": "复合",
+    "difficulty": "高级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "三角肌前束",
+      "三角肌中束",
+      "三角肌后束",
+      "肩袖肌群"
+    ],
+    "description": "双手持哑铃俯身，大臂水平外展，小臂垂直地面，先外旋小臂至前臂朝前，再向上推举哑铃，缓慢还原。",
+    "common_errors": [
+      "重量过大致使动作变形",
+      "旋转时肘关节位置下坠",
+      "肩关节未保持稳定产生晃动"
+    ]
+  },
+  {
+    "name": "阿诺德推举",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "三角肌前束",
+      "三角肌中束",
+      "肱三头肌"
+    ],
+    "description": "坐姿双手持哑铃于胸前，掌心朝内，向上推举同时旋转手腕至掌心朝前，到达顶部后原路返回。",
+    "common_errors": [
+      "推举时腰部过度反弓",
+      "旋转动作过快失去控制",
+      "肘关节未充分打开导致活动范围不足"
+    ]
+  },
+  {
+    "name": "反握牧师凳弯举",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "肱二头肌",
+      "肱桡肌"
+    ],
+    "description": "坐于牧师凳，双手反握杠铃（掌心向下），上臂贴靠垫板。保持身体稳定，缓慢弯举杠铃至肩前，顶峰收缩后下放至起始位置。",
+    "common_errors": [
+      "身体晃动借力",
+      "手腕过度弯曲",
+      "下放速度过快失去控制"
+    ]
+  },
+  {
+    "name": "上斜凳集中弯举",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "肱二头肌"
+    ],
+    "description": "坐于上斜凳，手持哑铃，上臂靠于同侧大腿内侧。另一手支撑膝盖，弯举哑铃至肩部，感受二头收缩，缓慢下放。",
+    "common_errors": [
+      "上臂离开大腿",
+      "身体后仰借力",
+      "手腕翻转过度"
+    ]
+  },
+  {
+    "name": "双杠臂屈伸（三头版本）",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "双杠",
+    "target_muscles": [
+      "肱三头肌",
+      "胸大肌下束",
+      "三角肌前束"
+    ],
+    "description": "双手撑双杠，身体直立，肘关节向后。缓慢屈肘下放身体至肘约90度，保持躯干垂直，发力伸直手臂还原。",
+    "common_errors": [
+      "身体前倾过度变成胸肌训练",
+      "肘关节外展",
+      "下放过低导致肩关节压力"
+    ]
+  },
+  {
+    "name": "反握绳索下压",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "肱三头肌"
+    ],
+    "description": "面对龙门架，双手反握绳索（掌心向上），肘部固定于体侧。向下压绳索至手臂完全伸直，顶峰收缩后缓慢还原。",
+    "common_errors": [
+      "肘部外展或移动",
+      "身体前后晃动",
+      "手腕过度伸展"
+    ]
+  },
+  {
+    "name": "正握腕弯举",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "前臂伸肌群"
+    ],
+    "description": "坐姿，前臂置于大腿或凳面，手腕悬空，正握杠铃（掌心向下）。仅靠手腕向上伸展杠铃，感受前臂伸肌收缩，缓慢下放。",
+    "common_errors": [
+      "前臂离开支撑面",
+      "使用肘部力量",
+      "动作速度过快"
+    ]
+  },
+  {
+    "name": "农夫行走",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "前臂屈肌群",
+      "前臂伸肌群",
+      "斜方肌",
+      "核心肌群"
+    ],
+    "description": "双手各持重哑铃，保持身体直立，肩胛下沉。迈步向前行走，保持躯干稳定，手臂自然下垂，握紧哑铃持续负重。",
+    "common_errors": [
+      "身体倾斜或旋转",
+      "含胸驼背",
+      "步幅过大失去平衡"
+    ]
+  },
+  {
+    "name": "反向锤式弯举",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "哑铃",
+    "target_muscles": [
+      "肱桡肌",
+      "肱肌",
+      "肱二头肌"
+    ],
+    "description": "站立，双手各持哑铃，掌心相对（锤式握法）。保持上臂固定，弯举哑铃至肩前，拇指朝上，顶峰收缩后缓慢下放。",
+    "common_errors": [
+      "上臂前后移动",
+      "手腕旋转成掌心向上",
+      "借力甩动哑铃"
+    ]
+  },
+  {
+    "name": "跪姿绳索锤式弯举",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "绳索",
+    "target_muscles": [
+      "肱肌",
+      "肱桡肌",
+      "肱二头肌"
+    ],
+    "description": "跪于龙门架前，双手对握绳索（掌心相对），肘部固定于体侧。弯举绳索至肩前，保持手腕中立，缓慢还原。",
+    "common_errors": [
+      "肘部前移或外展",
+      "身体后仰借力",
+      "手腕屈伸改变握法"
+    ]
+  },
+  {
+    "name": "反向卷腹抬臀",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "下腹直肌",
+      "髂腰肌"
+    ],
+    "description": "仰卧，双手置于体侧，双腿屈膝抬起至大腿垂直地面。收缩下腹将臀部抬离地面，向胸部卷曲，缓慢下放还原。",
+    "common_errors": [
+      "利用惯性甩腿",
+      "颈部过度用力",
+      "下放时腿完全触地"
+    ]
+  },
+  {
+    "name": "侧平板支撑提膝",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "腹外斜肌",
+      "腹内斜肌",
+      "臀中肌"
+    ],
+    "description": "侧卧，下方手肘撑地，身体成直线。上方腿屈膝向胸前提拉，同时躯干向膝侧卷曲，缓慢还原。",
+    "common_errors": [
+      "臀部下沉",
+      "身体前后晃动",
+      "提膝时骨盆旋转"
+    ]
+  },
+  {
+    "name": "药球砸地",
+    "exercise_type": "爆发力",
+    "difficulty": "中级",
+    "equipment": "药球",
+    "target_muscles": [
+      "腹直肌",
+      "腹横肌",
+      "肩部",
+      "股四头肌"
+    ],
+    "description": "双脚与肩同宽，双手持药球举过头顶。快速屈髋屈膝，用力将球砸向地面，同时收紧核心，接球后重复。",
+    "common_errors": [
+      "砸球时弓背",
+      "仅用上肢发力",
+      "膝盖过度前移"
+    ]
+  },
+  {
+    "name": "帕罗夫推",
+    "exercise_type": "孤立",
+    "difficulty": "中级",
+    "equipment": "绳索或弹力带",
+    "target_muscles": [
+      "腹横肌",
+      "腹内斜肌",
+      "腹外斜肌"
+    ],
+    "description": "侧对拉力器，双手握住把手于胸前。保持躯干中立，双臂向前推出至完全伸直，对抗绳索拉力，缓慢收回。",
+    "common_errors": [
+      "躯干旋转或侧屈",
+      "耸肩代偿",
+      "推出时骨盆前倾"
+    ]
+  },
+  {
+    "name": "跑步机匀速跑",
+    "exercise_type": "有氧",
+    "difficulty": "初级",
+    "equipment": "跑步机",
+    "target_muscles": [
+      "全身/心肺",
+      "股四头肌",
+      "腘绳肌",
+      "小腿肌群"
+    ],
+    "description": "在跑步机上以6-8公里/小时的速度匀速跑步，保持身体直立，手臂自然摆动，脚掌中前部着地，持续20-40分钟。",
+    "common_errors": [
+      "身体过度前倾或后仰",
+      "步幅过大导致膝盖压力增加",
+      "手臂横向摆动浪费能量"
+    ]
+  },
+  {
+    "name": "风阻单车冲刺间歇",
+    "exercise_type": "有氧",
+    "difficulty": "高级",
+    "equipment": "风阻单车",
+    "target_muscles": [
+      "全身/心肺",
+      "股四头肌",
+      "臀大肌",
+      "核心肌群"
+    ],
+    "description": "在风阻单车上全力冲刺20秒，随后慢骑40秒恢复，重复8-12轮。冲刺时站姿骑行，双手紧握把手，核心收紧。",
+    "common_errors": [
+      "冲刺时身体晃动过度",
+      "恢复期完全停止踩踏",
+      "阻力设置过高导致动作变形"
+    ]
+  },
+  {
+    "name": "波比跳",
+    "exercise_type": "有氧",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "全身/心肺",
+      "胸大肌",
+      "股四头肌",
+      "核心肌群"
+    ],
+    "description": "站立后下蹲双手撑地，双脚向后跳成俯卧撑姿势，完成一个俯卧撑后双脚跳回，再向上纵跳，手臂过头。连续重复。",
+    "common_errors": [
+      "俯卧撑时塌腰或拱背",
+      "跳跃落地时膝盖内扣",
+      "动作节奏过快导致呼吸紊乱"
+    ]
+  },
+  {
+    "name": "登山者",
+    "exercise_type": "有氧",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "全身/心肺",
+      "核心肌群",
+      "髋屈肌",
+      "肩部肌群"
+    ],
+    "description": "从俯卧撑起始姿势开始，交替将膝盖快速拉向胸部，保持背部平直，髋部稳定，双脚交替如登山动作，持续30-60秒。",
+    "common_errors": [
+      "臀部抬得过高失去平板支撑姿态",
+      "膝盖向外打开而非直线向前",
+      "肩部过度前移超过手腕"
+    ]
+  },
+  {
+    "name": "划船机匀速划行",
+    "exercise_type": "有氧",
+    "difficulty": "初级",
+    "equipment": "划船机",
+    "target_muscles": [
+      "全身/心肺",
+      "背阔肌",
+      "腘绳肌",
+      "核心肌群"
+    ],
+    "description": "坐在划船机上，双脚固定，膝盖弯曲，双手握把。蹬腿发力同时后拉把手至下腹部，然后伸展手臂并屈膝回位，保持节奏划行20-30分钟。",
+    "common_errors": [
+      "过早屈臂而非先蹬腿发力",
+      "回位时膝盖完全锁死",
+      "背部过度后仰导致腰部压力"
+    ]
+  },
+  {
+    "name": "低冲击快走",
+    "exercise_type": "有氧",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "全身/心肺",
+      "臀大肌",
+      "股四头肌",
+      "小腿肌群"
+    ],
+    "description": "以比日常步行更快的速度行走，保持每分钟120-140步，手臂弯曲90度前后摆动，脚跟先着地再过渡到脚尖，持续30-60分钟。",
+    "common_errors": [
+      "步幅过大导致膝盖冲击",
+      "低头驼背影响呼吸",
+      "手臂横向摆动而非前后摆动"
+    ]
+  },
+  {
+    "name": "猫式伸展动态拉伸",
+    "exercise_type": "拉伸",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "竖脊肌",
+      "腹直肌",
+      "胸椎"
+    ],
+    "description": "四足跪姿，吸气抬头塌腰拉伸腹部与胸椎，呼气低头拱背拉伸背部与脊柱，交替进行。每个动作保持2-3秒，重复10次。",
+    "common_errors": [
+      "过度拱背导致腰部不适",
+      "憋气导致肌肉紧张",
+      "动作过快失去拉伸效果"
+    ]
+  },
+  {
+    "name": "最伟大拉伸动态",
+    "exercise_type": "拉伸",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "腘绳肌",
+      "髋屈肌",
+      "胸椎",
+      "小腿"
+    ],
+    "description": "弓步姿势，前腿同侧手撑地，另一侧手肘触地后向上旋转打开胸椎，再后腿伸直前屈拉伸腘绳肌。每侧动态重复3-5次，每次保持2秒。",
+    "common_errors": [
+      "前腿膝盖超过脚尖",
+      "旋转时骨盆歪斜",
+      "憋气导致拉伸不充分"
+    ]
+  },
+  {
+    "name": "腿摆动态拉伸",
+    "exercise_type": "拉伸",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "腘绳肌",
+      "髋屈肌",
+      "臀大肌"
+    ],
+    "description": "站立扶墙，单腿前后摆动，前摆时勾脚尖拉伸腘绳肌，后摆时伸展髋屈肌。每侧摆动10-15次，幅度逐渐增大。",
+    "common_errors": [
+      "摆动过快失去控制",
+      "身体晃动借力",
+      "膝盖锁死导致关节压力"
+    ]
+  },
+  {
+    "name": "腘绳肌静态拉伸",
+    "exercise_type": "拉伸",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "腘绳肌",
+      "小腿"
+    ],
+    "description": "坐姿，一腿伸直勾脚尖，另一腿弯曲脚底贴大腿内侧。身体前倾，双手触碰脚尖，保持15-30秒，换腿。",
+    "common_errors": [
+      "弓背导致拉伸下背部",
+      "膝盖过度弯曲",
+      "憋气导致肌肉保护性收缩"
+    ]
+  },
+  {
+    "name": "髋屈肌静态拉伸",
+    "exercise_type": "拉伸",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "髋屈肌",
+      "股四头肌"
+    ],
+    "description": "弓步跪姿，后腿膝盖着地，身体前移，感受后腿髋部前方拉伸。保持15-30秒，换边。",
+    "common_errors": [
+      "前腿膝盖超过脚尖",
+      "骨盆前倾过度",
+      "憋气导致拉伸效果下降"
+    ]
+  },
+  {
+    "name": "泡沫轴滚背放松",
+    "exercise_type": "拉伸",
+    "difficulty": "初级",
+    "equipment": "泡沫轴",
+    "target_muscles": [
+      "竖脊肌",
+      "背阔肌",
+      "胸椎"
+    ],
+    "description": "仰卧，泡沫轴置于上背部下方，双手抱头，臀部离地，缓慢上下滚动，从肩胛骨到腰部，持续30-60秒。",
+    "common_errors": [
+      "直接滚压腰椎",
+      "憋气导致肌肉紧张",
+      "滚动速度过快失去放松效果"
+    ]
+  },
+  {
+    "name": "跳箱",
+    "exercise_type": "爆发力",
+    "difficulty": "中级",
+    "equipment": "跳箱",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腓肠肌",
+      "核心肌群"
+    ],
+    "description": "站立于跳箱前，屈髋屈膝下蹲，双臂后摆，迅速蹬地摆臂跳上箱面，落地时屈膝缓冲，核心收紧保持稳定，避免关节锁死。",
+    "common_errors": [
+      "落地时膝盖锁死",
+      "核心未收紧导致身体晃动",
+      "跳箱高度过高超出能力"
+    ]
+  },
+  {
+    "name": "深蹲跳",
+    "exercise_type": "爆发力",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腓肠肌",
+      "核心肌群"
+    ],
+    "description": "双脚与肩同宽，下蹲至大腿平行地面，迅速向上跳起，双臂上摆，落地时屈膝缓冲，核心收紧，避免膝盖内扣或锁死。",
+    "common_errors": [
+      "落地时膝盖内扣",
+      "下蹲过浅导致爆发力不足",
+      "落地时膝盖锁死"
+    ]
+  },
+  {
+    "name": "分腿跳",
+    "exercise_type": "爆发力",
+    "difficulty": "高级",
+    "equipment": "自重",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腘绳肌",
+      "核心肌群"
+    ],
+    "description": "前后弓步站立，屈膝下蹲至前后腿均约90度，迅速向上跳起并在空中交换前后腿位置，落地时屈膝缓冲，核心收紧，保持躯干直立。",
+    "common_errors": [
+      "落地时前膝超过脚尖",
+      "躯干前倾过多",
+      "落地时膝盖锁死或晃动"
+    ]
+  },
+  {
+    "name": "连续跳",
+    "exercise_type": "爆发力",
+    "difficulty": "高级",
+    "equipment": "自重",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腓肠肌",
+      "核心肌群"
+    ],
+    "description": "双脚并拢，连续向前或向上跳跃，每次落地后立即再次起跳，保持节奏，落地时屈膝缓冲，核心收紧，避免关节锁死。",
+    "common_errors": [
+      "落地时膝盖锁死",
+      "节奏中断导致动作变形",
+      "核心松弛影响稳定性"
+    ]
+  },
+  {
+    "name": "药球胸前推",
+    "exercise_type": "爆发力",
+    "difficulty": "中级",
+    "equipment": "药球",
+    "target_muscles": [
+      "胸大肌",
+      "三角肌前束",
+      "肱三头肌",
+      "核心肌群"
+    ],
+    "description": "双手持药球于胸前，双脚与肩同宽，微屈膝，迅速向前推出药球，手臂完全伸展，核心收紧，接球时屈臂缓冲，避免关节锁死。",
+    "common_errors": [
+      "推出时手臂未完全伸展",
+      "核心未收紧导致身体后仰",
+      "接球时手臂锁死"
+    ]
+  },
+  {
+    "name": "药球过顶砸",
+    "exercise_type": "爆发力",
+    "difficulty": "中级",
+    "equipment": "药球",
+    "target_muscles": [
+      "背阔肌",
+      "三角肌",
+      "核心肌群",
+      "股四头肌"
+    ],
+    "description": "双手持药球举过头顶，双脚与肩同宽，微屈膝，迅速向前下方砸球，同时屈髋屈膝，核心收紧，避免腰部过度弯曲或关节锁死。",
+    "common_errors": [
+      "砸球时腰部过度弯曲",
+      "手臂未完全伸展",
+      "落地时膝盖锁死"
+    ]
+  },
+  {
+    "name": "药球旋转抛",
+    "exercise_type": "爆发力",
+    "difficulty": "中级",
+    "equipment": "药球",
+    "target_muscles": [
+      "腹斜肌",
+      "腹直肌",
+      "髋屈肌群",
+      "肩部肌群"
+    ],
+    "description": "侧对墙壁站立，双手持药球于髋部一侧，旋转躯干将球抛向墙壁，核心收紧，接球后顺势旋转至另一侧，避免腰部扭转过猛或关节锁死。",
+    "common_errors": [
+      "旋转时仅用腰部而非核心",
+      "抛球时手臂主导而非躯干",
+      "接球时关节锁死"
+    ]
+  },
+  {
+    "name": "高翻简化版",
+    "exercise_type": "爆发力",
+    "difficulty": "高级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "竖脊肌",
+      "斜方肌",
+      "三角肌"
+    ],
+    "description": "杠铃置于地面，双手正握略宽于肩，屈髋屈膝下蹲，迅速伸髋伸膝提拉杠铃至肩部，肘部前旋托住杠铃，核心收紧，落地时屈膝缓冲，避免关节锁死。",
+    "common_errors": [
+      "提拉时背部弯曲",
+      "肘部未及时前旋导致杠铃掉落",
+      "落地时膝盖锁死"
+    ]
+  },
+  {
+    "name": "抓举简化版",
+    "exercise_type": "爆发力",
+    "difficulty": "高级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "竖脊肌",
+      "三角肌",
+      "斜方肌"
+    ],
+    "description": "杠铃置于地面，双手宽握，屈髋屈膝下蹲，迅速伸髋伸膝将杠铃向上提拉至头顶上方，手臂伸直，核心收紧，落地时屈膝缓冲，避免关节锁死。",
+    "common_errors": [
+      "提拉时杠铃偏离身体",
+      "手臂未完全伸直",
+      "落地时膝盖锁死或重心不稳"
+    ]
+  },
+  {
+    "name": "借力推举",
+    "exercise_type": "爆发力",
+    "difficulty": "中级",
+    "equipment": "杠铃",
+    "target_muscles": [
+      "三角肌",
+      "肱三头肌",
+      "股四头肌",
+      "核心肌群"
+    ],
+    "description": "杠铃置于肩前，双脚与肩同宽，微屈膝，迅速伸膝伸髋将杠铃向上推举至头顶，手臂伸直，核心收紧，下落时屈膝缓冲，避免关节锁死。",
+    "common_errors": [
+      "推举时手臂未完全伸直",
+      "核心未收紧导致身体后仰",
+      "下落时膝盖锁死"
+    ]
+  },
+  {
+    "name": "固定器械上斜推胸",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "胸大肌上束",
+      "三角肌前束",
+      "肱三头肌"
+    ],
+    "description": "坐在上斜推胸器械上，背部贴紧靠背，双手握住手柄，呼气向前推起至手臂接近伸直，吸气缓慢还原至胸肌有拉伸感。",
+    "common_errors": [
+      "推起时肘关节完全锁死",
+      "背部离开靠背借力",
+      "下落过快失去控制"
+    ]
+  },
+  {
+    "name": "蝴蝶机反向飞鸟",
+    "exercise_type": "孤立",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "三角肌后束",
+      "斜方肌中束",
+      "菱形肌"
+    ],
+    "description": "面对蝴蝶机坐于座椅，双手握住后方手柄，肘部微屈，呼气向后打开双臂至肩胛骨收紧，吸气缓慢回到起始位置。",
+    "common_errors": [
+      "肘关节过度弯曲借力",
+      "耸肩导致斜方肌代偿",
+      "打开幅度过大导致肩关节不适"
+    ]
+  },
+  {
+    "name": "固定器械肩推",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "三角肌前束",
+      "三角肌中束",
+      "肱三头肌"
+    ],
+    "description": "坐在肩推器械上，调整座椅使手柄与肩同高，双手握柄，呼气向上推起至手臂接近伸直，吸气缓慢下放至肘关节约90度。",
+    "common_errors": [
+      "推起时头部前伸借力",
+      "肘关节过度外展",
+      "下放过低导致肩关节压力过大"
+    ]
+  },
+  {
+    "name": "固定器械单臂划船",
+    "exercise_type": "复合",
+    "difficulty": "初级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "背阔肌",
+      "斜方肌中束",
+      "肱二头肌"
+    ],
+    "description": "坐于单臂划船器械前，单手握柄，保持背部挺直，呼气将手柄向后拉至腹部侧方，感受背肌收缩，吸气缓慢还原。",
+    "common_errors": [
+      "身体旋转借力",
+      "含胸驼背导致背部无法收紧",
+      "拉动手臂而非背部发力"
+    ]
+  },
+  {
+    "name": "倒蹬机宽距深蹲",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "固定器械",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "内收肌"
+    ],
+    "description": "躺在倒蹬机上，双脚置于踏板上方宽距（大于肩宽），脚尖微外八，屈膝下放至大腿接近胸部，呼气蹬起至膝关节微屈不锁死。",
+    "common_errors": [
+      "下放过低导致腰部抬起",
+      "蹬起时膝关节完全锁死",
+      "脚跟抬起导致发力不均"
+    ]
+  },
+  {
+    "name": "反握引体",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "背阔肌",
+      "肱二头肌",
+      "斜方肌"
+    ],
+    "description": "双手反握单杠，掌心朝向自己，握距与肩同宽。身体悬垂后，利用背部和手臂力量向上拉，直至下巴过杠，缓慢下放至手臂伸直。",
+    "common_errors": [
+      "摆动身体借力",
+      "下放过快失去控制",
+      "下巴未过杠即停止"
+    ]
+  },
+  {
+    "name": "手枪蹲",
+    "exercise_type": "复合",
+    "difficulty": "高级",
+    "equipment": "自重",
+    "target_muscles": [
+      "股四头肌",
+      "臀大肌",
+      "腘绳肌",
+      "核心肌群"
+    ],
+    "description": "单腿站立，另一腿向前伸直抬起。保持躯干直立，缓慢下蹲至支撑腿大腿与地面平行或更低，然后发力站起，全程保持平衡。",
+    "common_errors": [
+      "脚跟离地失去平衡",
+      "下蹲深度不足",
+      "弯腰驼背代偿"
+    ]
+  },
+  {
+    "name": "熊爬",
+    "exercise_type": "有氧",
+    "difficulty": "初级",
+    "equipment": "自重",
+    "target_muscles": [
+      "肩部",
+      "核心肌群",
+      "股四头肌",
+      "臀部"
+    ],
+    "description": "四肢着地，双手在肩下，双膝在髋下，背部平直。对侧手脚同时向前移动，保持躯干稳定，像熊一样爬行前进，节奏均匀。",
+    "common_errors": [
+      "背部拱起或塌腰",
+      "同侧手脚同时移动",
+      "膝盖过度内扣"
+    ]
+  },
+  {
+    "name": "片式俯卧撑",
+    "exercise_type": "复合",
+    "difficulty": "中级",
+    "equipment": "自重",
+    "target_muscles": [
+      "胸大肌",
+      "三角肌前束",
+      "肱三头肌",
+      "核心肌群"
+    ],
+    "description": "以标准俯卧撑姿势开始，双手间距略宽于肩。下放时身体保持一条直线，在底部稍作停顿后，用力推起并双手离地拍掌，落地缓冲。",
+    "common_errors": [
+      "下放时塌腰或撅臀",
+      "拍掌后落地手臂过直",
+      "动作节奏过快失去控制"
+    ]
+  }
 ]

@@ -263,7 +263,7 @@ if __name__ == "__main__":
     try:
         from src.llm.provider import LLMProvider
         llm = LLMProvider()
-        logger.info(f"LLM 已初始化: model={llm.default_model}")
+        logger.info(f"LLM 已初始化: model={llm.active_model}")
     except Exception as e:
         if not args.dry_run:
             logger.error(f"LLM 初始化失败: {e}")
