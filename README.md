@@ -14,9 +14,9 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
  Planner  Retriever  Writer  FactChecker
 (任务拆解) (多源检索) (计划生成) (安全审查+HITL)
     │    │  │
-    │    │  └── GraphRAG (Neo4j 知识图谱 39 节点多跳推理)
+    │    │  └── GraphRAG (Neo4j 知识图谱 106 动作节点多跳推理)
     │    └───── Agentic RAG (自评 + 改写 + 3 轮迭代)
-    └────────── Skill 系统 (关键词触发 + 策略模板)
+    └────────── Skill 系统 (LLM 语义选择 + 关键词降级兜底 + 策略模板)
          │
     ┌────┼────┬──────────┐
     ▼    ▼     ▼          ▼
@@ -36,7 +36,7 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 | 向量化 | DashScope text-embedding-v4（1024 维，API 调用） |
 | 缓存 | Redis 语义缓存（二级命中：精确 + 余弦相似度扫描） |
 | 安全 | FactChecker 双重校验 + HITL 人在回路 |
-| 评测 | 60 条 Golden Dataset + 三组消融实验 |
+| 评测 | 80 条 Golden Dataset（2026-07-17 异构裁判补标）+ 三组消融实验 + E2E/RAGAS（qwen-plus 异构裁判）+ Serving 压测 |
 | 前端 | FastAPI + SSE + 暗黑工业风 HTML/CSS/JS |
 | 部署 | Docker Compose（PostgreSQL + Neo4j + Redis + MinIO） |
 
@@ -44,7 +44,7 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 
 - **智能计划生成** — 输入身高体重/目标/场景，AI 先给个性化分析，Multi-Agent 流水线生成周训练计划，FactChecker 安全审查
 - **动作分析** — 输入动作名 + 训练感受，检索标准规范，诊断问题，给出改进方案
-- **知识问答** — 自然语言健身问题，18 篇自写文档 + 62 篇 PubMed 文献混合检索，RRF 融合 + Re-rank 精排，带来源引用
+- **知识问答** — 自然语言健身问题，92 篇知识文档（30 自写 + 62 篇 PubMed 翻译，318 chunks）混合检索，RRF 融合 + Re-rank 精排，带来源引用
 
 ## 快速开始
 
@@ -59,7 +59,7 @@ cp .env.example .env
 # 3. 启动基础服务
 docker compose up -d
 
-# 4. 灌入种子数据（39 个标准动作）
+# 4. 灌入种子数据（106 个标准动作）
 python -m src.main --seed
 
 # 5. 启动服务
@@ -109,8 +109,8 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge
 ├── scripts/                      # 知识库工具
 │   ├── fetch_knowledge.py        # PubMed 爬取
 │   └── translate_knowledge.py    # LLM 翻译改写
-├── eval/                         # 评测框架（60 条 Golden Dataset）
-├── data/knowledge/               # 健身知识库（80+ 篇文档）
+├── eval/                         # 评测框架（80 条 Golden Dataset + 消融/E2E/RAGAS/压测）
+├── data/knowledge/               # 健身知识库（92 篇文档，318 chunks）
 ├── run_mcp_server.py             # MCP 独立服务器（stdio/SSE/HTTP）
 ├── docker-compose.yml
 └── requirements.txt
