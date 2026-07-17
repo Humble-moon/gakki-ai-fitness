@@ -109,9 +109,19 @@ def generate_rag(llm: LLMProvider, query: str, context: str) -> str:
     return response.content
 
 
-def judge(llm: LLMProvider, query: str, answer: str, ground_truth: str, group_label: str) -> dict:
+def judge(llm: LLMProvider, query: str, answer: str, ground_truth: str,
+          group_label: str, judge_alias: str) -> dict:
     messages = build_judge_messages(query, answer, ground_truth, group_label)
-    return llm.chat_with_json_mode(messages)
+    return llm.chat_with_json_mode(messages, model=judge_alias)
+
+
+def resolve_judge_alias(llm: LLMProvider) -> str:
+    """优先用异构裁判（LLM_JUDGE_* 配置的 qwen-plus），未配置则回退 default。"""
+    if "judge" in llm.available_models:
+        return "judge"
+    logger.warning("未配置 LLM_JUDGE_*，回退用 default 模型当裁判"
+                   "（与生成模型同源，存在自偏好偏差）")
+    return "default"
 
 
 def main():
@@ -128,6 +138,10 @@ def main():
     logger.info(f"Comparing Direct vs RAG on {len(queries)} queries...")
 
     llm = LLMProvider()
+    judge_alias = resolve_judge_alias(llm)
+    judge_model_name = llm.available_models[judge_alias]
+    logger.info(f"生成模型: {llm.available_models['default']} | 裁判模型: {judge_model_name}"
+                f"{'（异构裁判）' if judge_alias == 'judge' else ''}")
     results = []
 
     for i, q in enumerate(queries, 1):
@@ -161,8 +175,8 @@ def main():
 
         # Judge 打分
         try:
-            score_direct = judge(llm, query_text, answer_direct, ground_truth, "Direct-直问")
-            score_rag = judge(llm, query_text, answer_rag, ground_truth, "RAG-带知识库")
+            score_direct = judge(llm, query_text, answer_direct, ground_truth, "Direct-直问", judge_alias)
+            score_rag = judge(llm, query_text, answer_rag, ground_truth, "RAG-带知识库", judge_alias)
         except Exception as e:
             logger.error(f"  Judge failed: {e}")
             continue
@@ -214,17 +228,18 @@ def main():
         "avg_rag": avg_rag,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    generate_report(results, avg_direct, avg_rag)
+    generate_report(results, avg_direct, avg_rag, judge_model_name, judge_alias == "judge")
     logger.info(f"Report saved to {OUTPUT_REPORT}")
 
 
-def generate_report(results: list, avg_direct: dict, avg_rag: dict):
+def generate_report(results: list, avg_direct: dict, avg_rag: dict,
+                    judge_model: str, heterogeneous: bool):
     lines = [
         "# DeepSeek 直问 vs RAG 系统 对比评测",
         "",
         f"**评测时间**: {time.strftime('%Y-%m-%d %H:%M')}",
         f"**评测数量**: {len(results)} 条知识型查询",
-        f"**裁判模型**: DeepSeek (deepseek-chat)",
+        f"**裁判模型**: {judge_model}" + ("（异构裁判，与生成模型不同厂商）" if heterogeneous else ""),
         "",
         "## 实验设计",
         "",
