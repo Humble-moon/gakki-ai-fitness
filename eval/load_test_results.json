@@ -1,0 +1,82 @@
+[
+  {
+    "scenario": "light:/admin/metrics c=1",
+    "requests_ok": 50,
+    "errors": 0,
+    "wall_time_sec": 0.05,
+    "throughput_rps": 1003.05,
+    "latency_ms": {
+      "mean": 1.0,
+      "p50": 0.8,
+      "p95": 1.1,
+      "p99": 7.3,
+      "max": 7.3
+    }
+  },
+  {
+    "scenario": "light:/admin/metrics c=10",
+    "requests_ok": 200,
+    "errors": 0,
+    "wall_time_sec": 0.21,
+    "throughput_rps": 947.39,
+    "latency_ms": {
+      "mean": 10.0,
+      "p50": 7.9,
+      "p95": 21.2,
+      "p99": 29.2,
+      "max": 34.9
+    }
+  },
+  {
+    "scenario": "light:/admin/metrics c=50",
+    "requests_ok": 500,
+    "errors": 0,
+    "wall_time_sec": 0.82,
+    "throughput_rps": 606.98,
+    "latency_ms": {
+      "mean": 77.6,
+      "p50": 61.7,
+      "p95": 211.7,
+      "p99": 270.4,
+      "max": 468.5
+    }
+  },
+  {
+    "scenario": "qa:/api/ask-question c=1",
+    "requests_ok": 5,
+    "errors": 0,
+    "wall_time_sec": 88.87,
+    "throughput_rps": 0.06,
+    "latency_ms": {
+      "mean": 17773.6,
+      "p50": 18107.7,
+      "p95": 19681.4,
+      "p99": 19681.4,
+      "max": 19681.4
+    },
+    "ttft_ms": {
+      "mean": 1.6,
+      "p50": 1.5,
+      "p95": 2.4
+    }
+  },
+  {
+    "scenario": "qa:/api/ask-question c=5",
+    "requests_ok": 10,
+    "errors": 0,
+    "wall_time_sec": 36.49,
+    "throughput_rps": 0.27,
+    "latency_ms": {
+      "mean": 17671.7,
+      "p50": 17492.0,
+      "p95": 18837.7,
+      "p99": 18837.7,
+      "max": 18837.7
+    },
+    "ttft_ms": {
+      "mean": 4.6,
+      "p50": 7.2,
+      "p95": 8.6
+    }
+  }
+]
