@@ -185,12 +185,14 @@ def run_ragas_eval(
         return {"error": "ragas not installed. Run: pip install ragas langchain-openai datasets pandas"}
 
     import ragas
-    from ragas import evaluate, EvaluationDataset
     from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextRelevance
-    from ragas.llms import LangchainLLMWrapper
-    from ragas.embeddings import HuggingFaceEmbeddings
-    from langchain_openai import ChatOpenAI
-    from src.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, EMBEDDING_MODEL
+    from ragas.llms import llm_factory
+    from ragas.embeddings import OpenAIEmbeddings as RagasOpenAIEmbeddings
+    from openai import AsyncOpenAI
+    from src.config import (
+        DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL,
+        EMBEDDING_API_KEY, EMBEDDING_BASE_URL, EMBEDDING_MODEL,
+    )
 
     # ---- 评估模式与生产模式用不同的 LLM ----
     # 如果 .env 中设置了 EVAL_LLM 系列变量则用评估 LLM，否则 fallback 到生产 LLM
@@ -201,21 +203,24 @@ def run_ragas_eval(
     if limit and limit < len(queries):
         queries = queries[:limit]
 
-    # ---- 配置 RAGAS 裁判 LLM（DeepSeek，OpenAI 兼容）----
-    evaluator_llm = LangchainLLMWrapper(ChatOpenAI(
-        model=eval_model,
-        api_key=eval_api_key,
-        base_url=eval_base_url,
-        temperature=0.0,  # 评测用确定性温度
-    ))
+    # ---- 配置 RAGAS 裁判 LLM（OpenAI 兼容，ragas 0.4.x 要求 llm_factory/InstructorLLM）----
+    # collections 指标的 ascore() 走异步路径，必须传 AsyncOpenAI 客户端
+    evaluator_llm = llm_factory(
+        eval_model,
+        client=AsyncOpenAI(api_key=eval_api_key, base_url=eval_base_url),
+        max_tokens=8192,  # Faithfulness 语句分解+逐条判定的输出较长，默认上限会截断
+    )
 
-    # ---- 配置 RAGAS 嵌入模型（复用项目已有的 BGE 模型）----
+    # ---- 配置 RAGAS 嵌入模型（DashScope OpenAI 兼容 API，与生产链路同款）----
     # AnswerRelevancy 需要 embeddings 来比较生成问题与原问题的语义相似度
     try:
-        evaluator_embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
-        logger.info(f"RAGAS embeddings loaded: {EMBEDDING_MODEL}")
+        evaluator_embeddings = RagasOpenAIEmbeddings(
+            client=AsyncOpenAI(api_key=EMBEDDING_API_KEY, base_url=EMBEDDING_BASE_URL),
+            model=EMBEDDING_MODEL,
+        )
+        logger.info(f"RAGAS embeddings configured: {EMBEDDING_MODEL}")
     except Exception as e:
-        logger.warning(f"Failed to load embeddings model {EMBEDDING_MODEL}: {e}")
+        logger.warning(f"Failed to configure embeddings {EMBEDDING_MODEL}: {e}")
         logger.info("AnswerRelevancy will be skipped (requires embeddings)")
         evaluator_embeddings = None
 
@@ -238,46 +243,55 @@ def run_ragas_eval(
         answers.append(answer)
         contexts_list.append(contexts)
 
-    # ---- 步骤 2：构造 RAGAS EvaluationDataset ----
-    # ragas 0.4.x: 字段名改为 user_input / response / retrieved_contexts
-    samples = [
-        {"user_input": q, "response": a, "retrieved_contexts": c}
-        for q, a, c in zip(questions, answers, contexts_list)
-    ]
-    eval_dataset = EvaluationDataset.from_dict(samples)
-
-    # ---- 步骤 3：运行 RAGAS 评测 ----
+    # ---- 步骤 2/3：运行 RAGAS 评测（ragas 0.4.x collections API：逐样本 score）----
+    # 0.4.x 的 collections 指标不再兼容旧 evaluate() 入口，
+    # 每个指标直接提供 score(user_input=..., ...) -> MetricResult，天然支持逐 query 明细
     logger.info(f"Running RAGAS evaluation with {eval_model} as judge...")
     start = time.time()
 
-    # ragas 0.4.x: metrics take llm/embeddings in constructor
-    metrics = [
-        Faithfulness(llm=evaluator_llm),          # 答案是否忠于上下文
-        ContextRelevance(llm=evaluator_llm),       # 检索的上下文是否相关
-    ]
-    # AnswerRelevancy 需要 embeddings，如果加载失败则跳过
-    if evaluator_embeddings is not None:
-        metrics.append(
-            AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings)
-        )
+    m_faith = Faithfulness(llm=evaluator_llm)        # 答案是否忠于上下文
+    m_ctx = ContextRelevance(llm=evaluator_llm)      # 检索的上下文是否相关
+    m_ans = (AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings)
+             if evaluator_embeddings is not None else None)  # 需要 embeddings
 
-    result = evaluate(eval_dataset, metrics=metrics)
+    async def _score_all() -> list:
+        all_scores = []
+        for i, (q_text, ans, ctxs) in enumerate(zip(questions, answers, contexts_list), 1):
+            scores = {}
+            try:
+                r = await m_faith.ascore(
+                    user_input=q_text, response=ans, retrieved_contexts=ctxs)
+                scores["faithfulness"] = float(r.value)
+            except Exception as e:
+                logger.warning(f"  [{i}] faithfulness failed: {e}")
+            try:
+                r = await m_ctx.ascore(user_input=q_text, retrieved_contexts=ctxs)
+                scores["context_relevance"] = float(r.value)
+            except Exception as e:
+                logger.warning(f"  [{i}] context_relevance failed: {e}")
+            if m_ans is not None:
+                try:
+                    r = await m_ans.ascore(user_input=q_text, response=ans)
+                    scores["answer_relevancy"] = float(r.value)
+                except Exception as e:
+                    logger.warning(f"  [{i}] answer_relevancy failed: {e}")
+            all_scores.append(scores)
+            logger.info(f"  [{i}/{len(questions)}] " +
+                        " ".join(f"{k}={v:.3f}" for k, v in scores.items()))
+        return all_scores
+
+    import asyncio
+    per_scores = asyncio.run(_score_all())
     elapsed = time.time() - start
 
     # ---- 步骤 4：整理结果 ----
-    # ragas 0.4.x 返回 EvaluationResult，可 .to_pandas()
-    try:
-        df = result.to_pandas()
-        faithfulness_mean = float(df["faithfulness"].mean()) if "faithfulness" in df.columns else 0.0
-        answer_relevancy_mean = float(df["answer_relevancy"].mean()) if "answer_relevancy" in df.columns else 0.0
-        # ragas 0.4.x may use "context_relevance" or "context_relevancy"
-        cr_col = "context_relevance" if "context_relevance" in df.columns else "context_relevancy"
-        context_relevance_mean = float(df[cr_col].mean()) if cr_col in df.columns else 0.0
-    except Exception:
-        faithfulness_mean = float(result.get("faithfulness", 0))
-        answer_relevancy_mean = float(result.get("answer_relevancy", 0))
-        context_relevance_mean = float(result.get("context_relevance", 0))
-        df = None
+    def _mean(key: str) -> float:
+        vals = [s[key] for s in per_scores if key in s]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    faithfulness_mean = _mean("faithfulness")
+    answer_relevancy_mean = _mean("answer_relevancy")
+    context_relevance_mean = _mean("context_relevance")
 
     # 逐 query 详情
     per_query = []
@@ -288,11 +302,8 @@ def run_ragas_eval(
             "answer": answers[i][:200],
             "num_contexts": len(contexts_list[i]),
         }
-        if df is not None and i < len(df):
-            row = df.iloc[i]
-            entry["faithfulness"] = round(float(row.get("faithfulness", 0)), 4)
-            entry["answer_relevancy"] = round(float(row.get("answer_relevancy", 0)), 4)
-            entry["context_relevance"] = round(float(row.get("context_relevance", 0)), 4)
+        for key, val in per_scores[i].items():
+            entry[key] = round(val, 4)
         per_query.append(entry)
 
     summary = {
