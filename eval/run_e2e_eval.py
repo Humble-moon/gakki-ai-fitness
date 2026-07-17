@@ -117,11 +117,26 @@ def generate_answer(llm: LLMProvider, query: str, context: str) -> str:
     return response.content
 
 
-def judge_answer(llm: LLMProvider, query: str, answer: str, ground_truth: str) -> dict:
-    """用 DeepSeek 当裁判打分。"""
+def judge_answer(llm: LLMProvider, query: str, answer: str, ground_truth: str,
+                 judge_alias: str) -> dict:
+    """用异构裁判（Qwen）打分，消除自偏好偏差。"""
     messages = build_judge_messages(query, answer, ground_truth)
-    result = llm.chat_with_json_mode(messages)
+    result = llm.chat_with_json_mode(messages, model=judge_alias)
     return result
+
+
+def resolve_judge_alias(llm: LLMProvider) -> str:
+    """优先用 .env 配置的 judge 别名（异构裁判），未配置则回退 default。
+
+    生成模型是 DeepSeek，裁判如果也是 DeepSeek 会有 self-preference bias
+    （模型给自己的输出打分系统性偏高）。配置 LLM_JUDGE_*=qwen-plus 后，
+    裁判与生成模型来自不同厂商，评分独立性更强。
+    """
+    if "judge" in llm.available_models:
+        return "judge"
+    logger.warning("未配置 LLM_JUDGE_*，回退用 default 模型当裁判"
+                   "（与生成模型同源，存在自偏好偏差）")
+    return "default"
 
 
 def main():
@@ -139,6 +154,11 @@ def main():
     logger.info(f"Running E2E eval on {len(queries)} queries...")
 
     llm = LLMProvider()
+    judge_alias = resolve_judge_alias(llm)
+    judge_model_name = llm.available_models[judge_alias]
+    gen_model_name = llm.available_models["default"]
+    logger.info(f"生成模型: {gen_model_name} | 裁判模型: {judge_model_name}"
+                f"{'（异构裁判）' if judge_alias == 'judge' else ''}")
 
     results = []
     for i, q in enumerate(queries, 1):
@@ -170,7 +190,7 @@ def main():
         # Judge 评分
         t0 = time.time()
         try:
-            judge_result = judge_answer(llm, query_text, answer, ground_truth)
+            judge_result = judge_answer(llm, query_text, answer, ground_truth, judge_alias)
         except Exception as e:
             logger.error(f"  Judge failed: {e}")
             results.append({"id": qid, "query": query_text, "answer": answer, "error": str(e)})
@@ -212,26 +232,28 @@ def main():
     logger.info(f"Raw data saved to {OUTPUT_DATA}")
 
     # 生成报告
-    generate_report(success, avg_accuracy, avg_safety, avg_usefulness)
+    generate_report(success, avg_accuracy, avg_safety, avg_usefulness,
+                    gen_model_name, judge_model_name, judge_alias == "judge")
     logger.info(f"Report saved to {OUTPUT_REPORT}")
 
 
-def generate_report(results: list, avg_accuracy: float, avg_safety: float, avg_usefulness: float):
+def generate_report(results: list, avg_accuracy: float, avg_safety: float, avg_usefulness: float,
+                    gen_model: str, judge_model: str, heterogeneous: bool):
     """生成 Markdown 评测报告。"""
     lines = [
         "# 端到端生成质量评测报告 (LLM-as-Judge)",
         "",
         f"**评测时间**: {time.strftime('%Y-%m-%d %H:%M')}",
         f"**评测数量**: {len(results)} 条知识型查询",
-        f"**裁判模型**: DeepSeek (deepseek-chat)",
-        f"**生成模型**: DeepSeek (deepseek-chat)",
+        f"**裁判模型**: {judge_model}" + ("（异构裁判，与生成模型不同厂商）" if heterogeneous else ""),
+        f"**生成模型**: {gen_model}",
         "",
         "## 评测设计",
         "",
         "每条查询的评测流程：",
         "1. 读取源文档 → 作为检索上下文（模拟检索命中）",
         "2. LLM 基于上下文生成回答（200-350 字）",
-        "3. DeepSeek 裁判对回答三维度打分（0-5 分）",
+        f"3. 裁判模型（{judge_model}）对回答三维度打分（0-5 分）",
         "",
         "> 注: 检索环节已在消融实验中独立评测(R@5/P@5/MRR/NDCG), ",
         "> 本次评测聚焦于'给定正确上下文后, 生成质量如何'。",
@@ -287,9 +309,10 @@ def generate_report(results: list, avg_accuracy: float, avg_safety: float, avg_u
         "",
         "### 如果面试官问'LLM-as-Judge靠谱吗?'",
         "",
-        "1. Judge只做相对打分(同模型同prompt下横向可比), 不做绝对质量判断",
+        "1. **异构裁判**: 生成用 DeepSeek, 打分用 Qwen(不同厂商), 消除 self-preference bias(模型给自己输出打分系统性偏高)",
         "2. 每个维度有明确的0-5分rubric, 不是主观感觉",
         "3. 裁判给了扣分理由(accuracy_reason等), 可以人工抽查验证",
+        "4. 核心结论以相对比较为主(RAG vs Direct), 同一裁判下偏差在对照组间近似抵消",
     ]
 
     OUTPUT_REPORT.write_text("\n".join(lines), encoding="utf-8")
