@@ -9,10 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   IRON MIND — Industrial Forge Aesthetic
-   设计方向：工业锻造厂 × 霓虹灯光
-   配色：锻造炉的暖橙 + 冷却钢的冷蓝 + 深炭背景
-   字体：Syncopate(logo) + Rajdhani(标题) + Noto Sans SC(正文) + Share Tech Mono(数据)
+   IRON MIND — Industrial Forge Aesthetic v3
+   氛围：深锻炉 + 胶片噪点 + 悬浮火星粒子 + 金属拉丝质感
    ============================================================ */
 :root {
   --bg-deep:        #060608;
@@ -24,8 +22,10 @@
   --forge-amber:    #ff6b35;
   --forge-amber-dim: rgba(255,107,53,0.18);
   --forge-amber-glow: rgba(255,107,53,0.35);
+  --forge-ember:    #ff8c5a;
   --cool-blue:      #00c9a0;
   --cool-blue-dim:  rgba(0,201,160,0.15);
+  --cool-blue-glow: rgba(0,201,160,0.25);
   --danger:         #f04343;
   --warn:           #f0a040;
   --chalk:          #e8e5df;
@@ -58,24 +58,62 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Ambient Background ── */
+/* ── Ambient Background: Forge Atmosphere ── */
+/* Three layers of controlled light — fills the "empty" right side with purpose */
 body::before {
   content: '';
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(ellipse 80% 60% at 20% 80%, rgba(255,107,53,0.04) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 80% at 85% 15%, rgba(0,201,160,0.03) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(120,120,160,0.02) 0%, transparent 70%);
+    /* Deep forge glow: bottom-left — the furnace */
+    radial-gradient(ellipse 90% 70% at 15% 85%, rgba(255,107,53,0.05) 0%, transparent 55%),
+    /* Cool steel bloom: top-right — fills the right-side dead space */
+    radial-gradient(ellipse 50% 70% at 80% 20%, rgba(0,201,160,0.04) 0%, transparent 60%),
+    /* Warm ember haze: center-right — bridges the gap */
+    radial-gradient(ellipse 40% 50% at 70% 50%, rgba(255,140,90,0.02) 0%, transparent 65%),
+    /* Deep void fill */
+    radial-gradient(ellipse 60% 60% at 50% 50%, rgba(120,120,160,0.015) 0%, transparent 70%);
 }
 
-/* Subtle grid texture */
+/* Film-grain overlay — organic texture over the clean grid */
 body::after {
   content: '';
-  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.03;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
-  background-size: 64px 64px;
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  opacity: 0.45;
+  mask-image: radial-gradient(ellipse 60% 70% at 50% 40%, black 50%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 70% at 50% 40%, black 50%, transparent 100%);
+}
+
+/* Floating ember particles — the forge is alive */
+.ember-particles {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+}
+.ember {
+  position: absolute;
+  width: 2px; height: 2px;
+  background: var(--forge-amber);
+  border-radius: 50%;
+  opacity: 0;
+  animation: emberFloat 5s ease-in infinite;
+  box-shadow: 0 0 4px var(--forge-amber-glow);
+}
+.ember:nth-child(1)  { left: 15%; top: 70%; animation-delay: 0s; animation-duration: 5s; }
+.ember:nth-child(2)  { left: 25%; top: 80%; animation-delay: 1.2s; animation-duration: 6s; width: 1.5px; height: 1.5px; }
+.ember:nth-child(3)  { left: 20%; top: 75%; animation-delay: 2.5s; animation-duration: 4.5s; }
+.ember:nth-child(4)  { left: 12%; top: 85%; animation-delay: 3.8s; animation-duration: 5.5s; width: 2.5px; height: 2.5px; }
+.ember:nth-child(5)  { left: 30%; top: 72%; animation-delay: 0.6s; animation-duration: 6.5s; width: 1px; height: 1px; background: var(--forge-ember); }
+.ember:nth-child(6)  { left: 18%; top: 78%; animation-delay: 1.8s; animation-duration: 4.8s; }
+.ember:nth-child(7)  { left: 22%; top: 82%; animation-delay: 2.2s; animation-duration: 5.2s; width: 1.8px; height: 1.8px; background: var(--forge-ember); }
+.ember:nth-child(8)  { left: 8%;  top: 74%; animation-delay: 3s; animation-duration: 7s; }
+.ember:nth-child(9)  { left: 28%; top: 76%; animation-delay: 4s; animation-duration: 4.2s; width: 1.2px; height: 1.2px; }
+.ember:nth-child(10) { left: 16%; top: 88%; animation-delay: 0.4s; animation-duration: 5.8s; }
+
+@keyframes emberFloat {
+  0%   { opacity: 0; transform: translateY(0) translateX(0) scale(1); }
+  20%  { opacity: 0.7; }
+  50%  { opacity: 0.4; transform: translateY(-60px) translateX(8px) scale(0.6); }
+  80%  { opacity: 0.1; }
+  100% { opacity: 0; transform: translateY(-120px) translateX(-4px) scale(0.2); }
 }
 
 /* ── Scrollbar ── */
@@ -115,14 +153,19 @@ body::after {
   background: linear-gradient(90deg, var(--forge-amber), var(--cool-blue));
 }
 
-/* Sidebar bottom glow */
+/* Sidebar bottom glow — breathing forge pulse */
 .sidebar::after {
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 160px;
+  height: 200px;
   background: linear-gradient(to top, var(--forge-amber-dim), transparent);
   pointer-events: none;
+  animation: forgeBreathe 4s ease-in-out infinite;
+}
+@keyframes forgeBreathe {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
 }
 
 .logo-block {
@@ -156,6 +199,14 @@ body::after {
   flex-direction: column;
   gap: 16px;
 }
+.field-group .field {
+  animation: fadeSlideIn 0.5s var(--ease-out) both;
+}
+.field-group .field:nth-child(1) { animation-delay: 0.05s; }
+.field-group .field:nth-child(2) { animation-delay: 0.10s; }
+.field-group .field:nth-child(3) { animation-delay: 0.15s; }
+.field-group .field:nth-child(4) { animation-delay: 0.20s; }
+.field-group .field:nth-child(5) { animation-delay: 0.25s; }
 
 .field {
   display: flex;
@@ -187,7 +238,10 @@ body::after {
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none;
   border-color: var(--forge-amber);
-  box-shadow: 0 0 0 3px var(--forge-amber-dim);
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.3),
+    0 0 0 3px var(--forge-amber-dim),
+    0 0 16px var(--forge-amber-dim);
 }
 
 .field input::placeholder { color: var(--chalk-faint); }
@@ -260,8 +314,8 @@ body::after {
 .btn-generate:hover::before { transform: translateX(100%); }
 
 .btn-generate:hover {
-  background: #ff7a4a;
-  box-shadow: 0 0 48px var(--forge-amber-glow), 0 8px 32px rgba(0,0,0,0.4);
+  background: var(--forge-ember);
+  box-shadow: 0 0 48px var(--forge-amber-glow), 0 0 0 4px var(--forge-amber-dim), 0 8px 32px rgba(0,0,0,0.5);
   transform: translateY(-2px);
 }
 
@@ -300,48 +354,210 @@ body::after {
 
 /* ═══════════════ MAIN ═══════════════ */
 .main {
-  padding: 40px 56px;
+  padding: 40px 48px;
   display: flex;
   flex-direction: column;
   gap: 28px;
-  max-width: 960px;
   overflow-y: auto;
+  position: relative;
+}
+/* Forge-edge: subtle warm bleed where sidebar meets main */
+.main::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    var(--forge-amber-glow) 15%,
+    var(--forge-amber-dim) 50%,
+    var(--cool-blue-dim) 85%,
+    transparent 100%);
+  z-index: 2;
 }
 
-/* ── Tabs ── */
+/* Two-column plan layout on wide screens */
+@media (min-width: 1400px) {
+  .main { padding: 40px 64px; }
+}
+
+/* ── Splash (empty state) ── */
+.splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 80px 40px;
+  text-align: center;
+  color: var(--chalk-dim);
+}
+.splash .big-icon {
+  font-size: 64px;
+  margin-bottom: 8px;
+  filter: grayscale(0.4);
+  opacity: 0.6;
+}
+.splash h3 {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  letter-spacing: 3px;
+  color: var(--chalk);
+  text-transform: uppercase;
+}
+.splash p {
+  font-size: 13px;
+  max-width: 420px;
+  line-height: 1.7;
+  color: var(--chalk-faint);
+}
+
+/* ── Plan Result Grid ── */
+.plan-result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1200px) {
+  .plan-result-grid { grid-template-columns: 1fr; }
+}
+
+.plan-day-column {
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+  position: relative;
+}
+.plan-day-column::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--forge-amber-dim), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.plan-day-column:hover {
+  border-color: var(--steel-light);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  transform: translateY(-2px);
+}
+.plan-day-column:hover::before { opacity: 1; }
+
+.plan-day-header {
+  padding: 14px 20px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--steel);
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-transform: uppercase;
+  position: relative;
+  overflow: hidden;
+}
+/* Corner rivet accents */
+.plan-day-header::before {
+  content: '';
+  position: absolute;
+  top: 8px; right: 12px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--forge-amber);
+  opacity: 0.12;
+  box-shadow: 26px 0 0 var(--cool-blue), 26px 26px 0 var(--forge-amber), 0 26px 0 var(--cool-blue);
+}
+/* Metallic brush texture on header */
+.plan-day-header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 2px,
+    rgba(255,255,255,0.01) 2px,
+    rgba(255,255,255,0.01) 4px
+  );
+  pointer-events: none;
+}
+
+.plan-day-body { padding: 14px 20px; }
+
+.plan-ex-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 0.8fr;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--steel);
+  font-size: 13px;
+  align-items: center;
+  transition: background 0.15s;
+}
+.plan-ex-row:last-child { border-bottom: none; }
+.plan-ex-row:hover { background: rgba(255,107,53,0.03); }
+.plan-ex-name { font-weight: 600; color: var(--chalk); }
+.plan-ex-sets { font-family: var(--font-mono); color: var(--cool-blue); }
+.plan-ex-reps { font-family: var(--font-mono); color: var(--chalk-dim); }
+.plan-ex-rest { font-family: var(--font-mono); font-size: 11px; color: var(--chalk-faint); }
+
+/* ── Tabs: Industrial Gauge Style ── */
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   border-bottom: 1px solid var(--steel);
   padding-bottom: 0;
+  position: relative;
 }
 
 .tab-btn {
-  padding: 12px 28px;
+  padding: 14px 32px;
   background: none;
   border: none;
-  color: var(--chalk-dim);
+  color: var(--chalk-faint);
   font-family: var(--font-heading);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s var(--ease-out);
+  transition: color 0.3s var(--ease-out);
   text-transform: uppercase;
   position: relative;
-  margin-bottom: -1px;
 }
-
+.tab-btn::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 12px; right: 12px;
+  height: 2px;
+  background: var(--forge-amber);
+  transform: scaleX(0);
+  transition: transform 0.35s var(--ease-spring);
+}
 .tab-btn:hover { color: var(--chalk); }
-
+.tab-btn:hover::after { transform: scaleX(0.4); }
 .tab-btn.active {
   color: var(--forge-amber);
-  border-bottom-color: var(--forge-amber);
+}
+.tab-btn.active::after {
+  transform: scaleX(1);
+  box-shadow: 0 0 12px var(--forge-amber-glow);
 }
 
-.tab-content { display: none; animation: fadeSlideIn 0.35s var(--ease-out); }
-.tab-content.active { display: block; }
+.tab-content {
+  display: none;
+  opacity: 0;
+  transform: translateY(8px);
+}
+.tab-content.active {
+  display: block;
+  animation: tabEnter 0.4s var(--ease-out) forwards;
+}
 
 /* ── Section Header ── */
 .section-header {
@@ -358,6 +574,7 @@ body::after {
   display: flex; align-items: center; justify-content: center;
   font-size: 18px;
   background: var(--bg-card);
+  box-shadow: 0 0 12px var(--cool-blue-dim);
 }
 
 .section-header h2 {
@@ -452,15 +669,67 @@ body::after {
 }
 
 /* ── Chat Messages (Q&A tab) ── */
+.qa-chat-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 0;
+  min-height: 65vh;
+  max-height: calc(100vh - 260px);
+}
+@media (max-width: 1100px) {
+  .qa-chat-wrapper { grid-template-columns: 1fr; }
+  .qa-side-panel { display: none; }
+}
+
 .qa-chat-container {
   display: flex;
   flex-direction: column;
   gap: 0;
-  max-height: 60vh;
+  max-height: calc(100vh - 260px);
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 12px;
   scroll-behavior: smooth;
 }
+
+.qa-side-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 24px 20px;
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+}
+.qa-side-panel::before {
+  content: '';
+  position: absolute;
+  top: 20px; left: 0; bottom: 20px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--steel-light) 30%, var(--steel-light) 70%, transparent);
+}
+.qa-side-panel h4 {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--chalk-faint);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.qa-side-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--steel);
+  transition: color 0.2s;
+}
+.qa-side-stat:hover { color: var(--chalk); }
+.qa-side-stat .val { color: var(--cool-blue); font-family: var(--font-mono); font-size: 13px; }
 .qa-chat-container::-webkit-scrollbar { width: 4px; }
 .qa-chat-container::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 2px; }
 
@@ -491,7 +760,7 @@ body::after {
   display: block;
 }
 .chat-ai-bubble {
-  background: linear-gradient(135deg, rgba(0,201,160,0.04), rgba(255,107,53,0.03));
+  background: linear-gradient(135deg, rgba(0,201,160,0.05), rgba(255,107,53,0.04), rgba(0,201,160,0.02));
   border-left: 3px solid var(--cool-blue);
   padding: 18px 22px;
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
@@ -499,6 +768,7 @@ body::after {
   line-height: 1.9;
   color: var(--chalk);
   position: relative;
+  box-shadow: 0 0 1px rgba(0,201,160,0.08) inset;
 }
 .chat-ai-bubble .cursor {
   display: inline-block;
@@ -570,15 +840,29 @@ body::after {
   font-size: 30px;
   position: relative;
   background: var(--bg-card);
+  box-shadow: 0 0 32px var(--forge-amber-dim);
 }
-
+.empty-state .icon-ring::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border: 1px solid var(--steel);
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: ringPulse 3s ease-in-out infinite;
+}
 .empty-state .icon-ring::after {
   content: '';
   position: absolute;
   inset: -6px;
-  border: 1px solid var(--steel);
+  border: 1px solid var(--steel-light);
   border-radius: 50%;
-  opacity: 0.4;
+  opacity: 0.5;
+  animation: ringPulse 3s ease-in-out 0.5s infinite;
+}
+@keyframes ringPulse {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50%      { transform: scale(1.08); opacity: 0.6; }
 }
 
 .empty-state h3 {
@@ -903,7 +1187,7 @@ body::after {
   text-transform: uppercase;
 }
 
-/* ── Plan Card ── */
+/* ── Plan Card (compact grid version) ── */
 .plan-card {
   background: var(--bg-card);
   border: 1px solid var(--steel);
@@ -911,20 +1195,11 @@ body::after {
   margin-bottom: 8px;
   overflow: hidden;
   animation: cardReveal 0.5s var(--ease-out) both;
-  transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+  transition: border-color 0.25s, box-shadow 0.25s;
 }
-
-.plan-card:nth-child(2) { animation-delay: 0.06s; }
-.plan-card:nth-child(3) { animation-delay: 0.12s; }
-.plan-card:nth-child(4) { animation-delay: 0.18s; }
-.plan-card:nth-child(5) { animation-delay: 0.24s; }
-.plan-card:nth-child(6) { animation-delay: 0.30s; }
-.plan-card:nth-child(7) { animation-delay: 0.36s; }
-
 .plan-card:hover {
   border-color: var(--steel-light);
   box-shadow: 0 4px 28px rgba(0,0,0,0.4);
-  transform: translateX(3px);
 }
 
 .plan-card-header {
@@ -1090,6 +1365,10 @@ body::after {
   50%      { opacity: 0.75; }
 }
 
+@keyframes tabEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 @keyframes dotPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%      { opacity: 0.3; transform: scale(1.6); }
@@ -1119,6 +1398,32 @@ body::after {
 </style>
 </head>
 <body>
+
+<!-- SVG Filters: Film Grain + Metallic Texture -->
+<svg style="position:fixed;width:0;height:0;pointer-events:none;" aria-hidden="true">
+  <filter id="grain">
+    <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/>
+    <feColorMatrix type="saturate" values="0"/>
+    <feBlend in="SourceGraphic" mode="multiply"/>
+  </filter>
+  <filter id="metallic-shine">
+    <feTurbulence type="fractalNoise" baseFrequency="0.02 0.001" numOctaves="2" seed="3"/>
+    <feColorMatrix type="saturate" values="0"/>
+    <feComponentTransfer>
+      <feFuncA type="linear" slope="0.06"/>
+    </feComponentTransfer>
+    <feBlend in="SourceGraphic" mode="overlay"/>
+  </filter>
+</svg>
+
+<!-- Ember particles — floating forge sparks -->
+<div class="ember-particles">
+  <div class="ember"></div><div class="ember"></div><div class="ember"></div>
+  <div class="ember"></div><div class="ember"></div><div class="ember"></div>
+  <div class="ember"></div><div class="ember"></div><div class="ember"></div>
+  <div class="ember"></div>
+</div>
+
 <div class="app">
 
   <!-- ═══════════════ SIDEBAR ═══════════════ -->
@@ -1312,7 +1617,21 @@ body::after {
         <button class="btn-secondary" id="qa-new-session-btn" onclick="newQaSession()" style="display:none;">新对话</button>
       </div>
       <div id="qa-output" style="margin-top:24px">
-        <div class="qa-chat-container" id="qa-chat"></div>
+        <div class="qa-chat-wrapper">
+          <div class="qa-chat-container" id="qa-chat"></div>
+          <div class="qa-side-panel" id="qa-side">
+            <div>
+              <h4>会话统计</h4>
+              <div class="qa-side-stat"><span>提问轮数</span><span class="val" id="qa-stat-turns">0</span></div>
+              <div class="qa-side-stat"><span>引用来源</span><span class="val" id="qa-stat-sources">-</span></div>
+              <div class="qa-side-stat"><span>已上传文件</span><span class="val" id="qa-stat-files">0</span></div>
+            </div>
+            <div>
+              <h4>知识覆盖</h4>
+              <div id="qa-source-list" style="font-size:10px;color:var(--chalk-faint);line-height:1.7;"></div>
+            </div>
+          </div>
+        </div>
         <div class="welcome-area" id="qa-welcome">
           <div class="empty-state">
             <div class="icon-ring">&#10033;</div>
@@ -1727,30 +2046,37 @@ function renderPlanResult(container, data) {
       data.warnings.map(s => `· ${s}`).join('<br>')));
   }
 
-  // Day cards
+  // Day cards — responsive 2-column grid on wide screens
   const days = data.days || [];
-  days.forEach((day, idx) => {
-    const card = el('div', 'plan-card open', '');
-    card.style.animationDelay = (0.05 * idx) + 's';
-    card.innerHTML = `
-      <div class="plan-card-header" onclick="this.parentElement.classList.toggle('open')">
-        <span>DAY ${day.day} · ${day.focus || ''}</span>
-        <span style="font-family:var(--font-mono);font-size:11px;color:var(--chalk-faint);font-weight:400;">${(day.exercises||[]).length} ACTIONS</span>
-      </div>
-      <div class="plan-card-body">
-        ${(day.exercises||[]).map(ex => `
-          <div class="exercise-row">
-            <span class="exercise-name">${ex.name || '?'}</span>
-            <span class="exercise-stat">${ex.sets || '?'} 组</span>
-            <span class="exercise-stat">${ex.reps || '?'}</span>
-            <span class="exercise-stat">${ex.rest || '60s'}</span>
-            ${ex.notes ? `<span class="exercise-note">${ex.notes}</span>` : ''}
+  if (days.length > 0) {
+    const grid = el('div', 'plan-result-grid', '');
+    days.forEach((day, idx) => {
+      const col = el('div', 'plan-day-column', '');
+      col.style.animationDelay = (0.04 * idx) + 's';
+      col.innerHTML = `
+        <div class="plan-day-header">
+          <span>DAY ${day.day} · ${day.focus || ''}</span>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--chalk-faint);font-weight:400;">${(day.exercises||[]).length} EX</span>
+        </div>
+        <div class="plan-day-body">
+          <div style="display:grid;grid-template-columns:2fr 0.8fr 0.8fr 0.9fr;gap:6px;padding:6px 0;border-bottom:1px solid var(--steel);font-size:10px;color:var(--chalk-faint);text-transform:uppercase;letter-spacing:1px;font-family:var(--font-mono);">
+            <span>动作</span><span>组数</span><span>次数</span><span>休息</span>
           </div>
-        `).join('')}
-      </div>
-    `;
-    container.appendChild(card);
-  });
+          ${(day.exercises||[]).map((ex, i) => `
+            <div class="plan-ex-row" style="animation: fadeSlideIn 0.25s var(--ease-out) ${0.03 * i}s both;">
+              <span class="plan-ex-name">${ex.name || '?'}</span>
+              <span class="plan-ex-sets">${ex.sets || '?'} 组</span>
+              <span class="plan-ex-reps">${ex.reps || '?'}</span>
+              <span class="plan-ex-rest">${ex.rest || '60s'}</span>
+              ${ex.notes ? `<div style="grid-column:1/-1;font-size:11px;color:var(--chalk-faint);padding-top:2px;">${ex.notes}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+      grid.appendChild(col);
+    });
+    container.appendChild(grid);
+  }
 
   if (!days.length && data.raw) {
     container.appendChild(el('div', 'stream-box', data.raw));
@@ -1964,17 +2290,24 @@ async function askQuestion() {
   turn.appendChild(aiBubble);
   chat.appendChild(turn);
 
-  // Brief stage indicator
-  let stageEl = el('div', 'stage-detail', '');
-  stageEl.style.cssText = 'margin:0 0 8px 0;font-size:11px;padding:6px 12px;';
-  stageEl.innerHTML = '<span class="dot-pulse" style="display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:var(--forge-amber);animation:dotPulse 1.2s infinite;"></span>检索中...';
+  // Live progress indicator with stage events, thinking stream, and retrieval details
+  let stageEl = el('div', 'live-stage', '');
+  stageEl.style.cssText = 'margin:0 0 4px 0;font-size:12px;padding:4px 0;color:var(--forge-amber);';
+  stageEl.innerHTML = '<span class="dot-pulse"></span>正在分析...';
   turn.appendChild(stageEl);
+
+  // Detail line for retrieval counts (shown below stage)
+  let detailEl = el('div', 'stage-detail', '');
+  detailEl.style.cssText = 'margin:0 0 8px 0;font-size:10px;color:var(--text-dim);padding-left:2px;';
+  turn.appendChild(detailEl);
   chat.scrollTop = chat.scrollHeight;
 
   const body = { ...getProfile(), question, session_id: qaSessionId };
   qaTurnCount++;
   let streamText = '';
+  let thinkText = '';
   let stageGone = false;
+  let detailText = '';
 
   try {
     const resp = await fetch('/api/ask-question', {
@@ -1994,13 +2327,63 @@ async function askQuestion() {
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         const { event, data } = JSON.parse(line.slice(6));
-        if (event === 'answer_chunk') {
+
+        if (event === 'stage') {
+          // Update the live stage indicator with the current phase
+          stageEl.innerHTML = '<span class="dot-pulse"></span>' + data;
+          chat.scrollTop = chat.scrollHeight;
+
+        } else if (event === 'think_chunk') {
+          // Streaming the model's pre-thinking — show as italic gray text
           if (!stageGone) { stageEl.remove(); stageGone = true; }
+          thinkText += data;
+          aiBubble.innerHTML = '<span class="ai-label" style="color:var(--forge-amber)">思考中</span>'
+            + '<span style="font-style:italic;color:var(--text-dim);font-size:13px">' + thinkText + '</span>'
+            + '<span class="cursor"></span>';
+          chat.scrollTop = chat.scrollHeight;
+
+        } else if (event === 'think_done') {
+          // Thinking complete — keep it visible briefly, then prepare for answer
+          detailText += '分析完成 → ';
+
+        } else if (event === 'graph_done') {
+          const gd = data;
+          if (gd && gd.exercise) {
+            stageEl.innerHTML = '<span class="dot-pulse"></span>知识图谱推理: ' + gd.exercise;
+          }
+
+        } else if (event === 'knowledge_done') {
+          const kd = data;
+          let parts = [];
+          if (kd.count > 0) parts.push('知识库找到 ' + kd.count + ' 篇相关文档');
+          if (kd.doc_chunks > 0) parts.push('你的文件找到 ' + kd.doc_chunks + ' 段内容');
+          if (kd.doc_files > 0) parts.push('(' + kd.doc_files + ' 个文件)');
+          detailText = parts.join('，') || '检索完成';
+          detailEl.textContent = detailText;
+
+        } else if (event === 'retriever_done') {
+          const rd = data;
+          if (rd.count > 0 && rd.names) {
+            detailText += ' | 匹配动作: ' + rd.names.slice(0, 4).join('、');
+            detailEl.textContent = detailText;
+          }
+
+        } else if (event === 'answer_chunk') {
+          // Answer streaming begins — clear stages, show final answer
+          if (!stageGone) { stageEl.remove(); detailEl.remove(); stageGone = true; }
+          if (thinkText) {
+            // Keep the thinking as a collapsed hint
+            aiBubble.innerHTML = '<span class="ai-label">IRON MIND</span>'
+              + '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;opacity:0.7">'
+              + '💭 ' + thinkText + '</div>';
+            thinkText = '';
+          }
           streamText += data;
           aiBubble.innerHTML = '<span class="ai-label">IRON MIND</span>' + streamText + '<span class="cursor"></span>';
           chat.scrollTop = chat.scrollHeight;
+
         } else if (event === 'done') {
-          if (!stageGone) { stageEl.remove(); stageGone = true; }
+          if (!stageGone) { stageEl.remove(); detailEl.remove(); stageGone = true; }
           aiBubble.querySelector('.cursor')?.remove();
           const sources = data.sources || [];
           if (sources.length) {
@@ -2009,6 +2392,19 @@ async function askQuestion() {
             if (data.doc_chunks > 0) srcHtml += ' + <b>' + data.doc_chunks + '</b> 段文件内容';
             srcDiv.innerHTML = srcHtml;
             turn.appendChild(srcDiv);
+            // Update side panel stats
+            const statTurns = document.getElementById('qa-stat-turns');
+            const statSources = document.getElementById('qa-stat-sources');
+            const statFiles = document.getElementById('qa-stat-files');
+            const sourceList = document.getElementById('qa-source-list');
+            if (statTurns) statTurns.textContent = qaTurnCount;
+            if (statSources) statSources.textContent = sources.length;
+            if (statFiles) statFiles.textContent = data.doc_files || data.doc_chunks || 0;
+            if (sourceList) {
+              sourceList.innerHTML = sources.slice(0, 5).map(s =>
+                '<div style="padding:3px 0;border-bottom:1px solid var(--steel)">《' + s.title + '》</div>'
+              ).join('');
+            }
           }
           if (qaTurnCount >= 1) {
             document.getElementById('qa-session-badge').style.display = 'inline-flex';
@@ -2018,7 +2414,7 @@ async function askQuestion() {
       }
     }
   } catch(e) {
-    if (!stageGone) stageEl.remove();
+    if (!stageGone) { stageEl.remove(); detailEl.remove(); stageGone = true; }
     aiBubble.innerHTML = '<span class="ai-label">IRON MIND</span><span style="color:var(--danger)">请求失败: ' + escapeHtml(e.message) + '</span>';
   }
   document.getElementById('qa-query').value = '';

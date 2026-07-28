@@ -78,7 +78,12 @@ class VectorSearch:
         # 例：[0.1, -0.05, 0.3] → "[0.1,-0.05,0.3]"
         vec_str = f"[{','.join(str(v) for v in vec)}]"
 
-        # 步骤 3：构建参数化查询
+        # 步骤 3：设置 HNSW 查询精度
+        # ef_search 控制查询时搜索深度：越大→召回越准但查询越慢。
+        # 42 对于 1024 维 × 万级行数据足够。可动态调高以换取更高的召回率。
+        self.pg.execute("SET LOCAL hnsw.ef_search = 42")
+
+        # 步骤 4：构建参数化查询
         # vec_str 是 embedding 模型内部生成的 float 列表格式化字符串（如 "[0.1,0.2,...]"），
         # 不来自用户输入，无 SQL 注入风险，使用 f-string 直接拼接以兼容 pgvector 的 ::vector 语法。
         # equipment 和 top_k 来自外部，使用参数化查询。

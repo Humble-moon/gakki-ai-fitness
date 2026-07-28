@@ -65,6 +65,65 @@ _RETRYABLE = (APIConnectionError, RateLimitError, APITimeoutError,
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 2.0  # 秒
 
+# 熔断器参数
+_CIRCUIT_FAILURE_THRESHOLD = 3   # 连续失败 N 次触发熔断
+_CIRCUIT_COOLDOWN_SECONDS = 30.0  # 熔断冷却时间
+
+
+class CircuitBreaker:
+    """滑动窗口熔断器——连续失败 N 次后，冷却期内跳过该模型。
+
+    状态机：CLOSED → (连续失败 threshold 次) → OPEN → (冷却 cooldown 秒)
+            → HALF_OPEN → (一次探测成功) → CLOSED
+                        → (探测失败) → OPEN（重新计时）
+
+    线程安全：Python GIL 使 dict 操作原子化，单进程场景下无需额外锁。
+    多进程部署时需改用 Redis 存储熔断状态。
+    """
+
+    def __init__(self, failure_threshold: int = _CIRCUIT_FAILURE_THRESHOLD,
+                 cooldown_seconds: float = _CIRCUIT_COOLDOWN_SECONDS):
+        self.threshold = failure_threshold
+        self.cooldown = cooldown_seconds
+        self._failures: dict[str, list[float]] = {}
+        self._open_until: dict[str, float] = {}
+
+    def record_failure(self, model_alias: str):
+        """记录一次调用失败。连续失败达到阈值时打开熔断器。"""
+        now = time.monotonic()
+        if model_alias not in self._failures:
+            self._failures[model_alias] = []
+        self._failures[model_alias].append(now)
+        self._failures[model_alias] = self._failures[model_alias][-self.threshold:]
+        if len(self._failures[model_alias]) >= self.threshold:
+            window_start = self._failures[model_alias][0]
+            if now - window_start < self.cooldown * 2:
+                self._open_until[model_alias] = now + self.cooldown
+                logger.warning(
+                    f"[CircuitBreaker] OPEN for {model_alias} — "
+                    f"{self.threshold} failures in {now - window_start:.1f}s, "
+                    f"cooldown until {self.cooldown}s from now"
+                )
+
+    def record_success(self, model_alias: str):
+        """一次调用成功——重置该模型的失败计数和熔断状态。"""
+        if model_alias in self._failures or model_alias in self._open_until:
+            self._failures.pop(model_alias, None)
+            self._open_until.pop(model_alias, None)
+            logger.info(f"[CircuitBreaker] CLOSED for {model_alias} — success after failures")
+
+    def is_open(self, model_alias: str) -> bool:
+        """检查熔断器是否开启（该模型当前是否不可用）。"""
+        if model_alias not in self._open_until:
+            return False
+        if time.monotonic() > self._open_until[model_alias]:
+            # 冷却期结束 → 半开状态（关闭熔断器，允许一次探测）
+            self._open_until.pop(model_alias, None)
+            self._failures.pop(model_alias, None)
+            logger.info(f"[CircuitBreaker] HALF_OPEN for {model_alias} — cooling ended, probing")
+            return False
+        return True
+
 
 @dataclass
 class LLMResponse:
@@ -94,6 +153,7 @@ class LLMProvider:
         self._clients: dict[str, OpenAI] = {}
         self._models: dict[str, str] = {}
         self._active: str = "default"
+        self._breaker = CircuitBreaker()
 
         for alias, cfg in LLM_CONFIGS.items():
             self._clients[alias] = OpenAI(
@@ -159,8 +219,17 @@ class LLMProvider:
         chain = list(LLM_FALLBACK_CHAIN) if LLM_FALLBACK_CHAIN else [primary_alias]
         if primary_alias not in chain:
             chain.insert(0, primary_alias)
-        # 只保留已配置的模型
-        return [a for a in chain if a in self._models]
+        # 只保留已配置且未熔断的模型
+        available = []
+        for a in chain:
+            if a not in self._models:
+                continue
+            if self._breaker.is_open(a):
+                logger.warning(f"[CircuitBreaker] Skipping {a} — circuit is OPEN")
+                continue
+            available.append(a)
+        # 如果所有模型都被熔断，至少保留一个（全挂了就全挂了，不能空链）
+        return available if available else [a for a in chain if a in self._models][:1]
 
     # ------------------------------------------------------------------
     # 内部：单次 API 调用（含重试）
@@ -244,10 +313,12 @@ class LLMProvider:
                     logger.info(f"[Fallback] Succeeded with {mn} after {i} fallback(s)")
                 cost_tracker.record(mn, resp.tokens,
                                     extra="fallback" if resp.degraded else "chat")
+                self._breaker.record_success(alias)
                 return resp
             except Exception as e:
                 errors.append(f"{mn}: {type(e).__name__}: {e}")
                 logger.error(f"[LLM] {mn} failed: {type(e).__name__}: {e}")
+                self._breaker.record_failure(alias)
                 continue
 
         # 所有模型都失败了 → 兜底降级响应
@@ -311,11 +382,13 @@ class LLMProvider:
                 estimated_tokens = max(1, len(output_text) // 2)
                 tag = "stream:fallback" if i > 0 else "stream"
                 cost_tracker.record(mn, estimated_tokens, extra=tag)
+                self._breaker.record_success(alias)
                 return
 
             except Exception as e:
                 errors.append(f"{mn}: {type(e).__name__}: {e}")
                 logger.error(f"[LLM:stream] {mn} failed: {type(e).__name__}: {e}")
+                self._breaker.record_failure(alias)
                 continue
 
         # 所有模型都失败 → yield 降级消息

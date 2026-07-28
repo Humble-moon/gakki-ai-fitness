@@ -124,6 +124,9 @@ class KnowledgeSearch:
         vec = self.emb.embed(query)
         vec_str = f"[{','.join(str(v) for v in vec)}]"
 
+        # 设置 HNSW 查询精度（同 vector_search.py）
+        self.pg.execute("SET LOCAL hnsw.ef_search = 42")
+
         # pgvector 余弦距离检索
         # <=> 运算符: cosine_distance = 1 - cosine_similarity
         # 1 - distance 将距离转回相似度分数
