@@ -87,13 +87,16 @@ class LongTermMemory:
         2. 从 key 名中提取偏好 key 名（去掉前缀和 :pref: 后的部分）。
         3. 从 Redis 取值并 JSON 反序列化，组装为字典。
         """
-        # 为什么要 decode：redis-py 返回的 key 是 bytes 类型，需要 decode 为 str
-        # 注意：keys() 在大型生产环境应改为 scan_iter() 避免阻塞
-        keys = self.redis.conn.keys(f"{self.prefix}{user_id}:pref:*")
+        # 使用 SCAN 迭代而非 KEYS * —— KEYS 会阻塞 Redis 主线程(O(N))，
+        # SCAN 基于游标分批返回，不阻塞其他操作。
+        pattern = f"{self.prefix}{user_id}:pref:*"
         prefs = {}
-        for k in keys:
-            key_name = k.decode().split(":pref:")[-1]  # 从完整 key 中提取偏好名
-            prefs[key_name] = json.loads(self.redis.get(k.decode()))
+        for key_bytes in self.redis.conn.scan_iter(match=pattern, count=20):
+            key_str = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
+            key_name = key_str.split(":pref:")[-1]
+            val = self.redis.get(key_str)
+            if val:
+                prefs[key_name] = json.loads(val)
         return prefs
 
     def record_feedback(self, user_id: int, plan_id: str, rating: int, comment: str):

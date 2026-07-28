@@ -66,8 +66,11 @@ def parse_pdf(file_bytes: bytes) -> PDFParseResult:
     return PDFParseResult(
         pages=pages,
         total_chars=total_chars,
-        has_text=total_chars > 20,  # 少于 20 字符视为无文本（扫描件）
+        has_text=total_chars > 200,  # <200 字符视为扫描件或空文档（元数据/页码就能凑出~20字）
         error=error,
+        # NOTE: 扫描版 PDF 需要 OCR（pytesseract + pdf2image）。
+        # 当前未集成 OCR。如果 has_text=False 且文件大小>50KB（说明不是空文档），
+        # 应在 UI 提示用户"这可能是扫描件，暂不支持文字提取"。
     )
 
 

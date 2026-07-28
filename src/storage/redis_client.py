@@ -110,16 +110,21 @@ class RedisClient:
         """
         return self.conn.get(key)
 
-    def flushdb(self):
-        """
-        清空当前 Redis 数据库的所有键
+    def flushdb(self, confirmed: bool = False):
+        """清空当前 Redis 数据库的所有键。
 
-        返回值：
-            无
+        Args:
+            confirmed: 必须显式传 True，防止误调用清空生产数据。
 
-        警告：此操作不可逆，用于开发/测试环境重置缓存，
-              生产环境慎用！
+        警告：此操作不可逆！仅在开发/测试环境使用。
         """
+        if not confirmed:
+            raise RuntimeError(
+                "flushdb() requires confirmed=True. "
+                "This is a destructive operation that wipes ALL Redis data. "
+                "If you really mean it, call flushdb(confirmed=True)."
+            )
+        logger.warning("FLUSHDB called — wiping all Redis keys!")
         self.conn.flushdb()
 
     def close(self):

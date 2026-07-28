@@ -43,6 +43,7 @@ semantic_cache.py — 语义缓存层（第 5 层）
 import json
 import hashlib
 import logging
+import time
 
 import numpy as np
 
@@ -51,6 +52,13 @@ from src.storage.redis_client import RedisClient
 from src.config import CACHE_SIMILARITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
+
+# 语义缓存的扩展边界：
+# 当前 L2 方案为客户端余弦扫描，O(N*D)，适用条目数 < 2000。
+# 超过此规模后，应迁移至 Redis RediSearch 向量索引（FT.SEARCH），
+# 或迁移至 pgvector ANN 索引（HNSW），将扫描复杂度从 O(N) 降为 O(log N)。
+# 迁移触发条件: _MAX_SCAN 从 200 上调到 500 以上时，应优先做索引迁移。
+_SCAN_WARN_MS = 100  # 超过此毫秒数记录性能警告
 
 # Redis 缓存键前缀，用于命名空间隔离和扫描
 _CACHE_PREFIX = "cache:fitness:"

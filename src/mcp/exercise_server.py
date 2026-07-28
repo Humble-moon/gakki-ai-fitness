@@ -99,6 +99,11 @@ mcp = FastMCP("GakkiFitnessExerciseServer")
 #   - type:       动作类型（复合=多关节/孤立=单关节）
 #   - description: 动作标准做法描述
 #   - common_mistakes: 常见错误
+#
+# NOTE (2026-07-28): EXERCISE_LIBRARY 是 MCP 协议的独立演示数据集（8 个示例动作），
+# 用于验证 FastMCP 协议的 Tool/Resource 注册-发现-调用全链路。
+# 生产路径上的检索不走 MCP Server——走 Retriever Agent → VectorSearch(pgvector, 209动作)
+# → KeywordSearch(pg_trgm)。MCP 层是标准化接口预留，数据源待注入 PG。
 # ---------------------------------------------------------------------------
 EXERCISE_LIBRARY = [
     {
