@@ -83,19 +83,21 @@ mcp = FastMCP("GakkiFitnessMCP")
 # =========================================================================
 
 from src.mcp.exercise_server import (  # noqa: E402
-    EXERCISE_LIBRARY,
     get_exercise_detail,
+    list_all_exercises,
     search_by_difficulty,
     search_by_equipment,
     search_by_muscle,
+    search_exercises,
 )
 
-# 直接在本服务器的 FastMCP 实例上注册工具
-# 这些工具会出现在 tools/list 响应中
+# 直接在本服务器的 FastMCP 实例上注册工具 — v2 接入 PG 数据库 (209 动作)
 mcp.tool()(search_by_muscle)
 mcp.tool()(search_by_equipment)
 mcp.tool()(search_by_difficulty)
 mcp.tool()(get_exercise_detail)
+mcp.tool()(list_all_exercises)
+mcp.tool()(search_exercises)
 
 logger = logging.getLogger(__name__)
 
