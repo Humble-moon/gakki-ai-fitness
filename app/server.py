@@ -387,6 +387,87 @@ async def admin_metrics():
     }
 
 
+@app.post("/admin/reingest")
+async def admin_reingest(strategy: str = "combo", incremental: bool = True):
+    """POST /admin/reingest — 手动触发知识库摄入（增量模式）。
+
+    使用方式: curl -X POST http://localhost:8503/admin/reingest?strategy=combo&incremental=true
+
+    增量模式: 仅摄入变更/新增的文档（基于文件 hash 对比）。
+    全量模式: incremental=false 时重摄全部文档。
+    """
+    from src.rag.knowledge_ingestion import ingest
+    import threading, time as _time
+
+    started_at = _time.time()
+
+    # 后台线程执行摄入（避免阻塞响应）
+    result = {"status": "started", "strategy": strategy, "incremental": incremental}
+
+    def _run():
+        try:
+            ingest(
+                knowledge_dir="data/knowledge",
+                strategy=strategy,
+                incremental=incremental,
+                state_file="data/.ingestion_state.json",
+            )
+            result["status"] = "completed"
+            result["elapsed_sec"] = round(_time.time() - started_at, 1)
+        except Exception as e:
+            result["status"] = "failed"
+            result["error"] = str(e)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return result
+
+
+@app.get("/admin/ingestion-status")
+async def admin_ingestion_status():
+    """GET /admin/ingestion-status — 查看摄入状态和文件变更列表。
+
+    返回: 上次摄入时间、文件总数、变更文件列表。
+    需要先跑过一次 --incremental 才会有状态文件。
+    """
+    from pathlib import Path as _Path
+    import json as _json
+
+    state_file = _Path("data/.ingestion_state.json")
+    if not state_file.exists():
+        return {"status": "no_state", "hint": "Run ingestion with --incremental first"}
+
+    state = _json.loads(state_file.read_text(encoding="utf-8"))
+    knowledge_dir = _Path("data/knowledge")
+    current_files = set(f.name for f in knowledge_dir.glob("*.md"))
+
+    changed = []
+    added = []
+    deleted = []
+    for fname, old_hash in state.items():
+        fpath = knowledge_dir / fname
+        if not fpath.exists():
+            deleted.append(fname)
+        else:
+            import hashlib
+            current_hash = hashlib.md5(fpath.read_bytes()).hexdigest()
+            if current_hash != old_hash:
+                changed.append(fname)
+
+    for fname in current_files:
+        if fname not in state:
+            added.append(fname)
+
+    return {
+        "status": "ok",
+        "total_files": len(current_files),
+        "tracked_files": len(state),
+        "changed": changed,
+        "added": added,
+        "deleted": deleted,
+        "needs_reingest": len(changed) + len(added) > 0,
+    }
+
+
 # ============================================================
 # 直接启动入口
 # ============================================================

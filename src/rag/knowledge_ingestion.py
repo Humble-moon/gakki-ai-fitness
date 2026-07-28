@@ -557,12 +557,35 @@ def get_chunker(
 # 步骤 3-4: 向量化 + 写入
 # =========================================================================
 
+def _load_state(state_file: str) -> dict:
+    """加载摄入状态文件（文件路径 → content_hash）。"""
+    if not state_file or not Path(state_file).exists():
+        return {}
+    try:
+        return json.loads(Path(state_file).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_state(state_file: str, state: dict):
+    """保存摄入状态文件。"""
+    if state_file:
+        Path(state_file).write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _file_hash(filepath: Path) -> str:
+    """计算文件的 MD5 hash（用于变更检测）。"""
+    return hashlib.md5(filepath.read_bytes()).hexdigest()
+
+
 def ingest(
     knowledge_dir: str,
     chunk_size: int = CHUNK_SIZE,
     overlap: int = CHUNK_OVERLAP,
     strategy: str = "combo",
     semantic_threshold: float = 0.6,
+    incremental: bool = False,
+    state_file: str = "",
 ):
     """知识库摄入主流程：读取 → 分块 → 向量化 → 写入 PostgreSQL。
 
@@ -570,19 +593,51 @@ def ingest(
         knowledge_dir:      Markdown 文件目录路径
         chunk_size:         分块大小（字符数）
         overlap:            块间重叠（字符数）
-        strategy:           分块策略（three_tier / semantic / contextual / small_to_big / combo）
-        semantic_threshold: SemanticChunker 的切分阈值（仅 strategy=semantic/combo 时生效）
+        strategy:           分块策略
+        semantic_threshold: SemanticChunker 的切分阈值
+        incremental:        True=仅处理变更/新增文件, False=全量重摄
+        state_file:         增量摄入状态文件路径（记录每个文件的 hash）
 
-    v2.0 改动：
-      - 支持五种分块策略，通过 --strategy 切换
-      - 默认策略从 three_tier(500,80) 升级到 combo(800,120) + 语义切分 + 上下文前缀
-      - Small-to-big 模式下写入两张表：child_chunks + parent_chunks
+    v3.0 增量模式:
+      - 首次运行: 处理全部文件 + 保存 hash 到 state_file
+      - 后续运行: 仅处理 hash 变化的文件（新增/修改）
+      - 已删除的文件: chunk 保留（不做物理删除，检索时按 source_status 过滤）
     """
     init_db()
     pg = PGClient()
     emb = EmbeddingService()
     docs = read_markdown_files(knowledge_dir)
-    logger.info(f"Found {len(docs)} documents in {knowledge_dir}")
+
+    # === 增量模式：过滤未变更文件 ===
+    prev_state = _load_state(state_file) if incremental else {}
+    new_state = {}
+    skipped = 0
+    if incremental and prev_state:
+        filtered = []
+        for doc in docs:
+            fpath = Path(knowledge_dir) / doc["source_file"]
+            current_hash = _file_hash(fpath) if fpath.exists() else "deleted"
+            new_state[doc["source_file"]] = current_hash
+            if prev_state.get(doc["source_file"]) == current_hash:
+                skipped += 1
+                continue  # 未变更，跳过
+            filtered.append(doc)
+        logger.info(
+            f"Found {len(docs)} documents: {len(filtered)} changed, "
+            f"{skipped} unchanged (skipped)"
+        )
+        docs = filtered
+    else:
+        logger.info(f"Found {len(docs)} documents in {knowledge_dir}")
+        if incremental:
+            # 首次增量运行：记录所有文件的 hash
+            for doc in docs:
+                fpath = Path(knowledge_dir) / doc["source_file"]
+                new_state[doc["source_file"]] = _file_hash(fpath) if fpath.exists() else "deleted"
+
+    if not docs:
+        logger.info("No documents to ingest (all unchanged).")
+        return
 
     total_chunks = 0
     total_parents = 0
@@ -618,6 +673,10 @@ def ingest(
                     continue
                 _insert_chunk(pg, emb, chunk, doc, chunk.chunk_id, is_parent=False)
                 total_chunks += 1
+
+    # === 保存增量状态 ===
+    if incremental and state_file:
+        _save_state(state_file, new_state)
 
     if strategy == "small_to_big":
         logger.info(
@@ -698,7 +757,15 @@ if __name__ == "__main__":
                         help=f"块间重叠（字符数），默认 {CHUNK_OVERLAP}")
     parser.add_argument("--semantic-threshold", type=float, default=0.6,
                         help="语义切分阈值，仅 semantic/combo 策略生效（默认 0.6）")
+    parser.add_argument("--incremental", action="store_true",
+                        help="增量模式：仅处理变更/新增文档（需要 --state-file）")
+    parser.add_argument("--state-file", default="",
+                        help="增量摄入状态文件路径（如 data/.ingestion_state.json）")
     args = parser.parse_args()
+
+    if args.incremental and not args.state_file:
+        args.state_file = str(Path(args.dir) / ".ingestion_state.json")
+        logger.info(f"Auto state-file: {args.state_file}")
 
     strategy_labels = {
         "three_tier": "三段式智能切分",
@@ -716,5 +783,7 @@ if __name__ == "__main__":
         overlap=args.overlap,
         strategy=args.strategy,
         semantic_threshold=args.semantic_threshold,
+        incremental=args.incremental,
+        state_file=args.state_file,
     )
 
