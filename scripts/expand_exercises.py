@@ -178,6 +178,81 @@ description 中强调"落地缓冲/核心收紧/避免关节锁死"等安全要�
 严格排除已有动作：引体向上, 平板支撑, 悬垂举腿, 站姿提踵, 双杠臂屈伸""",
         "count": 4,
     },
+    # === v2 扩展: 壶铃 ===
+    {
+        "batch_name": "壶铃训练",
+        "prompt": """请生成 12 个壶铃训练动作（equipment="壶铃"），这是目前完全缺失的类别。覆盖：
+- 壶铃摆荡及变式（双手摆荡、单手摆荡、交替摆荡）
+- 壶铃深蹲及变式（高脚杯深蹲壶铃版、壶铃前蹲、壶铃过顶蹲）
+- 壶铃推举及变式（单臂推举、借力推举、自下而上推举）
+- 壶铃划船及高拉（单臂划船、高拉、壶铃甩摆）
+- 壶铃土耳其起立
+- 壶铃风车
+- 壶铃农夫行走（单臂/双臂）
+
+每个动作 equipment 填"壶铃"。description 写清壶铃特有的握法和运动轨迹。
+壶铃动作强调"髋铰链驱动+核心抗旋转"，在 description 和 common_errors 中体现。""",
+        "count": 12,
+    },
+    # === v2 扩展: 弹力带 ===
+    {
+        "batch_name": "弹力带训练",
+        "prompt": """请生成 10 个弹力带训练动作（equipment="弹力带"），覆盖：
+- 弹力带推举（过顶推举、前平举、侧平举）
+- 弹力带划船（坐姿划船、俯身划船、面拉）
+- 弹力带下肢（弹力带臀桥、弹力带髋外展、弹力带侧向走）
+- 弹力带手臂（弹力带弯举、弹力带下压、弹力带臂屈伸）
+- 弹力带核心（弹力带帕罗夫推、弹力带抗旋转）
+
+弹力带的特点是"阻力随拉伸增加"，描述中体现"顶峰收缩时阻力最大"。
+difficulty 多为"初级"到"中级"，适合家庭训练和康复初期。""",
+        "count": 10,
+    },
+    # === v2 扩展: TRX/悬挂训练 ===
+    {
+        "batch_name": "TRX悬挂训练",
+        "prompt": """请生成 10 个TRX/悬挂训练动作（equipment="TRX"），覆盖：
+- TRX 划船及变式（双手划船、单手划船、宽距划船）
+- TRX 推胸及变式（推胸、飞鸟、下斜推胸）
+- TRX 下肢（TRX后弓步、TRX臀桥、TRX腘绳肌弯举）
+- TRX 核心（TRX平板撑、TRX跪姿卷腹、TRX侧平板）
+- TRX 二头/三头（TRX弯举、TRX臂屈伸）
+
+TRX 的特点是利用自身体重+不稳定平面。description 中写清"调整身体角度控制难度"。
+common_errors 中强调"核心收紧/不借力摆动"。difficulty 适当分布。""",
+        "count": 10,
+    },
+    # === v2 扩展: 康复/预康复 ===
+    {
+        "batch_name": "康复预康复",
+        "prompt": """请生成 10 个康复/预康复训练动作，这是目前缺失的重要类别。覆盖：
+- 肩袖肌群（弹力带外旋/内旋、侧卧外旋、古巴旋转）
+- 髋关节（蚌式开合、鸟狗式、单腿臀桥）
+- 核心稳定（死虫式、帕罗夫推、猫牛式）
+- 肩胛稳定（YTW伸展、墙壁天使、前锯肌激活）
+- 踝关节（弹力带踝背屈、提踵走）
+
+equipment 多为"弹力带"或"自重"，difficulty 多为"初级"。
+description 中强调"慢速控制、感受目标肌群、不是追求重量"。
+target_muscles 精确到小肌群（如"肩袖""前锯肌""臀中肌"而非笼统的"肩部""臀部"）。
+exercise_type 填"康复"。""",
+        "count": 10,
+    },
+    # === v2 扩展: 进阶变式 ===
+    {
+        "batch_name": "进阶变式",
+        "prompt": """请生成 15 个进阶/变式训练动作，为已有基础动作的进阶版本。覆盖：
+- 单侧变式（单腿罗马尼亚硬拉、单臂哑铃卧推、单臂推举）
+- 暂停/节奏变式（暂停深蹲、慢离心卧推、底部暂停硬拉）
+- 握法/站距变式（相扑硬拉、窄距卧推、宽距深蹲、反握划船、对握引体）
+- 角度变式（下斜卧推、上斜飞鸟、坐姿侧平举、上斜弯举）
+- 组合动作（深蹲推举、箭步蹲弯举、波比跳接引体）
+
+这些是已有基础动作的派生版本。请确保不与已有动作名称重复。
+equipment 与基础版一致，difficulty 适当提高（多为"中级"）。
+description 中说明"和标准版的区别是什么+为什么要做这个变式"。""",
+        "count": 15,
+    },
 ]
 
 SCHEMA_REQUIREMENT = """
@@ -334,23 +409,28 @@ def main():
             print("全部校验通过。")
         return
 
-    print(f"现有动作: {len(existing)}")
+    # 从种子文件加载全部已有名称（而非仅硬编码的 39 个），更新全局去重表
+    for ex in existing:
+        EXISTING_NAMES.add(ex.get("name", ""))
+
+    print(f"现有动作: {len(existing)}（已知名称 {len(EXISTING_NAMES)} 个）")
     print(f"将生成 {sum(b['count'] for b in BATCHES)} 个新动作 ({len(BATCHES)} 批次)\n")
 
     llm = LLMProvider()
     all_new = []
+    new_names = set(EXISTING_NAMES)  # 累积新名称（独立于原名表，避免二次去重误杀）
 
     for batch in BATCHES:
         new_exercises = generate_batch(llm, batch)
-        all_new.extend(new_exercises)
+        for ex in new_exercises:
+            if ex["name"] not in new_names:
+                new_names.add(ex["name"])
+                all_new.append(ex)
         print(f"  累计: {len(all_new)} 新动作")
 
     if not all_new:
         print("\n[失败] 没有生成任何有效新动作。")
         sys.exit(1)
-
-    # 二次去重（跨批次）
-    all_new = deduplicate(all_new, EXISTING_NAMES)
     merged = existing + all_new
 
     print(f"\n{'='*60}")

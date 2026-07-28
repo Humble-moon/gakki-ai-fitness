@@ -29,6 +29,7 @@ from src.agents.fact_checker import FactCheckerAgent
 from src.rag.semantic_cache import SemanticCache
 from src.rag.knowledge_search import KnowledgeSearch
 from src.memory.conversation import ConversationManager
+from src.memory.long_term import LongTermMemory
 from src.skills.registry import SkillRegistry
 from src.a2a.messaging import MessageBus, Task, Artifact
 from src.models.schemas import UserProfileInput
@@ -65,6 +66,7 @@ class Orchestrator:
         self.bus = MessageBus()
         self.knowledge = KnowledgeSearch()
         self.conversation = ConversationManager()
+        self.long_term = LongTermMemory()
         self.documents = DocumentStore()
 
     def generate_plan(self, profile: UserProfileInput, query: str = "") -> dict:
@@ -226,6 +228,10 @@ class Orchestrator:
             # 获取上一轮生成的计划，用于"把第二天改成哑铃"这类修改请求
             plan_context = self.conversation.get_plan_state(session_id) or ""
 
+        # === 长期记忆：读取跨会话的用户画像 ===
+        pseudo_uid = self._make_user_key(profile_dict)
+        long_term_context = self.long_term.build_context_for_prompt(pseudo_uid)
+
         # 1. 检查缓存（多轮对话场景跳过缓存，因为每次修改都需要重新生成）
         if not session_id:
             cached = self.cache.get(profile_dict, query)
@@ -239,8 +245,10 @@ class Orchestrator:
         # 避免用户面对空白页面等待，同时建立教练对话感
         yield ("stage", "[分析] 正在分析你的情况...")
         advice_context = ""
+        if long_term_context:
+            advice_context += f"\n\n[这个用户之前来过，他的历史画像]：\n{long_term_context}"
         if plan_context:
-            advice_context = f"\n\n用户之前已经有了一个训练计划：\n{plan_context}\n用户现在说：{query}\n请结合这个上下文给出建议。"
+            advice_context += f"\n\n用户之前已经有了一个训练计划：\n{plan_context}\n用户现在说：{query}\n请结合这个上下文给出建议。"
         advice_prompt = self._build_advice_prompt(profile_dict, query) + advice_context
         advice_text = ""
         for chunk in self.writer.llm.chat_stream(
@@ -250,12 +258,15 @@ class Orchestrator:
             yield ("advice_chunk", chunk)
         yield ("advice_done", advice_text)
 
-        # 3. 规划器 —— 多轮场景下注入历史上下文和已有计划
+        # 3. 规划器 —— 注入多轮对话 + 跨会话长期记忆 + 已有计划
         yield ("stage", "[规划] Planner 正在拆解任务...")
+        plan_conv = conv_context
+        if long_term_context:
+            plan_conv = f"[跨会话记忆：该用户的历史画像]\n{long_term_context}\n\n{conv_context}" if conv_context else f"[跨会话记忆：该用户的历史画像]\n{long_term_context}"
         plan = self.planner.plan(
             query or f"为{profile.goal}目标生成训练计划",
             profile_dict,
-            conv_context=conv_context,
+            conv_context=plan_conv,
             plan_context=plan_context,
         )
         yield ("planner_done", {"skill": plan.get("skill", "unknown"),
@@ -337,6 +348,12 @@ class Orchestrator:
         # 6. 写入缓存（多轮对话跳过缓存）
         if not session_id:
             self.cache.set(profile_dict, query, result)
+
+        # === 长期记忆：保存用户画像，跨会话复用 ===
+        self.long_term.save_preference(pseudo_uid, "profile", profile_dict)
+        self.long_term.save_preference(pseudo_uid, "goal", profile_dict.get("goal", ""))
+        self.long_term.save_preference(pseudo_uid, "equipment", profile_dict.get("available_equipment", []))
+
         yield ("done", result)
 
     def _build_advice_prompt(self, profile: dict, query: str) -> str:
@@ -457,6 +474,26 @@ class Orchestrator:
         """
         profile_dict = profile.model_dump()
 
+        # === 预思考：即时反馈 LLM 分析方向 ===
+        # 用户提问后第一件事不是闷头检索，而是让 LLM 快速"说出"它在分析什么、
+        # 需要查哪些方面。这几秒的流式输出让用户知道"AI 在思考"，而不是卡住了。
+        yield ("stage", "[思考] 正在分析你的问题...")
+        think_prompt = f"""你是资深健身教练。用户刚问了一个问题，你需要快速判断需要从哪些方面来回答。
+用 1-2 句话简要说出你的分析方向（如"需要查胸肌训练动作+肩关节保护"或"需要从解剖角度解释+给出替代动作建议"）。
+不要回答用户的问题本身，只说你打算从哪些角度来分析。
+
+用户情况：{profile_dict.get('height')}cm, {profile_dict.get('weight')}kg, 训练{profile_dict.get('training_years', 1)}年
+伤病：{profile_dict.get('injuries', [])}
+用户问题：{question}
+
+简要分析方向（1-2句话）："""
+
+        think_text = ""
+        for chunk in self.writer.llm.chat_stream([{"role": "user", "content": think_prompt}], temperature=0.3):
+            think_text += chunk
+            yield ("think_chunk", chunk)
+        yield ("think_done", think_text.strip())
+
         # === 检测是否为伤病/疼痛类问题 → 启用 GraphRAG ===
         # 知识图谱中存储了"动作→肌肉→伤病"的关系链，适合多跳推理。
         # 仅当问题包含疼痛相关关键词时才触发，避免无意义的图谱查询开销。
@@ -498,6 +535,18 @@ class Orchestrator:
         yield ("retriever_done", {"count": len(exercises),
                                    "names": [e.get("name", "?") for e in exercises[:6]]})
 
+        # === 安全检测：伤病/疼痛关键词 → 注入安全 Prompt ===
+        SAFETY_KEYWORDS = [
+            "疼", "痛", "伤", "酸", "不舒服", "拉伤", "扭伤", "炎症",
+            "恢复", "手术", "骨折", "撕裂", "脱臼", "肿胀", "麻", "无力",
+            "不能动", "动不了", "弯不了", "伸直不了",
+        ]
+        user_injuries = profile_dict.get("injuries", [])
+        has_safety_concern = (
+            any(kw in question for kw in SAFETY_KEYWORDS)
+            or bool(user_injuries)
+        )
+
         # === 构建带引用来源和对话上下文的回答提示词 ===
         yield ("stage", "[解答] 正在为你解答...")
         sources_text = ""
@@ -530,8 +579,24 @@ class Orchestrator:
             self.conversation.add_turn(session_id, "user", user_turn_preview)
             conv_context = self.conversation.build_context_for_prompt(session_id, question)
 
+        # === 长期记忆：读取跨会话的用户画像 ===
+        pseudo_uid = self._make_user_key(profile_dict)
+        long_term_context = self.long_term.build_context_for_prompt(pseudo_uid)
+
+        # 安全提示模板：检测到伤病关键词或有伤病史时注入
+        _SAFETY_NOTE = """
+⚠️ 【重要安全规则 — 违反视为严重错误】：
+1. 用户提到伤病/疼痛/不适或已记录伤病史时，首要建议必须是"停止训练、咨询医生或物理治疗师"
+2. 不要做出医疗诊断——只给出运动康复层面的参考建议，并明确标注"以下不能替代专业医疗诊断"
+3. 推荐的任何替代动作，必须明确解释为什么不会加重所述伤病
+4. 绝不要推荐任何可能加重用户已有伤病的动作
+5. 不确定时，明确说"建议先去康复科/运动医学科做专业评估"
+"""
+
         prompt = f"""你是资深健身教练和运动康复专家。请基于提供的知识库文档回答用户的问题。
 如果知识库中没有足够信息，可以结合你的专业知识补充，但需要明确指出哪些来自文档、哪些是专业推断。
+
+{f'[跨会话记忆] {long_term_context}' if long_term_context else ''}
 
 用户情况：{profile_dict.get('height')}cm, {profile_dict.get('weight')}kg, 训练{profile_dict.get('training_years')}年
 伤病：{profile_dict.get('injuries', [])}
@@ -555,7 +620,8 @@ class Orchestrator:
 5. 用自己的话自然回答，不要在正文里写 [来源N] 或类似标记（来源信息会单独展示给用户）
 6. 200-350 字，口语化，像教练在聊天
 7. 纯文字段落，不用 markdown
-{"8. 如果用户使用了'改一下''换一个''刚才说的'等指代，请结合对话历史中的上下文理解用户的真正意图。" if conv_context else ""}"""
+{"8. 如果用户使用了'改一下''换一个''刚才说的'等指代，请结合对话历史中的上下文理解用户的真正意图。" if conv_context else ""}
+{_SAFETY_NOTE if has_safety_concern else ""}"""
 
         full_text = ""
         for chunk in self.writer.llm.chat_stream([{"role": "user", "content": prompt}], temperature=0.5):
@@ -574,6 +640,10 @@ class Orchestrator:
              "score": c.get("rerank_score") or c.get("rrf_score", 0)}
             for c in relevant_sources
         ]
+
+        # === 长期记忆：保存用户画像，跨会话复用 ===
+        self.long_term.save_preference(pseudo_uid, "profile", profile_dict)
+        self.long_term.save_preference(pseudo_uid, "goal", profile_dict.get("goal", ""))
 
         yield ("done", {
             "answer": full_text,
@@ -611,6 +681,22 @@ class Orchestrator:
             if ex in question:
                 return ex
         return None
+
+    @staticmethod
+    def _make_user_key(profile: dict) -> int:
+        """用身体数据组合生成伪用户 ID，无认证场景下的跨会话标识。
+
+        将身高+体重+目标+伤病 MD5 hash 为固定整数。
+        使用 hashlib.md5 而非 Python hash() —— 后者在 PYTHONHASHSEED 随机化
+        下多进程间不稳定，会导致同一用户在不同 worker 中无法匹配缓存。
+        注意：不同用户可能碰撞（1/1M），但在个人项目场景下可接受。
+        """
+        import hashlib
+        raw = (
+            f"{profile.get('height', 0)}|{profile.get('weight', 0)}|"
+            f"{profile.get('goal', '')}|{','.join(sorted(profile.get('injuries', [])))}"
+        )
+        return int(hashlib.md5(raw.encode()).hexdigest()[:8], 16) % 1000000
 
     def _summarize_plan_for_context(self, plan: dict) -> str:
         """【私有方法】从训练计划提取摘要，供多轮对话的 plan_state 存储。
