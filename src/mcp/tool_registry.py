@@ -54,9 +54,12 @@ from pathlib import Path
 from typing import Any
 
 from src.mcp.exercise_server import (
-    ExerciseMCPServer,
-    McpToolError,
-    mcp as exercise_mcp,
+    get_exercise_detail,
+    list_all_exercises,
+    search_by_difficulty,
+    search_by_equipment,
+    search_by_muscle,
+    search_exercises,
 )
 from src.graphrag.search import GraphSearch
 
