@@ -2223,5 +2223,1139 @@
       "握法生物力学",
       "替代动作"
     ]
+  },
+  {
+    "query": "第一次进健身房，啥都不会，器械也不知道怎么用，想增肌变壮一点，有没有那种从头开始的教学计划，一周去几次比较好",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q081",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "家里只有一对哑铃，想练出那种有线条的肌肉，不想去健身房，有没有哑铃全身增肌计划，一周练四天行不行",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q082",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "练了快一年，体重和力量都不怎么涨了，是不是到瓶颈了，要不要换分化训练，改成推拉腿还是继续五分化",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q083",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想冲大重量增肌，但每次加重后动作就变形，是不是核心太弱，有没有什么辅助训练能让卧推深蹲稳稳加片",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q084",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "居家增肌只有弹力带，能做多大重量，弹力带能把胸和背练起来吗，有没有合适的训练方案",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q085",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "一周只能练两天，怎么安排增肌最有效，是不是只能做全身训练，每个动作做几组比较好",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q086",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "预算有限不想请教练，自己看视频学，但总怕动作不对练伤，有没有新手必学的安全动作清单",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q087",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想变大只，但吃不下那么多，每顿吃一点就饱了，增肌粉有用吗，还是必须硬塞",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q088",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "胸肌练不大，上胸特别薄，卧推重量也上不去，是不是应该先加强三头，还是换动作",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q089",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "胳膊太细了，穿短袖撑不起来，专门练二头三头两个月了没啥变化，是不是训练频率不够",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q090",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "练了三年，想尝试力量举式增肌，但怕受伤，怎么从健美式慢慢过渡到低次数大重量",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q091",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "女生想增肌但不想太壮，主要想练臀和背，用中低重量多次数能长肌肉吗，还是必须上重量",
+    "category": "muscle_building",
+    "expected_route": "muscle_building",
+    "safety_risk": "low",
+    "id": "q092",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "160/55kg女生，想瘦腿但不想掉肌肉，怎么练",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "id": "q093",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "185/100kg大体重，肚子怎么都减不下来，只有小区健身器材能练吗",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "id": "q094",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "产后三个月，肚子松垮想减脂，能不能做卷腹，膝盖不好不能跑步怎么有氧",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "medium",
+    "id": "q095",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "每天只有30分钟，想同时增肌减脂，怎么安排训练最有效",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "id": "q096",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "代谢慢怎么办，练了半年体重没变化，是不是要换训练方式",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "id": "q097",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "越练越重，体重涨了但看起来没胖，是不是在长肌肉，减脂期这样正常吗",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "id": "q098",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "只有小区健身器材，想减肚子和腿，每天30分钟够不够",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "id": "q099",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "膝盖不好不能跑步，怎么减脂效果好，力量训练能替代有氧吗",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "medium",
+    "id": "q100",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想瘦但是不想掉肌肉，减脂期蛋白质要吃多少，训练怎么调整",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "id": "q101",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "产后减脂，肚子和骨盆前倾怎么一起改善，能练平板支撑吗",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "medium",
+    "id": "q102",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "160/55kg，想瘦小腿但怕练粗，跑步和跳绳哪个更合适",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "low",
+    "id": "q103",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "185/100kg，减肚子时下背痛，是不是动作做错了，该怎么调整",
+    "category": "fat_loss",
+    "expected_route": "fat_loss",
+    "safety_risk": "medium",
+    "id": "q104",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "深蹲时膝盖前方疼痛，是不是膝盖超过脚尖太多导致的，怎么调整动作才能不疼",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q105",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "卧推时肩膀前侧疼痛，尤其下落阶段更明显，是不是肩峰撞击，该怎么改动作",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q106",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "硬拉完后下背酸痛持续两天，是不是圆背了，怎么判断自己有没有弓腰",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q107",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "杠铃推举时肩膀有尖锐刺痛感，感觉像骨头在磨，是不是肩峰撞击，还能练推举吗",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q108",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "深蹲时脚跟总是抬起来，重心往前倒，是不是脚踝活动度不够，怎么改善",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q109",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "卧推时杠铃轨迹歪歪扭扭，左右手发力不均匀，应该先练什么辅助动作稳定轨迹",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q110",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "弯举时身体前后晃动借力，明明想练二头结果腰先酸了，怎么纠正借力问题",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q111",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "练胸日推完杠铃，肩膀前束酸胀但胸肌完全没感觉，是不是发力模式错了，怎么找到胸肌发力感",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q112",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "引体向上做完手臂二头酸但背部没感觉，怎么让背阔肌主导发力，是不是握距太窄了",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q113",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "臀推时臀部完全没感觉，大腿前侧和腰反而酸了，怎么调整才能让臀真正发力",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q114",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "卧推时感觉右边胸肌发力比左边强很多，左边明显弱，怎么单独强化左边又不破坏平衡",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q115",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "左侧肩膀在做推举和侧平举时都有明显弹响，但不疼，需不需要停练或者换动作",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q116",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "右膝盖在深蹲到底时内侧有牵拉痛，平时走路不疼，是不是动作角度有问题",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q117",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "前交叉韧带重建术后六个月，目前能正常走路，但不敢深蹲，从什么动作开始恢复下肢力量最安全",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q118",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "产后一年，腹直肌分离两指，做平板支撑时感觉腹部中间凸起，还能练核心吗，什么动作更安全",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q119",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "55岁，膝盖有轻度骨关节炎，想练下肢力量但怕加重磨损，深蹲和箭步蹲哪个更安全",
+    "category": "exercise_analysis",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q120",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "腰间盘突出两年了，最近想恢复训练，能做硬拉和深蹲吗，会不会加重突出",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q121",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "半月板损伤保守治疗后，走路不疼但跑步时膝盖内侧刺痛，还能继续跑吗",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q122",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "肩袖撕裂术后八个月，做推举时肩膀前方还是疼，是不是恢复得不好，还能练上肢吗",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q123",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "网球肘半年了，握哑铃和做俯卧撑时肘外侧疼得厉害，有没有不疼的上肢训练动作",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q124",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "跟腱炎反复发作，早上起床踩地那一下最疼，还能做提踵和跑步吗",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q125",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "前交叉韧带重建术后六个月，能正常走路和慢跑，但做深蹲时膝盖里面卡住一样，是不是角度太大了",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q126",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "腰椎微创术后三个月，目前坐久了腰酸，想恢复核心训练，平板支撑和鸟狗式能做吗",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q127",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "每天下背痛，尤其是久坐后站起来那一下直不起腰，拉伸也没用，还能练硬拉吗",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q128",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "早上起来手指和膝盖僵硬半小时才能活动开，关节还咔咔响，是不是关节炎早期，还能练力量吗",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q129",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "上周跑步时右膝盖突然软了一下差点跪下去，之后走路正常，但不敢再跑了，是什么问题",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q130",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "做深蹲时感觉膝盖要散架了，尤其是蹲到底的时候，关节里面发虚，是不是韧带松了",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q131",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "有心脏病史，但想冲大重量增肌，做卧推和深蹲时心率飙到160会不会有危险",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q132",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "骨质减少，骨密度T值-2.0，医生说不让跑跳，但我想练硬拉和深蹲来增强骨骼，会不会反而骨折",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q133",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "膝盖每次上下楼梯都咔咔响，不疼但很频繁，是不是髌骨软化，还能做箭步蹲吗",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q134",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "肩峰撞击确诊过，现在做侧平举到最高点时肩膀刺痛，换什么动作能安全练到三角肌",
+    "category": "injury",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q135",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "以前膝盖前交叉韧带重建过，现在想练腿增肌，深蹲和腿举哪个更安全？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q136",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "肩袖损伤过，现在想练胸肌，卧推会不会加重损伤？有没有替代动作？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q137",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "腰突患者想减脂，能做哪些有氧运动不伤腰？卷腹和仰卧起坐还能做吗？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q138",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "膝盖不好（髌骨软化）想减重，跑步不行，游泳和椭圆机哪个更推荐？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q139",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想变壮但又怕受伤，尤其是腰和膝盖，应该从什么强度开始？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q140",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想瘦但不知道先减脂还是先增肌，我现在170/70kg体脂20%，是不是应该先刷脂再增肌？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q141",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "我想增肌但不想体重变重，是不是只能做低重量高次数？这样能长肌肉吗？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q142",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想练深蹲增肌，但每次蹲到底膝盖里面感觉不对，有点酸胀发虚，还能继续练吗？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q143",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "以前腰椎间盘突出过，现在想练腹肌减肚子，平板支撑和卷腹哪个更安全？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q144",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "膝盖半月板切除过，现在想增肌练腿，是不是只能做静态动作？腿弯举能做吗？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q145",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想瘦肚子但又有腰肌劳损，仰卧起坐不能做，还有什么动作能练下腹？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "medium",
+    "id": "q146",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想增肌但又怕练成施瓦辛格那种太大只，女生练力量会不会变得很壮？",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "low",
+    "id": "q147",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "为什么练后要补充蛋白质",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q148",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "HIIT和稳态有氧哪个减脂效果好",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q149",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "自由重量和固定器械哪个更适合增肌",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q150",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "乳清蛋白和酪蛋白有什么区别",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q151",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "碳水循环和低碳饮食哪个更有效",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q152",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "青少年举重影响身高吗",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q153",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "80岁想练力量，有高血压和骨质疏松，能不能练，怎么练",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q154",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "体重45kg，想增肌20kg，可能吗，怎么吃怎么练",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "medium",
+    "id": "q155",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "只有轮椅，上肢力量怎么练，有没有适合轮椅用户的全身训练方案",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q156",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "只有壶铃，怎么安排一周四练的全身增肌计划",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q157",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "只有TRX，能练出肌肉吗，有没有完整的训练计划推荐",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q158",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "只有药球，适合练什么，能减脂和增肌吗",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q159",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "完全零器械，只有自重，怎么练出肌肉线条，一周练几天",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q160",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想同时增肌和减脂，能不能实现，训练和饮食怎么安排",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "medium",
+    "id": "q161",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想变大但不想练腿，只练上半身行不行，会不会有什么问题",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q162",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "想深蹲但绝对不能膝盖过脚尖，是不是只能做高脚杯深蹲，还有没有其他替代动作",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "medium",
+    "id": "q163",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "我膝盖疼+下背酸+肩膀响，还能练吗，应该先练什么，避开什么动作",
+    "category": "mixed",
+    "expected_route": "exercise_analysis",
+    "safety_risk": "high",
+    "id": "q164",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "健身和考研怎么平衡，每天只有一小时，怎么安排训练和复习",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q165",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "失恋后靠健身走出来有用吗，会不会越练越焦虑",
+    "category": "mixed",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q166",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "碳水循环减肥时，高碳日应该吃多少碳水才不会影响燃脂效果？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q167",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "训练后半小时内喝蛋白粉是不是必须的，晚一点喝效果就差很多吗？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q168",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "生酮饮食期间想增肌，碳水摄入压到多少能既保持酮症又不影响肌肉合成？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q169",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "每天只吃两顿饭的间歇断食法，会不会让肌肉流失得更快？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q170",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "锌和镁对健身人群有什么具体好处，普通人需不需要额外补？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q171",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "肌酸每天吃五克是不是太多了，停用后会不会掉力量？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q172",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "支链氨基酸在空腹有氧前喝能防止掉肌肉吗，还是心理作用？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q173",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "氮泵喝多了会不会产生耐受，怎么循环使用才能保持效果？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q174",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "谷氨酰胺对肠道恢复有帮助，那对健身后的肌肉修复有没有直接作用？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q175",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "鱼油里的欧米伽3到底能减轻多少训练后的肌肉僵硬感？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q176",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "离心训练时故意放慢下落速度，比普通节奏能多长多少肌肉？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q177",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "血流限制训练用普通弹力带绑腿有效果吗，还是必须用专业加压带？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q178",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "每次训练都做到力竭到底好不好，会不会反而影响长期进步？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q179",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "金字塔训练从轻到重和从重到轻，哪种对增肌更有效？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q180",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "超级组把胸和背放一起练，比单独练一个部位效率高在哪里？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q181",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "主动恢复比如慢跑或拉伸，和完全躺着休息相比恢复速度差多少？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q182",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "冷热交替浴到底该怎么操作，先冷还是先热才能促进恢复？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q183",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "按摩枪打在酸胀的肌肉上越疼越有效吗，还是应该避开痛点？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q184",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "训练后马上拉伸和等几小时再拉伸，对肌肉柔韧性的影响一样吗？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q185",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "健身坚持了三个月开始觉得没动力，有什么办法能重新找到训练热情？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q186",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "增肌遇到平台期体重两个月没变，是不是该彻底换训练计划了？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q187",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "看到别人练得比我好就焦虑，怎么调整心态专注于自己的进步？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q188",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "一天不练就浑身难受，这种情况算不算健身成瘾需要控制？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q189",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "素食者只靠豆制品和米饭能练出明显肌肉吗，需要额外注意什么？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q190",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "倒班工人作息不规律，怎么安排训练时间和饮食才能维持肌肉？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q191",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "去高海拔地区训练会不会让耐力变差，身体适应后能提升运动表现吗？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q192",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "停练半年后重新开始，肌肉记忆能让恢复速度比新手快多少？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q193",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "神经适应是不是只在前几周有效，之后增肌主要靠肌肉本身生长？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q194",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "肌浆肥大和肌原纤维肥大到底有什么区别，训练方法上怎么区分？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q195",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "碳水循环中低碳日完全不吃碳水会不会导致训练时没力气？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q196",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "训练前吃一根香蕉和喝一杯米糊，哪种能更快提供能量？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q197",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "肌酸和咖啡因一起喝会不会互相抵消效果，需要错开时间吗？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q198",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "支链氨基酸和蛋白粉哪个更适合练后喝，区别大不大？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q199",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "氮泵里咖啡因含量高，晚上练的话会不会影响睡眠质量？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q200",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "谷氨酰胺要不要在空腹时吃吸收更好，还是随餐吃没区别？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q201",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "鱼油每天吃多少克对关节润滑有实际帮助，吃多了会怎样？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q202",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "离心训练做太多会不会让肌肉过度疲劳，一周安排几次合适？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q203",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "血流限制训练后手臂发麻正常吗，是不是压力太大了？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q204",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "力竭组每组都做到完全动不了，和留一两次余量相比增肌效果差多少？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q205",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
+  },
+  {
+    "query": "金字塔训练里每组重量递增幅度多少最合适，10%会不会太小？",
+    "category": "knowledge",
+    "expected_route": "qa",
+    "safety_risk": "low",
+    "id": "q206",
+    "relevant_doc_ids": [],
+    "hard_negative_ids": []
   }
 ]
