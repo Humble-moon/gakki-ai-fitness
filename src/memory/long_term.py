@@ -15,7 +15,7 @@
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from src.storage.redis_client import RedisClient
 
 
@@ -48,26 +48,16 @@ class LongTermMemory:
         self.prefix = "memory:user:"
 
     def save_preference(self, user_id: int, key: str, value):
+        """保存用户偏好项，自动附加时间戳。
+
+        存储格式: {"v": <value>, "ts": "2026-07-29T10:30:00Z"}
+        时间戳用于检索时判断新鲜度：超过 90 天的记录权重降低。
         """
-        保存用户的一个偏好项。
-
-        参数：
-            user_id: int  - 用户唯一 ID
-            key: str      - 偏好键名，如 "goal"（目标）、"level"（训练水平）、
-                           "equipment"（可用器械）、"injuries"（伤病史）
-            value: any    - 偏好值，可以是 str / list / dict，内部自动 json.dumps
-
-        返回值：None
-
-        核心逻辑：
-        构造 Redis key: memory:user:{user_id}:pref:{key}
-        将 value JSON 序列化后存入 Redis（无 TTL，永久存储直到用户主动更新）。
-
-        使用场景：
-        - 用户首次注册时填写健身目标 → save_preference(uid, "goal", "增肌")
-        - 用户更新可用器械 → save_preference(uid, "equipment", ["哑铃", "杠铃"])
-        """
-        self.redis.set(f"{self.prefix}{user_id}:pref:{key}", json.dumps(value))
+        record = {
+            "v": value,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        self.redis.set(f"{self.prefix}{user_id}:pref:{key}", json.dumps(record))
 
     def get_preferences(self, user_id: int) -> dict:
         """
@@ -94,9 +84,15 @@ class LongTermMemory:
         for key_bytes in self.redis.conn.scan_iter(match=pattern, count=20):
             key_str = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
             key_name = key_str.split(":pref:")[-1]
-            val = self.redis.get(key_str)
-            if val:
-                prefs[key_name] = json.loads(val)
+            raw = self.redis.get(key_str)
+            if not raw:
+                continue
+            data = json.loads(raw)
+            # 兼容旧格式 (纯值) 和新格式 ({"v": ..., "ts": ...})
+            if isinstance(data, dict) and "v" in data:
+                prefs[key_name] = data["v"]
+            else:
+                prefs[key_name] = data
         return prefs
 
     def record_feedback(self, user_id: int, plan_id: str, rating: int, comment: str):
@@ -145,8 +141,14 @@ class LongTermMemory:
         从固定 key memory:user:{user_id}:pref:injuries 读取，
         JSON 反序列化为列表。伤病史是硬约束，FactChecker 会据此标记危险动作。
         """
-        data = self.redis.get(f"{self.prefix}{user_id}:pref:injuries")
-        return json.loads(data) if data else []
+        raw = self.redis.get(f"{self.prefix}{user_id}:pref:injuries")
+        if not raw:
+            return []
+        data = json.loads(raw)
+        # 兼容新旧格式
+        if isinstance(data, dict) and "v" in data:
+            return data["v"] if isinstance(data["v"], list) else [data["v"]]
+        return data if isinstance(data, list) else []
 
     def build_context_for_prompt(self, user_id: int) -> str:
         """
@@ -173,9 +175,45 @@ class LongTermMemory:
         """
         prefs = self.get_preferences(user_id)
         injuries = self.get_injury_history(user_id)
+        ages = self._get_preference_ages(user_id)
         parts = []
         if prefs:
             parts.append(f"用户偏好：{prefs}")
+            # 附加新鲜度信息（超过 30 天的标记为"较早"）
+            if ages:
+                stale = [f"{k}({ages[k]})" for k in ages if "天前" in ages[k] and
+                         any(d in ages[k] for d in ["30", "60", "90"])]
+                if stale:
+                    parts.append(f"以下偏好记录较旧，可能已过时：{', '.join(stale)}")
         if injuries:
             parts.append(f"伤病史：{injuries}")
         return "\n".join(parts)
+
+    def _get_preference_ages(self, user_id: int) -> dict[str, str]:
+        """获取各偏好的时间描述。如 {'goal': '3天前', 'injuries': '90天前'}。"""
+        ages = {}
+        now = datetime.now(timezone.utc)
+        pattern = f"{self.prefix}{user_id}:pref:*"
+        for key_bytes in self.redis.conn.scan_iter(match=pattern, count=20):
+            key_str = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
+            key_name = key_str.split(":pref:")[-1]
+            raw = self.redis.get(key_str)
+            if not raw:
+                continue
+            try:
+                data = json.loads(raw)
+                ts_str = data.get("ts") if isinstance(data, dict) else None
+                if ts_str:
+                    ts = datetime.fromisoformat(ts_str)
+                    delta = now - ts
+                    if delta.days > 90:
+                        ages[key_name] = f"{delta.days}天前"
+                    elif delta.days > 30:
+                        ages[key_name] = f"{delta.days}天前"
+                    elif delta.days > 0:
+                        ages[key_name] = f"{delta.days}天前"
+                    else:
+                        ages[key_name] = "今天"
+            except Exception:
+                continue
+        return ages
