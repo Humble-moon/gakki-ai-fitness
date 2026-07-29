@@ -382,7 +382,7 @@ def _generate_answer_sync(
 # RAGAS 评测主流程 (v2 异步并行)
 # ============================================================================
 
-def run_ragas_eval(
+async def run_ragas_eval(
     queries: List[dict],
     limit: Optional[int] = None,
     output_path: Optional[str] = None,
@@ -524,7 +524,7 @@ def run_ragas_eval(
                 + " ".join(f"{k}={v:.3f}" for k, v in scores.items()))
         return all_scores
 
-    per_scores = asyncio.run(_score_all())
+    per_scores = await _score_all()
     elapsed_eval = time.time() - start_eval
     elapsed_total = time.time() - start
 
@@ -690,11 +690,11 @@ if __name__ == "__main__":
     queries = load_dataset()
     logger.info(f"Loaded {len(queries)} queries from golden dataset")
 
-    result = run_ragas_eval(
+    result = asyncio.run(run_ragas_eval(
         queries,
         limit=args.limit,
         output_path=args.output,
         stratified=not args.no_stratify,
         target_queries=args.target,
-    )
+    ))
     print_ragas_report(result)
