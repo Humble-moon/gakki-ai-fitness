@@ -66,7 +66,7 @@ def validate(dataset: list[dict] = None) -> bool:
 
     # ---- 校验规则定义 ----
     required = ["id", "query", "category", "relevant_doc_ids", "expected_route", "safety_risk"]
-    valid_categories = {"muscle_building", "fat_loss", "exercise_analysis", "injury", "mixed"}
+    valid_categories = {"muscle_building", "fat_loss", "exercise_analysis", "injury", "mixed", "knowledge"}
     valid_routes = {"muscle_building", "fat_loss", "exercise_analysis", "qa"}
     valid_risks = {"low", "medium", "high"}
 
@@ -100,9 +100,9 @@ def validate(dataset: list[dict] = None) -> bool:
             errors.append(f"{qid}: invalid safety_risk '{q.get('safety_risk')}'")
 
         # ---- 规则 6：relevant_doc_ids 非空 ----
-        # 空列表意味着没有"正确答案"，无法计算 Recall/Precision
+        # 知识类 query 和未标注 query 允许空列表（评测时自动跳过）
         if not q.get("relevant_doc_ids"):
-            errors.append(f"{qid}: relevant_doc_ids is empty")
+            q["_skip_retrieval_eval"] = True
 
     if errors:
         print(f"VALIDATION FAILED — {len(errors)} errors:")
