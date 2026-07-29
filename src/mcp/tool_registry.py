@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from src.mcp.exercise_server import (
+    ExerciseMCPServer,
     get_exercise_detail,
     list_all_exercises,
     search_by_difficulty,
@@ -223,17 +224,80 @@ class ToolRegistry:
              格式为 {"type": "object", "properties": {...}, "required": [...]}
           2. 手动定义的 GraphRAG schema（本文件 _GRAPH_TOOL_SCHEMAS）
         """
-        # 从 FastMCP 提取 schema
-        for tool_name, tool_info in exercise_mcp._tool_manager._tools.items():
-            self._tool_schemas[tool_name] = {
-                "name": tool_name,
-                "description": tool_info.description or "",
-                "inputSchema": (
-                    tool_info.parameters
-                    if hasattr(tool_info, "parameters")
-                    else {"type": "object", "properties": {}}
-                ),
-            }
+        # 工具 Schema（手动定义，不依赖 FastMCP 内部 _tool_manager）
+        _BUILTIN_SCHEMAS = {
+            "search_by_muscle": {
+                "name": "search_by_muscle",
+                "description": "按目标肌群检索训练动作，如'胸大肌'、'臀大肌'。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "muscle": {"type": "string", "description": "目标肌群名称"},
+                        "limit": {"type": "integer", "default": 10, "description": "返回数量上限"},
+                    },
+                    "required": ["muscle"],
+                },
+            },
+            "search_by_equipment": {
+                "name": "search_by_equipment",
+                "description": "按器械检索训练动作，如'哑铃'、'杠铃'、'自重'、'壶铃'。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "equipment": {"type": "string", "description": "器械名称"},
+                        "limit": {"type": "integer", "default": 10},
+                    },
+                    "required": ["equipment"],
+                },
+            },
+            "search_by_difficulty": {
+                "name": "search_by_difficulty",
+                "description": "按难度检索训练动作，如'初级'、'中级'、'高级'。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "difficulty": {"type": "string", "description": "难度等级"},
+                        "limit": {"type": "integer", "default": 10},
+                    },
+                    "required": ["difficulty"],
+                },
+            },
+            "get_exercise_detail": {
+                "name": "get_exercise_detail",
+                "description": "按名称获取单个动作的详细信息。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "动作名称"},
+                    },
+                    "required": ["name"],
+                },
+            },
+            "search_exercises": {
+                "name": "search_exercises",
+                "description": "通用搜索：支持名称/肌群/器械的模糊匹配。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "搜索关键词"},
+                        "limit": {"type": "integer", "default": 10},
+                    },
+                    "required": ["query"],
+                },
+            },
+            "list_all_exercises": {
+                "name": "list_all_exercises",
+                "description": "列出所有训练动作。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "default": 50},
+                    },
+                },
+            },
+        }
+        for tool_name, schema in _BUILTIN_SCHEMAS.items():
+            self._tool_schemas[tool_name] = schema
 
         # 合并 GraphRAG 手动定义的 schema
         for schema in _GRAPH_TOOL_SCHEMAS:
