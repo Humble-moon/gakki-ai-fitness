@@ -14,9 +14,9 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
  Planner  Retriever  Writer  FactChecker
 (任务拆解) (多源检索) (计划生成) (安全审查+HITL)
     │    │  │
-    │    │  └── GraphRAG (Neo4j 知识图谱 106 动作节点多跳推理)
+    │    │  └── GraphRAG (Neo4j 知识图谱 338 动作节点多跳推理)
     │    └───── Agentic RAG (自评 + 改写 + 3 轮迭代)
-    └────────── Skill 系统 (LLM 语义选择 + 关键词降级兜底 + 策略模板)
+    └────────── Skill 系统 (v3 插件化目录 + Planner v4 安全闸门)
          │
     ┌────┼────┬──────────┐
     ▼    ▼     ▼          ▼
@@ -30,21 +30,22 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 |------|------|
 | Agent 框架 | 自研 Orchestrator（Planner → Retriever → Writer → FactChecker） |
 | 协议 | FastMCP 完整协议实现（Tools + Resources + JSON-RPC 错误码） |
-| 模型 | deepseek-chat + deepseek-reasoner 双模型架构 |
-| RAG | 向量检索 + 关键词检索 → RRF 融合 → LLM Re-rank |
+| 模型 | deepseek-chat + deepseek-reasoner 双模型架构 + 熔断器 |
+| RAG | 向量检索（HNSW）+ 关键词检索 → RRF 融合 → LLM Re-rank |
 | 知识图谱 | Neo4j + Cypher（动作→肌肉→器械→伤病 四类实体） |
 | 向量化 | DashScope text-embedding-v4（1024 维，API 调用） |
 | 缓存 | Redis 语义缓存（二级命中：精确 + 余弦相似度扫描） |
-| 安全 | FactChecker 双重校验 + HITL 人在回路 |
-| 评测 | 80 条 Golden Dataset（2026-07-17 异构裁判补标）+ 三组消融实验 + E2E/RAGAS（qwen-plus 异构裁判）+ Serving 压测 |
+| 安全 | FactChecker 双重校验 + HITL（关键词 + embedding 语义双路） |
+| 记忆 | 短期滑动窗口 + 长期记忆（带时间戳） |
+| 评测 | 206 条 Golden Dataset + 三组消融实验 + E2E/RAGAS + Serving 压测 |
 | 前端 | FastAPI + SSE + 暗黑工业风 HTML/CSS/JS |
 | 部署 | Docker Compose（PostgreSQL + Neo4j + Redis + MinIO） |
 
 ## 核心功能
 
-- **智能计划生成** — 输入身高体重/目标/场景，AI 先给个性化分析，Multi-Agent 流水线生成周训练计划，FactChecker 安全审查
+- **智能计划生成** — 输入身高体重/目标/场景，AI 先给个性化分析，Multi-Agent 流水线生成周训练计划，FactChecker 安全审查 + 修正回路
 - **动作分析** — 输入动作名 + 训练感受，检索标准规范，诊断问题，给出改进方案
-- **知识问答** — 自然语言健身问题，92 篇知识文档（30 自写 + 62 篇 PubMed 翻译，318 chunks）混合检索，RRF 融合 + Re-rank 精排，带来源引用
+- **知识问答** — 自然语言健身问题，162 篇知识文档（90 自写 + 32 PubMed 翻译 + 40 扩展专题，824 chunks）混合检索，RRF 融合 + Re-rank 精排，带来源引用
 
 ## 快速开始
 
@@ -54,15 +55,18 @@ pip install -r requirements.txt
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env，填入 DeepSeek API Key
+# 编辑 .env，填入 DeepSeek API Key 和 DashScope API Key
 
-# 3. 启动基础服务
+# 3. 启动基础服务（PostgreSQL/Neo4j/Redis/MinIO）
 docker compose up -d
 
-# 4. 灌入种子数据（106 个标准动作）
+# 4. 灌入种子数据（338 个动作 → PG + Neo4j）
 python -m src.main --seed
 
-# 5. 启动服务
+# 5. 摄入知识库（162 篇文档 → 824 chunks → pgvector）
+python -m src.rag.knowledge_ingestion --dir data/knowledge
+
+# 6. 启动服务
 python app/server.py
 # → 浏览器打开 http://localhost:8503
 ```
@@ -76,8 +80,12 @@ python scripts/fetch_knowledge.py
 # 翻译改写为中文健身科普文章
 python scripts/translate_knowledge.py
 
-# 摄入向量数据库
-python -m src.rag.knowledge_ingestion --dir data/knowledge
+# LLM 批量扩展动作库 / 知识库
+python scripts/expand_exercises.py
+python scripts/expand_knowledge.py
+
+# 增量摄入（只处理变更文件）
+python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 ```
 
 ## 项目结构
@@ -90,27 +98,34 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge
 │   ├── agents/                   # 四 Agent（Planner/Retriever/Writer/FactChecker）
 │   ├── core/                     # Orchestrator 编排引擎
 │   ├── mcp/                      # FastMCP 完整协议实现
-│   │   ├── exercise_server.py    # @mcp.tool() + @mcp.resource()
-│   │   └── tool_registry.py      # 7 Tools + 11 Resources 统一门面
+│   │   ├── exercise_server.py    # MCP 工具（接 PG 数据库）
+│   │   └── tool_registry.py      # 工具注册门面
 │   ├── rag/                      # RAG 五层检索体系
 │   │   ├── agentic_rag.py        # 自评改写迭代检索
 │   │   ├── knowledge_search.py   # RRF 融合 + LLM Re-rank
 │   │   └── semantic_cache.py     # Redis 语义缓存（二级命中）
 │   ├── graphrag/                 # Neo4j 知识图谱检索
-│   ├── llm/                      # LLMProvider 多模型管理
+│   ├── llm/                      # LLMProvider 多模型管理 + 熔断器
 │   │   └── provider.py           # chat + chat_stream + JSON mode
-│   ├── memory/                   # 多轮对话 + 长期记忆
+│   ├── memory/                   # 多轮对话 + 长期记忆（带时间戳）
 │   ├── storage/                  # PG/Neo4j/Redis/MinIO 客户端
-│   ├── skills/                   # Skill 系统（增肌/减脂/动作分析）
+│   ├── skills/                   # Skill 系统（SkillLoader 自动发现）
 │   ├── a2a/                      # A2A 消息总线（Task/Artifact）
-│   ├── hitl/                     # HITL 人在回路
+│   ├── hitl/                     # HITL 人在回路（关键词 + embedding 语义）
 │   └── models/                   # Pydantic 数据模型
-├── tests/                        # 46 个测试用例
-├── scripts/                      # 知识库工具
+├── skills/                       # Skill 插件目录（SKILL.md + references + scripts）
+│   ├── muscle_building/
+│   ├── fat_loss/
+│   └── exercise_analysis/
+├── tests/                        # 81 个测试用例
+├── scripts/                      # 数据工具
 │   ├── fetch_knowledge.py        # PubMed 爬取
-│   └── translate_knowledge.py    # LLM 翻译改写
-├── eval/                         # 评测框架（80 条 Golden Dataset + 消融/E2E/RAGAS/压测）
-├── data/knowledge/               # 健身知识库（92 篇文档，318 chunks）
+│   ├── translate_knowledge.py    # LLM 翻译改写
+│   ├── expand_exercises.py       # LLM 扩展动作库
+│   ├── expand_knowledge.py       # LLM 扩展知识库
+│   └── create_hnsw_indexes.sql   # HNSW 索引迁移
+├── eval/                         # 评测框架（206 条 Golden Dataset + 消融/E2E/RAGAS/压测）
+├── data/knowledge/               # 健身知识库（162 篇文档，824 chunks）
 ├── run_mcp_server.py             # MCP 独立服务器（stdio/SSE/HTTP）
 ├── docker-compose.yml
 └── requirements.txt
