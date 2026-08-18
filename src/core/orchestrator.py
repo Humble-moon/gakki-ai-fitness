@@ -70,36 +70,81 @@ class Orchestrator:
         self.long_term = LongTermMemory()
         self.documents = DocumentStore()
 
+    @staticmethod
+    def _safe_cached_result(result: dict | None) -> dict | None:
+        """Accept only cache entries that already passed the final gate."""
+        if not isinstance(result, dict) or result.get("_persistence_allowed") is not True:
+            return None
+        if result.get("requires_review") is not False or result.get("warnings"):
+            return None
+        try:
+            validate_training_plan(result)
+        except OutputValidationError:
+            return None
+        return result
+
+    def _finalize_result(self, result: dict, checks: list[dict], rewrite_count: int,
+                         *, provider_degraded: bool = False) -> dict:
+        """Normalize one terminal state and decide whether persistence is allowed."""
+        result = dict(result) if isinstance(result, dict) else {}
+        checks = checks if isinstance(checks, list) else []
+        warnings = []
+        seen = set()
+        for check in checks:
+            if not isinstance(check, dict):
+                continue
+            for issue in check.get("issues") or []:
+                value = issue.get("issue", str(issue)) if isinstance(issue, dict) else str(issue)
+                if value not in seen:
+                    seen.add(value)
+                    warnings.append(value)
+        final = checks[-1] if checks and isinstance(checks[-1], dict) else {}
+        try:
+            validate_training_plan(result)
+            schema_valid = True
+        except OutputValidationError:
+            schema_valid = False
+        is_safe = final.get("is_safe") is True
+        issues_empty = final.get("issues") == []
+        requires_review = any(isinstance(c, dict) and c.get("requires_human_review") is True for c in checks)
+        confidence = final.get("confidence")
+        confidence_valid = isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
+        result.update({"warnings": warnings, "requires_review": requires_review or not checks or not is_safe,
+                       "confidence": confidence if confidence_valid else 0, "rewrite_count": rewrite_count})
+        result["_persistence_allowed"] = bool(schema_valid and is_safe and issues_empty and not requires_review
+            and confidence_valid and not provider_degraded and not result.get("_degraded", False))
+        return result
+
+    def _persist_if_safe(self, profile: dict, query: str, result: dict,
+                         session_id: str | None = None) -> bool:
+        """Persist only a fully safe terminal result."""
+        if not isinstance(result, dict) or result.get("_persistence_allowed") is not True:
+            return False
+        if not self._safe_cached_result(result):
+            return False
+        if session_id:
+            summary = self._summarize_plan_for_context(result)
+            self.conversation.set_plan_state(session_id, summary)
+            self.conversation.add_turn(session_id, "assistant", summary[:500])
+        else:
+            self.cache.set(profile, query, result)
+        pseudo_uid = self._make_user_key(profile)
+        self.long_term.save_preference(pseudo_uid, "profile", profile)
+        self.long_term.save_preference(pseudo_uid, "goal", profile.get("goal", ""))
+        self.long_term.save_preference(pseudo_uid, "equipment", profile.get("available_equipment", []))
+        return True
+
     def generate_plan(self, profile: UserProfileInput, query: str = "") -> dict:
-        """【同步版】根据用户画像和查询生成完整的训练计划。
-
-        输入：
-            profile: UserProfileInput — 用户画像（含身高/体重/训练年限/目标/伤病等）
-            query: str — 用户额外补充的文本描述，可为空字符串
-        输出：
-            dict — 包含以下关键字段的训练计划：
-                - "days": list[dict] — 每日训练安排（含动作列表）
-                - "warnings": list[str] — 安全检查发现的问题
-                - "requires_review": bool — 是否需要人工复核
-                - "confidence": float — 整体置信度 (0~1)
-
-        核心流水线（6 步）：
-            1. 语义缓存查询 → 命中则直接返回，节省 LLM 调用成本
-            2. Planner 拆解任务 → 产出子任务列表 + 匹配的训练技能模板
-            3. Retriever 检索 → 根据子任务从动作库和知识图谱获取数据
-            4. Writer 调用 LLM 生成计划 → A2A 消息总线记录任务流转
-            5. FactChecker 安全审查 → 产出警告列表 + HITL 升级判定
-            6. 写入语义缓存 → 下次相同输入可直接命中
-        """
+        """Generate and finalize a training plan synchronously."""
         profile_dict = profile.model_dump()
-        # 1. 检查缓存 —— 语义缓存通过向量相似度匹配，不要求精确相等
-        cached = self.cache.get(profile_dict, query)
+        cached = self._safe_cached_result(self.cache.get(profile_dict, query))
         if cached:
             logger.info("Cache hit for plan generation")
             return cached
 
         # 2. 规划器 —— 如果没有 query，用用户目标构造默认查询
         plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict)
+        provider_degraded = False
 
         # 3. 检索器 —— 根据 Planner 产出的子任务逐条检索动作数据
         retrieved = self.retriever.retrieve(plan)
@@ -118,17 +163,15 @@ class Orchestrator:
             retrieved, profile_dict, plan.get("skill_config", {})
         )
         result = self._normalize_plan(result)
+        provider_degraded = bool(result.get("_degraded"))
         task.add_artifact(Artifact(
             artifact_id=task.task_id, artifact_type="training_plan", content=result
         ))
 
         # 5. FactChecker 审查 + Writer 修正回路
-        # 设计意图：FactChecker 发现问题后，不直接返回带警告的计划给用户，
-        # 而是把问题退回给 Writer 重写。Writer 根据反馈有针对性地替换危险动作、
-        # 调整不合理配置，然后 FactChecker 再次审查。最多重试 3 次。
         MAX_RETRIES = 3
         rewrite_count = 0
-        all_checks = []  # 记录每次审查结果，用于最终汇总
+        all_checks = []
 
         check = self.fact_checker.check(result, profile_dict)
         all_checks.append(check)
@@ -138,39 +181,92 @@ class Orchestrator:
                 f"FactChecker found {len(check.get('issues', []))} issue(s), "
                 f"rewrite attempt {rewrite_count + 1}/{MAX_RETRIES}"
             )
-            # Writer 根据 FactChecker 反馈重写
             result = self.writer.rewrite_plan(
                 result, check.get("issues", []), retrieved, profile_dict
             )
             result = self._normalize_plan(result)
+            provider_degraded = provider_degraded or bool(result.get("_degraded"))
             rewrite_count += 1
-
-            # 再次审查
             check = self.fact_checker.check(result, profile_dict)
             all_checks.append(check)
 
-        # 汇总所有轮次的警告（去重）
-        all_issues = []
-        seen = set()
-        for c in all_checks:
-            for issue in c.get("issues", []):
-                key = issue.get("issue", str(issue))
-                if key not in seen:
-                    seen.add(key)
-                    all_issues.append(key)
-
-        result["warnings"] = all_issues
-        result["requires_review"] = any(c.get("requires_human_review", False) for c in all_checks)
-        result["confidence"] = min(c.get("confidence", 0) for c in all_checks)
-        result["rewrite_count"] = rewrite_count
-
-        # 6. Final safety gate and persistence.
-        result = self._finalize_result(
-            result, all_checks, provider_degraded=bool(result.pop("_degraded", False))
-        )
+        result = self._finalize_result(result, all_checks, rewrite_count,
+                                       provider_degraded=provider_degraded)
         self._persist_if_safe(profile_dict, query, result)
         task.complete()
         return result
+
+    def generate_plan_stream(self, profile: UserProfileInput, query: str = "",
+                             session_id: str = None):
+        """Stream a plan and persist only after final validation."""
+
+        profile_dict = profile.model_dump()
+        conv_context = ""
+        plan_context = ""
+        if session_id:
+            user_turn_preview = query[:200] if query else "生成训练计划"
+            self.conversation.add_turn(session_id, "user", user_turn_preview)
+            conv_context = self.conversation.build_context_for_prompt(session_id, query or "")
+            plan_context = self.conversation.get_plan_state(session_id) or ""
+
+        pseudo_uid = self._make_user_key(profile_dict)
+        long_term_context = self.long_term.build_context_for_prompt(pseudo_uid)
+        if not session_id:
+            cached = self._safe_cached_result(self.cache.get(profile_dict, query))
+            if cached:
+                yield ("cache_hit", cached)
+                yield ("done", cached)
+                return
+
+        yield ("stage", "[分析] 正在分析你的情况...")
+        advice_context = ""
+        if long_term_context:
+            advice_context += f"\n\n[这个用户之前来过，他的历史画像]：\n{long_term_context}"
+        if plan_context:
+            advice_context += f"\n\n用户之前已经有了一个训练计划：\n{plan_context}\n用户现在说：{query}\n请结合这个上下文给出建议。"
+        advice_text = ""
+        for chunk in self.writer.llm.chat_stream(
+            [{"role": "user", "content": self._build_advice_prompt(profile_dict, query) + advice_context}], temperature=0.5
+        ):
+            advice_text += chunk
+            yield ("advice_chunk", chunk)
+        yield ("advice_done", advice_text)
+
+        yield ("stage", "[规划] Planner 正在拆解任务...")
+        plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict,
+                                 conv_context=conv_context, plan_context=plan_context)
+        yield ("planner_done", {"skill": plan.get("skill", "unknown"), "subtasks": plan.get("subtasks", [])})
+        yield ("stage", "[检索] Retriever 正在检索动作库...")
+        retrieved = self.retriever.retrieve(plan)
+        exercises = retrieved.get("exercises", [])
+        yield ("retriever_done", {"count": len(exercises), "names": [e.get("name", "?") for e in exercises[:8]]})
+        yield ("stage", "[生成] Writer 正在生成训练计划...")
+        full_text = ""
+        result = {}
+        for event, data in self.writer.write_plan_stream(retrieved, profile_dict, plan.get("skill_config", {})):
+            if event == "chunk":
+                full_text += data
+                yield ("writer_chunk", data)
+            elif event == "done":
+                result = data
+        yield ("writer_done_raw", full_text)
+        result = self._normalize_plan(result)
+
+        rewrite_count = 0
+        all_checks = []
+        check = self.fact_checker.check(result, profile_dict)
+        all_checks.append(check)
+        yield ("factcheck_done", {"safe": check.get("is_safe", True), "issues": len(check.get("issues", [])), "confidence": check.get("confidence", 0)})
+        while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < 3:
+            yield ("stage", f"[修正] 安全检查发现 {len(check.get('issues', []))} 个问题，第 {rewrite_count + 1} 次重写...")
+            result = self._normalize_plan(self.writer.rewrite_plan(result, check.get("issues", []), retrieved, profile_dict))
+            rewrite_count += 1
+            check = self.fact_checker.check(result, profile_dict)
+            all_checks.append(check)
+        result = self._finalize_result(result, all_checks, rewrite_count,
+                                       provider_degraded=bool(result.get("_degraded")))
+        self._persist_if_safe(profile_dict, query, result, session_id=session_id)
+        yield ("done", result)
 
     def _normalize_plan(self, result: dict) -> dict:
         """归一化 LLM 输出的训练计划 JSON。
@@ -191,179 +287,6 @@ class Orchestrator:
                 if "movement" in ex and "name" not in ex:
                     ex["name"] = ex.pop("movement")
         return result
-
-    def _finalize_result(self, result: dict, checks: list[dict], *, provider_degraded: bool = False) -> dict:
-        """Attach review metadata and enforce the final fail-closed safety gate."""
-        if not isinstance(result, dict):
-            raise OutputValidationError("LLM result must be an object")
-        all_issues = []
-        seen = set()
-        for check in checks:
-            for issue in check.get("issues") or []:
-                key = issue.get("issue", str(issue)) if isinstance(issue, dict) else str(issue)
-                if key not in seen:
-                    seen.add(key)
-                    all_issues.append(key)
-        result["warnings"] = all_issues
-        result["requires_review"] = any(c.get("requires_human_review") is True for c in checks)
-        result["confidence"] = min((c.get("confidence", 0) for c in checks), default=0)
-        result["rewrite_count"] = max(0, len(checks) - 1)
-        unsafe = provider_degraded or any(
-            c.get("is_safe") is not True or bool(c.get("issues"))
-            or c.get("requires_human_review") is True for c in checks
-        )
-        validate_training_plan(result)
-        if unsafe:
-            raise OutputValidationError("result failed safety gate; nothing was persisted")
-        return result
-
-    def _persist_if_safe(self, profile: dict, query: str, result: dict, *,
-                         session_id: str | None = None, pseudo_uid: int | None = None) -> None:
-        """Persist only a result that has already passed the final safety gate."""
-        self.cache.set(profile, query, result)
-        if session_id:
-            summary = self._summarize_plan_for_context(result)
-            self.conversation.set_plan_state(session_id, summary)
-            self.conversation.add_turn(session_id, "assistant", summary[:500])
-        if pseudo_uid is not None:
-            self.long_term.save_preference(pseudo_uid, "profile", profile)
-            self.long_term.save_preference(pseudo_uid, "goal", profile.get("goal", ""))
-            self.long_term.save_preference(pseudo_uid, "equipment", profile.get("available_equipment", []))
-
-    def generate_plan_stream(self, profile: UserProfileInput, query: str = "",
-                             session_id: str = None):
-        """Stream a plan and persist only after final validation."""
-
-        # === 多轮对话：注入历史上下文 ===
-        conv_context = ""
-        plan_context = ""
-        if session_id:
-            user_turn_preview = query[:200] if query else "生成训练计划"
-            self.conversation.add_turn(session_id, "user", user_turn_preview)
-            conv_context = self.conversation.build_context_for_prompt(session_id, query or "")
-            # 获取上一轮生成的计划，用于"把第二天改成哑铃"这类修改请求
-            plan_context = self.conversation.get_plan_state(session_id) or ""
-
-        # === 长期记忆：读取跨会话的用户画像 ===
-        pseudo_uid = self._make_user_key(profile_dict)
-        long_term_context = self.long_term.build_context_for_prompt(pseudo_uid)
-
-        # 1. 检查缓存（多轮对话场景跳过缓存，因为每次修改都需要重新生成）
-        if not session_id:
-            cached = self.cache.get(profile_dict, query)
-            if cached:
-                yield ("cache_hit", cached)
-                yield ("done", cached)
-                return
-
-        # 2. 初步分析 —— 在流水线开始前给出教练式的口头建议
-        # 设计意图：LLM 调用耗时较长，先推送一个简短的分析结果让用户有内容可看，
-        # 避免用户面对空白页面等待，同时建立教练对话感
-        yield ("stage", "[分析] 正在分析你的情况...")
-        advice_context = ""
-        if long_term_context:
-            advice_context += f"\n\n[这个用户之前来过，他的历史画像]：\n{long_term_context}"
-        if plan_context:
-            advice_context += f"\n\n用户之前已经有了一个训练计划：\n{plan_context}\n用户现在说：{query}\n请结合这个上下文给出建议。"
-        advice_prompt = self._build_advice_prompt(profile_dict, query) + advice_context
-        advice_text = ""
-        for chunk in self.writer.llm.chat_stream(
-            [{"role": "user", "content": advice_prompt}], temperature=0.5
-        ):
-            advice_text += chunk
-            yield ("advice_chunk", chunk)
-        yield ("advice_done", advice_text)
-
-        # 3. 规划器 —— 注入多轮对话 + 跨会话长期记忆 + 已有计划
-        yield ("stage", "[规划] Planner 正在拆解任务...")
-        plan_conv = conv_context
-        if long_term_context:
-            plan_conv = f"[跨会话记忆：该用户的历史画像]\n{long_term_context}\n\n{conv_context}" if conv_context else f"[跨会话记忆：该用户的历史画像]\n{long_term_context}"
-        plan = self.planner.plan(
-            query or f"为{profile.goal}目标生成训练计划",
-            profile_dict,
-            conv_context=plan_conv,
-            plan_context=plan_context,
-        )
-        yield ("planner_done", {"skill": plan.get("skill", "unknown"),
-                                 "subtasks": plan.get("subtasks", [])})
-
-        # 3. 检索器
-        yield ("stage", "[检索] Retriever 正在检索动作库...")
-        retrieved = self.retriever.retrieve(plan)
-        exercises = retrieved.get("exercises", [])
-        yield ("retriever_done", {"count": len(exercises),
-                                   "names": [e.get("name", "?") for e in exercises[:8]]})
-
-        # 4. Writer —— 流式输出，多轮场景下注入已有计划上下文
-        yield ("stage", "[生成] Writer 正在生成训练计划...")
-        writer_extra = {}
-        if plan_context:
-            writer_extra["plan_context"] = plan_context
-            writer_extra["user_query"] = query
-        full_text = ""
-        for event, data in self.writer.write_plan_stream(
-            retrieved, profile_dict, plan.get("skill_config", {}),
-            **writer_extra,
-        ):
-            if event == "chunk":
-                full_text += data
-                yield ("writer_chunk", data)
-            elif event == "done":
-                result = data
-        yield ("writer_done_raw", full_text)
-        result = self._normalize_plan(result)
-
-        # 5. FactChecker 审查 + Writer 修正回路（流式版）
-        MAX_RETRIES = 3
-        rewrite_count = 0
-        all_checks = []
-
-        check = self.fact_checker.check(result, profile_dict)
-        all_checks.append(check)
-        yield ("factcheck_done", {"safe": check.get("is_safe", True),
-                                   "issues": len(check.get("issues", [])),
-                                   "confidence": check.get("confidence", 0)})
-
-        while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < MAX_RETRIES:
-            yield ("stage", f"[修正] 安全检查发现 {len(check.get('issues', []))} 个问题，第 {rewrite_count + 1} 次重写...")
-            result = self.writer.rewrite_plan(
-                result, check.get("issues", []), retrieved, profile_dict
-            )
-            result = self._normalize_plan(result)
-            rewrite_count += 1
-
-            check = self.fact_checker.check(result, profile_dict)
-            all_checks.append(check)
-            yield ("factcheck_done", {"safe": check.get("is_safe", True),
-                                       "issues": len(check.get("issues", [])),
-                                       "confidence": check.get("confidence", 0)})
-
-        # 汇总所有轮次警告
-        all_issues = []
-        seen = set()
-        for c in all_checks:
-            for issue in c.get("issues", []):
-                key = issue.get("issue", str(issue))
-                if key not in seen:
-                    seen.add(key)
-                    all_issues.append(key)
-
-        result["warnings"] = all_issues
-        result["requires_review"] = any(c.get("requires_human_review", False) for c in all_checks)
-        result["confidence"] = min(c.get("confidence", 0) for c in all_checks)
-        result["rewrite_count"] = rewrite_count
-
-        result = self._finalize_result(
-            result, all_checks,
-            provider_degraded=bool(getattr(getattr(self.writer, "llm", None), "stream_metadata", None)
-                                   and getattr(self.writer.llm.stream_metadata, "degraded", False)),
-        )
-
-        # Persist conversation/cache/long-term state only after the final gate.
-        self._persist_if_safe(profile_dict, query, result,
-                              session_id=session_id, pseudo_uid=pseudo_uid)
-        yield ("done", result)
 
     def _build_advice_prompt(self, profile: dict, query: str) -> str:
         """【私有方法】构建"教练口头建议"的 LLM 提示词。
