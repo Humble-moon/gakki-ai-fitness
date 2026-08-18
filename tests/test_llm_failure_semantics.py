@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 from src.llm.provider import LLMProvider, LLMResponse, LLMUnavailableError
@@ -118,21 +120,128 @@ def test_stream_falls_back_after_empty_chunks(provider, monkeypatch):
     assert calls == ["primary", "backup"]
 
 
-def test_stream_does_not_fallback_after_output_started(provider, monkeypatch):
-    class Chunk:
-        class Choices:
-            class Delta:
-                content = "partial"
-            delta = Delta()
-        choices = [Choices()]
 
-    def stream_then_fail(*args, **kwargs):
-        yield Chunk()
-        raise ConnectionError("mid-stream offline")
 
-    monkeypatch.setattr(provider, "_create_stream_with_retry", stream_then_fail)
+def _chunk(content=None):
+    delta = type("Delta", (), {"content": content})()
+    choice = type("Choice", (), {"delta": delta})()
+    return type("Chunk", (), {"choices": [choice]})()
+
+
+def _assert_secret_is_redacted(caplog, secret):
+    assert secret not in caplog.text
+    assert "[REDACTED]" in caplog.text
+    assert all("\n" not in record.getMessage() for record in caplog.records)
+    assert max(len(record.getMessage()) for record in caplog.records) < 500
+
+
+def test_retry_logs_use_bounded_redacted_error_summary(provider, monkeypatch, caplog):
+    secret = "sk-abcdefghijklmnopqrstuvwxyz012345"
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            raise ConnectionError(f"Bearer {secret}\n" + "x" * 1000)
+
+    client = type("Client", (), {
+        "chat": type("Chat", (), {"completions": FakeCompletions()})()
+    })()
+    monkeypatch.setattr("src.llm.provider._MAX_RETRIES", 1)
+    monkeypatch.setattr("src.llm.provider.time.sleep", lambda _: None)
+
+    with caplog.at_level(logging.WARNING, logger="src.llm.provider"):
+        with pytest.raises(ConnectionError):
+            provider._call_api_with_retry(client, "primary", [], 0.1)
+
+    _assert_secret_is_redacted(caplog, secret)
+
+
+def test_chat_logs_use_bounded_redacted_error_summary(provider, monkeypatch, caplog):
+    secret = "credential=top-secret-value"
+
+    def always_fail(*args, **kwargs):
+        raise RuntimeError(secret + "\n" + "y" * 1000)
+
+    monkeypatch.setattr(provider, "_call_api_with_retry", always_fail)
+
+    with caplog.at_level(logging.ERROR, logger="src.llm.provider"):
+        with pytest.raises(LLMUnavailableError):
+            provider.chat([{"role": "user", "content": "固定脱敏测试问题"}])
+
+    _assert_secret_is_redacted(caplog, "top-secret-value")
+
+
+def test_stream_logs_use_bounded_redacted_error_summary(provider, monkeypatch, caplog):
+    secret = "session_cookie=top-secret-cookie"
+
+    def always_fail(*args, **kwargs):
+        raise RuntimeError(secret + "\n" + "z" * 1000)
+
+    monkeypatch.setattr(provider, "_create_stream_with_retry", always_fail)
+
+    with caplog.at_level(logging.ERROR, logger="src.llm.provider"):
+        with pytest.raises(LLMUnavailableError):
+            list(provider.chat_stream([{"role": "user", "content": "固定脱敏测试问题"}]))
+
+    _assert_secret_is_redacted(caplog, "top-secret-cookie")
+
+
+def test_stream_falls_back_when_primary_returns_zero_chunks(provider, monkeypatch):
+    calls = []
+
+    def zero_chunks_then_backup(client, model, messages, temperature):
+        calls.append(model)
+        if model == "primary":
+            return iter(())
+        return iter([_chunk("backup output")])
+
+    monkeypatch.setattr(provider, "_create_stream_with_retry", zero_chunks_then_backup)
 
     stream = provider.chat_stream([{"role": "user", "content": "固定脱敏测试问题"}])
-    assert next(stream) == "partial"
-    with pytest.raises(ConnectionError, match="mid-stream offline"):
-        next(stream)
+    assert list(stream) == ["backup output"]
+    assert calls == ["primary", "backup"]
+
+
+def test_stream_falls_back_after_metadata_only_and_empty_chunks(provider, monkeypatch):
+    calls = []
+
+    def empty_then_backup(client, model, messages, temperature):
+        calls.append(model)
+        if model == "primary":
+            return iter([_chunk(None), _chunk("")])
+        return iter([_chunk("backup output")])
+
+    monkeypatch.setattr(provider, "_create_stream_with_retry", empty_then_backup)
+
+    assert list(provider.chat_stream(
+        [{"role": "user", "content": "固定脱敏测试问题"}]
+    )) == ["backup output"]
+    assert calls == ["primary", "backup"]
+
+
+def test_stream_raises_when_all_models_end_without_text(provider, monkeypatch):
+    monkeypatch.setattr(
+        provider,
+        "_create_stream_with_retry",
+        lambda *args, **kwargs: iter([_chunk(None), _chunk("")]),
+    )
+
+    with pytest.raises(LLMUnavailableError) as exc_info:
+        list(provider.chat_stream([{"role": "user", "content": "固定脱敏测试问题"}]))
+
+    assert exc_info.value.attempted_models == ["primary", "backup"]
+    assert all("empty stream response" in error for error in exc_info.value.errors)
+
+
+def test_stream_exposes_fallback_metadata_without_changing_string_yields(provider, monkeypatch):
+    def primary_empty_then_backup(client, model, messages, temperature):
+        if model == "primary":
+            return iter(())
+        return iter([_chunk("backup output")])
+
+    monkeypatch.setattr(provider, "_create_stream_with_retry", primary_empty_then_backup)
+
+    stream = provider.chat_stream([{"role": "user", "content": "固定脱敏测试问题"}])
+    assert list(stream) == ["backup output"]
+    assert stream.metadata.degraded is True
+    assert stream.metadata.model == "backup"
+    assert stream.metadata.attempted_models == ["primary", "backup"]
