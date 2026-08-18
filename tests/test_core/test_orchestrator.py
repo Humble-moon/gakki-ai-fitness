@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from src.core.orchestrator import Orchestrator
 from src.models.schemas import UserProfileInput

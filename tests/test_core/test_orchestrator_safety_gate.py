@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from src.core.orchestrator import Orchestrator
 
 
@@ -97,8 +99,26 @@ def test_schema_invalid_result_is_fail_closed():
     orch.cache.assert_empty(); orch.conversation.assert_empty(); orch.long_term.assert_empty()
 
 
-def test_stream_writer_degraded_marker_is_consumed_by_final_gate():
+def test_degraded_fact_check_including_rewrite_cannot_authorize_persistence():
     orch = make_orch()
-    result = orch._finalize_result(dict(valid_plan(), _degraded=True), [safe_check()], 0,
-                                   provider_degraded=True)
+    orch.planner = SimpleNamespace(plan=lambda *args, **kwargs: {"skill_config": {}})
+    orch.retriever = SimpleNamespace(retrieve=lambda plan: {"exercises": []})
+    orch.bus = SimpleNamespace(send=lambda task: None)
+    orch.writer = SimpleNamespace(
+        write_plan=lambda *args: valid_plan(),
+        rewrite_plan=lambda *args: valid_plan(),
+    )
+    checks = iter([
+        safe_check(is_safe=False, issues=[{"issue": "rewrite"}], _degraded=True),
+        safe_check(),
+    ])
+    orch.fact_checker = SimpleNamespace(check=lambda *args: next(checks))
+    persisted = []
+    orch._persist_if_safe = lambda *args, **kwargs: persisted.append(args[2].get("_persistence_allowed"))
+    profile = SimpleNamespace(model_dump=lambda: {"goal": "增肌"}, goal="增肌")
+
+    result = orch.generate_plan(profile, "q")
+
+    assert result["rewrite_count"] == 1
     assert result["_persistence_allowed"] is False
+    assert persisted == [False]

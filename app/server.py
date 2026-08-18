@@ -169,16 +169,17 @@ def _stream_events(generator):
 
     try:
         for event, data in generator:
+            if terminal:
+                break
             if event in _TERMINAL_EVENTS:
-                if terminal:
-                    continue
                 terminal = True
             yield emit(event, data)
+            if terminal:
+                break
         if not terminal:
             yield emit("done", {"success": True})
     except GeneratorExit:
-        if not terminal:
-            yield emit("cancelled", {"message": "请求已取消"})
+        raise
     except (ConnectionError, LLMUnavailableError):
         if not terminal:
             yield emit("error", {"code": "DEPENDENCY_UNAVAILABLE", "message": "演示依赖暂时不可用"})
@@ -186,6 +187,10 @@ def _stream_events(generator):
         logger.exception("SSE stream failed")
         if not terminal:
             yield emit("error", {"code": "STREAM_FAILED", "message": "流式请求暂时失败，请稍后重试"})
+    finally:
+        close = getattr(generator, "close", None)
+        if callable(close):
+            close()
 
 
 # ============================================================
@@ -230,7 +235,7 @@ def generate_plan(req: PlanRequest):
     )
     return StreamingResponse(
         _stream_events(orch.generate_plan_stream(profile, req.query, req.session_id)),
-        media_type="text/event-stream"
+        media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
 
@@ -269,7 +274,7 @@ def analyze_exercise(req: AnalysisRequest):
     return StreamingResponse(
         _stream_events(orch.analyze_exercise_stream(
             req.exercise_name, req.user_description, profile, req.session_id)),
-        media_type="text/event-stream"
+        media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
 
@@ -309,7 +314,7 @@ def ask_question(req: QuestionRequest):
     )
     return StreamingResponse(
         _stream_events(orch.answer_question_stream(req.question, profile, req.session_id)),
-        media_type="text/event-stream"
+        media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
 

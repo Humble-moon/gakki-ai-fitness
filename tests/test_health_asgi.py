@@ -47,9 +47,61 @@ async def test_ready_health_reports_dependency_failure(client, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_sse_asgi_uses_fake_orchestrator_without_external_services(client):
-    response = await client.post("/api/generate-plan", json={"session_id": "offline"})
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/api/generate-plan", {"session_id": "offline"}),
+        ("/api/analyze-exercise", {"exercise_name": "深蹲"}),
+        ("/api/ask-question", {"question": "怎么练？"}),
+    ],
+)
+async def test_all_sse_routes_apply_stream_headers(client, path, payload):
+    from app.server import STREAM_HEADERS
+
+    response = await client.post(path, json=payload)
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/event-stream")
-    assert response.headers["cache-control"] == "no-cache"
-    assert '"event": "done"' in response.text
+    for name, value in STREAM_HEADERS.items():
+        assert response.headers[name] == value
+
+
+def test_stream_stops_and_closes_upstream_after_first_terminal():
+    from app.server import _stream_events
+
+    class Source:
+        def __init__(self):
+            self.closed = False
+
+        def __iter__(self):
+            yield "done", {"success": True}
+            yield "stage", "must not escape"
+
+        def close(self):
+            self.closed = True
+
+    source = Source()
+    frames = list(_stream_events(source))
+    assert len(frames) == 1
+    assert '"event": "done"' in frames[0]
+    assert "must not escape" not in frames[0]
+    assert source.closed is True
+
+
+def test_stream_generator_exit_closes_upstream_without_yielding():
+    from app.server import _stream_events
+
+    class Source:
+        def __init__(self):
+            self.closed = False
+
+        def __iter__(self):
+            yield "stage", "started"
+            yield "stage", "later"
+
+        def close(self):
+            self.closed = True
+
+    source = Source()
+    stream = _stream_events(source)
+    assert '"event": "stage"' in next(stream)
+    stream.close()
+    assert source.closed is True

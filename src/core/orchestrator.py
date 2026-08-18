@@ -174,6 +174,7 @@ class Orchestrator:
         all_checks = []
 
         check = self.fact_checker.check(result, profile_dict)
+        provider_degraded = provider_degraded or bool(check.get("_degraded"))
         all_checks.append(check)
 
         while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < MAX_RETRIES:
@@ -188,6 +189,7 @@ class Orchestrator:
             provider_degraded = provider_degraded or bool(result.get("_degraded"))
             rewrite_count += 1
             check = self.fact_checker.check(result, profile_dict)
+            provider_degraded = provider_degraded or bool(check.get("_degraded"))
             all_checks.append(check)
 
         result = self._finalize_result(result, all_checks, rewrite_count,
@@ -265,6 +267,7 @@ class Orchestrator:
         rewrite_count = 0
         all_checks = []
         check = self.fact_checker.check(result, profile_dict)
+        provider_degraded = provider_degraded or bool(check.get("_degraded"))
         all_checks.append(check)
         yield ("factcheck_done", {"safe": check.get("is_safe", True), "issues": len(check.get("issues", [])), "confidence": check.get("confidence", 0)})
         while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < 3:
@@ -273,6 +276,7 @@ class Orchestrator:
             provider_degraded = provider_degraded or bool(result.get("_degraded"))
             rewrite_count += 1
             check = self.fact_checker.check(result, profile_dict)
+            provider_degraded = provider_degraded or bool(check.get("_degraded"))
             all_checks.append(check)
             yield ("factcheck_done", {"safe": check.get("is_safe", True), "issues": len(check.get("issues", [])), "confidence": check.get("confidence", 0)})
         result = self._finalize_result(result, all_checks, rewrite_count,

@@ -96,6 +96,7 @@ class SemanticCache:
             for key_bytes in keys:
                 if scanned >= _MAX_SCAN:
                     break
+                scanned += 1
                 key = key_bytes.decode("utf-8") if isinstance(key_bytes, bytes) else key_bytes
                 try:
                     data = self.redis.get(key)
@@ -118,7 +119,6 @@ class SemanticCache:
                     sim = float(np.dot(query_vec, candidate) / denominator)
                 except (TypeError, ValueError, FloatingPointError):
                     continue
-                scanned += 1
                 if sim > best_sim:
                     best_sim = sim
                     best_result = entry["result"]
