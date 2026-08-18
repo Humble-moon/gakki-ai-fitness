@@ -153,7 +153,7 @@ class LLMUnavailableError(RuntimeError):
 
 
 class LLMProvider:
-    """多模型 LLM 调用提供者 — 内置重试 + 降级链 + 兜底。
+    """多模型 LLM 调用提供者 — 内置重试 + 降级链 + 明确失败语义。
 
     核心设计：
       - self._clients: {别名: OpenAI Client}，每个 API 端点一个 client
@@ -161,7 +161,7 @@ class LLMProvider:
       - self._active:  当前活跃的模型别名（默认 "default"）
       - 重试：指数退避 3 次，仅对网络/限流类异常重试
       - 降级：沿 LLM_FALLBACK_CHAIN 依次尝试
-      - 兜底：所有模型都失败时返回降级响应而非抛异常
+      - 全部失败：抛出 LLMUnavailableError，不返回伪成功内容
     """
 
     def __init__(self):
@@ -291,13 +291,13 @@ class LLMProvider:
 
     def chat(self, messages: list, temperature: float = 0.3,
              model: str = None) -> LLMResponse:
-        """非流式对话调用，含重试 + 降级链 + 兜底。
+        """非流式对话调用，含重试 + 降级链 + 明确失败语义。
 
         执行流程：
           1. 解析主模型
           2. 构建降级链（主模型 + 备用模型）
           3. 依次尝试降级链中的每个模型
-          4. 全部失败 → 返回降级响应（degraded=True），不抛异常
+          4. 全部失败 → 抛出 LLMUnavailableError，不返回伪成功响应
 
         Args:
             messages: OpenAI 格式消息列表
