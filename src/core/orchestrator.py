@@ -34,6 +34,7 @@ from src.skills.registry import SkillRegistry
 from src.a2a.messaging import MessageBus, Task, Artifact
 from src.models.schemas import UserProfileInput
 from src.storage.document_store import DocumentStore
+from src.agents.output_validation import validate_training_plan, OutputValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +164,11 @@ class Orchestrator:
         result["confidence"] = min(c.get("confidence", 0) for c in all_checks)
         result["rewrite_count"] = rewrite_count
 
-        # 6. 写入缓存并返回 —— 下次相同/相似输入可直接命中，减少 LLM 调用
-        self.cache.set(profile_dict, query, result)
+        # 6. Final safety gate and persistence.
+        result = self._finalize_result(
+            result, all_checks, provider_degraded=bool(result.pop("_degraded", False))
+        )
+        self._persist_if_safe(profile_dict, query, result)
         task.complete()
         return result
 
@@ -188,35 +192,47 @@ class Orchestrator:
                     ex["name"] = ex.pop("movement")
         return result
 
+    def _finalize_result(self, result: dict, checks: list[dict], *, provider_degraded: bool = False) -> dict:
+        """Attach review metadata and enforce the final fail-closed safety gate."""
+        if not isinstance(result, dict):
+            raise OutputValidationError("LLM result must be an object")
+        all_issues = []
+        seen = set()
+        for check in checks:
+            for issue in check.get("issues") or []:
+                key = issue.get("issue", str(issue)) if isinstance(issue, dict) else str(issue)
+                if key not in seen:
+                    seen.add(key)
+                    all_issues.append(key)
+        result["warnings"] = all_issues
+        result["requires_review"] = any(c.get("requires_human_review") is True for c in checks)
+        result["confidence"] = min((c.get("confidence", 0) for c in checks), default=0)
+        result["rewrite_count"] = max(0, len(checks) - 1)
+        unsafe = provider_degraded or any(
+            c.get("is_safe") is not True or bool(c.get("issues"))
+            or c.get("requires_human_review") is True for c in checks
+        )
+        validate_training_plan(result)
+        if unsafe:
+            raise OutputValidationError("result failed safety gate; nothing was persisted")
+        return result
+
+    def _persist_if_safe(self, profile: dict, query: str, result: dict, *,
+                         session_id: str | None = None, pseudo_uid: int | None = None) -> None:
+        """Persist only a result that has already passed the final safety gate."""
+        self.cache.set(profile, query, result)
+        if session_id:
+            summary = self._summarize_plan_for_context(result)
+            self.conversation.set_plan_state(session_id, summary)
+            self.conversation.add_turn(session_id, "assistant", summary[:500])
+        if pseudo_uid is not None:
+            self.long_term.save_preference(pseudo_uid, "profile", profile)
+            self.long_term.save_preference(pseudo_uid, "goal", profile.get("goal", ""))
+            self.long_term.save_preference(pseudo_uid, "equipment", profile.get("available_equipment", []))
+
     def generate_plan_stream(self, profile: UserProfileInput, query: str = "",
                              session_id: str = None):
-        """【流式版】逐阶段产出 (stage, data) 元组，供前端通过 SSE 实时更新 UI。
-
-        输入：
-            profile: UserProfileInput — 用户画像
-            query: str — 用户补充描述
-            session_id: str | None — 会话 ID，非 None 时启用多轮对话
-        产出（Generator）：
-            Generator[(str, any)] — 每个阶段产出一个或多个元组：
-                - ("stage", str)          → 当前阶段描述，前端显示为进度提示
-                - ("advice_chunk", str)   → 教练口头建议的流式文本片段
-                - ("advice_done", str)    → 口头建议完成，附完整文本
-                - ("planner_done", dict)  → 规划阶段完成，附技能名和子任务列表
-                - ("retriever_done", dict)→ 检索完成，附动作数量和名称预览
-                - ("writer_chunk", str)   → 计划生成的流式文本片段
-                - ("writer_done_raw", str)→ Writer 原始输出全文
-                - ("factcheck_done", dict)→ 安全检查完成，附安全状态和置信度
-                - ("cache_hit", dict)     → 缓存命中，直接返回完整结果
-                - ("done", dict)          → 最终完成，附完整训练计划结果
-
-        与同步版的区别：
-            1. 新增口头建议阶段 —— 在正式流水线前给出教练式的初步分析，
-               让用户在等待时不感到空白，提升体验
-            2. 每个阶段通过 yield 实时推送进度，前端可渐进式渲染
-            3. Writer 使用 chat_stream 而非 chat_with_json_mode，
-               实现逐 token 输出，让用户看到计划"被写出来"的过程
-        """
-        profile_dict = profile.model_dump()
+        """Stream a plan and persist only after final validation."""
 
         # === 多轮对话：注入历史上下文 ===
         conv_context = ""
@@ -338,22 +354,15 @@ class Orchestrator:
         result["confidence"] = min(c.get("confidence", 0) for c in all_checks)
         result["rewrite_count"] = rewrite_count
 
-        # === 多轮对话：保存计划状态 + 助手回复到对话历史 ===
-        if session_id:
-            plan_summary = self._summarize_plan_for_context(result)
-            self.conversation.set_plan_state(session_id, plan_summary)
-            assistant_preview = self._summarize_plan_for_context(result)
-            self.conversation.add_turn(session_id, "assistant", assistant_preview[:500])
+        result = self._finalize_result(
+            result, all_checks,
+            provider_degraded=bool(getattr(getattr(self.writer, "llm", None), "stream_metadata", None)
+                                   and getattr(self.writer.llm.stream_metadata, "degraded", False)),
+        )
 
-        # 6. 写入缓存（多轮对话跳过缓存）
-        if not session_id:
-            self.cache.set(profile_dict, query, result)
-
-        # === 长期记忆：保存用户画像，跨会话复用 ===
-        self.long_term.save_preference(pseudo_uid, "profile", profile_dict)
-        self.long_term.save_preference(pseudo_uid, "goal", profile_dict.get("goal", ""))
-        self.long_term.save_preference(pseudo_uid, "equipment", profile_dict.get("available_equipment", []))
-
+        # Persist conversation/cache/long-term state only after the final gate.
+        self._persist_if_safe(profile_dict, query, result,
+                              session_id=session_id, pseudo_uid=pseudo_uid)
         yield ("done", result)
 
     def _build_advice_prompt(self, profile: dict, query: str) -> str:
