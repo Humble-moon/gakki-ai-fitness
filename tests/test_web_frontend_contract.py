@@ -232,7 +232,19 @@ def test_no_result_root_destructive_clear():
     assert "resultArea.innerHTML = ''" not in HTML
 
 
-def test_plan_desktop_header_and_rows_share_column_grid():
+def test_plan_desktop_cards_stretch_to_equal_row_height():
+    grid = HTML[HTML.index(".plan-result-grid {"):HTML.index(".plan-day-column {", HTML.index(".plan-result-grid {"))]
+    card = HTML[HTML.index(".plan-day-column {"):HTML.index(".plan-day-column::before", HTML.index(".plan-day-column {"))]
+    body = HTML[HTML.index(".plan-day-body {"):HTML.index(".plan-ex-heading,", HTML.index(".plan-day-body {"))]
+    assert "align-items: stretch" in grid
+    assert "display: flex" in card and "flex-direction: column" in card
+    assert "height: 100%" in card
+    assert "flex: 1" in body
+    assert "@media (max-width: 767px)" in HTML
+    mobile = HTML[HTML.index("@media (max-width: 767px)"):HTML.index("@media (min-width: 768px)", HTML.index("@media (max-width: 767px)"))]
+    assert ".plan-day-column { height: auto; }" in mobile
+
+
     shared_grid = "--plan-columns: minmax(0, 2.4fr) minmax(56px, .7fr) minmax(72px, .9fr) minmax(92px, 1.1fr);"
     assert shared_grid in HTML
     assert ".plan-ex-heading," in HTML
