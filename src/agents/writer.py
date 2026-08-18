@@ -58,6 +58,7 @@ class WriterAgent:
         plan_json = self.llm.chat_with_json_mode(messages, model="reasoner")
         plan_json["plan_id"] = str(uuid.uuid4())[:8]
         plan_json["user_id"] = profile.get("id", 0)
+        plan_json.setdefault("weeks", plan_config.get("weeks"))
         return plan_json
 
     def write_plan_stream(self, retrieved: dict, profile: dict, plan_config: dict,
@@ -110,6 +111,7 @@ class WriterAgent:
             result = {"raw": full_text}
         result["plan_id"] = str(uuid.uuid4())[:8]
         result["user_id"] = profile.get("id", 0)
+        result.setdefault("weeks", plan_config.get("weeks"))
         result["_degraded"] = provider_degraded
         yield ("done", result)
 
@@ -161,8 +163,8 @@ class WriterAgent:
 1. 只改动有问题的地方，其他部分原样保留
 2. 如果某个动作有安全风险，从可用动作库里找安全的替代动作
 3. 如果用户的伤病涉及某些部位，完全避开相关动作
-4. 修正后的计划必须仍然是 {profile.get('days_per_week', original_plan.get('days_per_week', 4))} 天
-5. 输出完整的修正后计划 JSON（不是只输出修改的部分）
+4. 修正后的计划必须仍然是 {profile.get('days_per_week', original_plan.get('sessions_per_week'))} 天
+5. 输出完整的修正后计划 JSON（不是只输出修改的部分），并保留原计划的 weeks 和 sessions_per_week；未知的 weeks 保持 null，不得猜测
 
 目标：{goal}
 用户画像：{profile}
@@ -175,6 +177,11 @@ class WriterAgent:
         result = self.llm.chat_with_json_mode(messages, model="reasoner")
         result["plan_id"] = original_plan.get("plan_id", str(uuid.uuid4())[:8])
         result["user_id"] = profile.get("id", 0)
+        result.setdefault("weeks", original_plan.get("weeks"))
+        result.setdefault(
+            "sessions_per_week",
+            profile.get("days_per_week", original_plan.get("sessions_per_week")),
+        )
         return result
 
     def write_analysis(self, exercise_name: str, user_desc: str,
