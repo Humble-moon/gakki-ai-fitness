@@ -93,7 +93,7 @@ def test_tool_registry_list_tools(mock_graph):
     from src.mcp.tool_registry import ToolRegistry
     registry = ToolRegistry()
     tools = registry.list_tools()
-    assert len(tools) == 7
+    assert len(tools) == 9
     tool_names = [t["name"] for t in tools]
     assert "search_by_muscle" in tool_names
     assert "graph_multi_hop" in tool_names

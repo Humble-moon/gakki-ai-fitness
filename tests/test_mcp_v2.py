@@ -121,7 +121,7 @@ class TestToolRegistryV2:
         from src.mcp.tool_registry import ToolRegistry
         registry = ToolRegistry()
         tools = registry.list_tools()
-        assert len(tools) == 7
+        assert len(tools) == 9
 
     def test_list_tools_has_fastmcp_schemas(self):
         """FastMCP 工具应该有完整的 JSON Schema（从 type hints 自动生成）。"""

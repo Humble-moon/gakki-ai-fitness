@@ -54,7 +54,10 @@ from pathlib import Path
 from typing import Any
 
 from src.mcp.exercise_server import (
+    EXERCISE_LIBRARY,
     ExerciseMCPServer,
+    McpToolError,
+    exercise_mcp,
     get_exercise_detail,
     list_all_exercises,
     search_by_difficulty,
@@ -201,6 +204,12 @@ class ToolRegistry:
             ),
             "get_exercise_detail": lambda p: self.exercise_mcp.call_tool(
                 "get_exercise_detail", p
+            ),
+            "search_exercises": lambda p: self.exercise_mcp.call_tool(
+                "search_exercises", p
+            ),
+            "list_all_exercises": lambda p: self.exercise_mcp.call_tool(
+                "list_all_exercises", p
             ),
 
             # --- 知识图谱工具 ---
@@ -426,7 +435,6 @@ class ToolRegistry:
         ])
 
         # 动态列出每个动作的标准规范资源
-        from src.mcp.exercise_server import EXERCISE_LIBRARY
         for ex in EXERCISE_LIBRARY:
             resources.append({
                 "uri": f"exercise://standards/{ex['name']}",
@@ -474,21 +482,12 @@ class ToolRegistry:
             然后对相关资源调用 read_resource(uri) 精确获取内容 →
             将内容作为上下文注入 LLM prompt。
         """
-        # 委托给 exercise_server 的 FastMCP Resource 处理
+        # 委托给同步兼容层的 Resource 处理。
         if uri.startswith("exercise://"):
-            import asyncio as _asyncio
             try:
-                result = _asyncio.run(exercise_mcp.read_resource(uri))
-                # FastMCP 返回 list[ReadResourceContents]，提取文本内容
-                if isinstance(result, list):
-                    texts = []
-                    for item in result:
-                        if hasattr(item, "content"):
-                            texts.append(item.content)
-                        elif isinstance(item, str):
-                            texts.append(item)
-                    return "\n".join(texts)
-                return str(result)
+                return exercise_mcp.read_resource(uri)
+            except McpToolError:
+                raise
             except Exception as e:
                 raise McpToolError(
                     code=-32601,

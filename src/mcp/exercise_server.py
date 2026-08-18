@@ -15,6 +15,8 @@ Run standalone:  python run_mcp_server.py
 
 import json
 import logging
+from collections import Counter
+from dataclasses import dataclass
 from typing import Optional
 
 from src.storage.pg import PGClient
@@ -51,6 +53,43 @@ FALLBACK_EXERCISES = [
         "type": "复合",
         "description": "正握单杠，比肩稍宽，下拉至下巴过杠，缓慢下放。",
         "common_mistakes": ["摆动借力", "只用手臂拉"],
+    },
+]
+
+# Kept as a public alias for callers that enumerate offline resource metadata.
+EXERCISE_LIBRARY = FALLBACK_EXERCISES
+
+EXERCISE_TOOL_SCHEMAS = [
+    {
+        "name": "search_by_muscle",
+        "description": "按目标肌群检索训练动作，如'胸大肌'、'臀大肌'。",
+        "inputSchema": {"type": "object", "properties": {
+            "muscle": {"type": "string", "description": "目标肌群名称"},
+            "limit": {"type": "integer", "default": 10},
+        }, "required": ["muscle"]},
+    },
+    {
+        "name": "search_by_equipment",
+        "description": "按器械检索训练动作，如'哑铃'、'杠铃'、'自重'、'壶铃'。",
+        "inputSchema": {"type": "object", "properties": {
+            "equipment": {"type": "string", "description": "器械名称"},
+            "limit": {"type": "integer", "default": 10},
+        }, "required": ["equipment"]},
+    },
+    {
+        "name": "search_by_difficulty",
+        "description": "按难度检索训练动作，如'初级'、'中级'、'高级'。",
+        "inputSchema": {"type": "object", "properties": {
+            "difficulty": {"type": "string", "description": "难度等级"},
+            "limit": {"type": "integer", "default": 10},
+        }, "required": ["difficulty"]},
+    },
+    {
+        "name": "get_exercise_detail",
+        "description": "按名称获取单个动作的详细信息。",
+        "inputSchema": {"type": "object", "properties": {
+            "name": {"type": "string", "description": "动作名称"},
+        }, "required": ["name"]},
     },
 ]
 
@@ -204,12 +243,26 @@ _query = _ExerciseQuery()
 # 兼容层 — tool_registry.py 依赖的 McpToolError + ExerciseMCPServer
 # ---------------------------------------------------------------------------
 
+@dataclass
 class McpToolError(Exception):
     """MCP 工具调用错误（标准 JSON-RPC 错误码）。"""
-    def __init__(self, code: int, message: str):
-        self.code = code
-        self.message = message
-        super().__init__(message)
+
+    code: int
+    message: str
+    tool_name: str = ""
+    details: str = ""
+
+    def __str__(self) -> str:
+        return f"[{self.code}] {self.message} — tool={self.tool_name}: {self.details}"
+
+    def to_dict(self) -> dict:
+        return {
+            "error": {
+                "code": self.code,
+                "message": self.message,
+                "data": {"tool_name": self.tool_name, "details": self.details},
+            }
+        }
 
 
 class ExerciseMCPServer:
@@ -218,6 +271,10 @@ class ExerciseMCPServer:
     保留此类是为了 tool_registry.py 的向后兼容。
     tool_registry 依赖 call_tool() / read_resource() 接口。
     """
+
+    def list_tools(self) -> list[dict]:
+        """列出四个旧版兼容工具及其完整 JSON Schema。"""
+        return EXERCISE_TOOL_SCHEMAS.copy()
 
     def call_tool(self, tool_name: str, params: dict) -> list[dict]:
         """调用 MCP 工具（兼容旧接口）。"""
@@ -230,21 +287,83 @@ class ExerciseMCPServer:
             "list_all_exercises": lambda p: _query.list_all(limit=p.get("limit", 50)),
         }
         if tool_name not in tools:
-            raise McpToolError(-32601, f"Unknown tool: {tool_name}")
-        result = tools[tool_name](params)
-        if result is None:
-            return []
-        return result if isinstance(result, list) else [result]
+            raise McpToolError(
+                code=-32601,
+                message="Method not found",
+                tool_name=tool_name,
+                details=f"Unknown tool: {tool_name}",
+            )
+        try:
+            result = tools[tool_name](params)
+            if tool_name == "get_exercise_detail" and result is None:
+                raise ValueError(f"未找到动作 '{params.get('name', '')}'")
+            return result if isinstance(result, list) else [result]
+        except McpToolError:
+            raise
+        except ValueError as exc:
+            raise McpToolError(
+                code=-32602,
+                message="Invalid params",
+                tool_name=tool_name,
+                details=str(exc),
+            ) from exc
+        except Exception as exc:
+            raise McpToolError(
+                code=-32603,
+                message="Internal error",
+                tool_name=tool_name,
+                details=str(exc),
+            ) from exc
 
     def read_resource(self, uri: str) -> str:
-        """读取 MCP 资源（兼容旧接口）。"""
+        """读取旧版 exercise:// Markdown 资源及新版 exercises:// JSON。"""
+        if uri == "exercise://library":
+            by_muscle: dict[str, list[dict]] = {}
+            for exercise in EXERCISE_LIBRARY:
+                for muscle in exercise["target_muscles"]:
+                    by_muscle.setdefault(muscle, []).append(exercise)
+            lines = [f"# 动作库索引 (共 {len(EXERCISE_LIBRARY)} 个动作)", ""]
+            for muscle, exercises in sorted(by_muscle.items()):
+                lines.append(f"## {muscle}")
+                lines.extend(
+                    f"  - {exercise['name']} ({exercise['equipment']}, {exercise['difficulty']})"
+                    for exercise in exercises
+                )
+                lines.append("")
+            return "\n".join(lines)
+        if uri == "exercise://muscles":
+            counts = Counter(
+                muscle
+                for exercise in EXERCISE_LIBRARY
+                for muscle in exercise["target_muscles"]
+            )
+            return "\n".join(
+                ["# 肌群-动作覆盖", ""]
+                + [f"  - {muscle}: {count} 个动作" for muscle, count in counts.most_common()]
+            )
+        if uri.startswith("exercise://standards/"):
+            name = uri.removeprefix("exercise://standards/")
+            exercise = next((ex for ex in EXERCISE_LIBRARY if ex["name"] == name), None)
+            if exercise is None:
+                raise McpToolError(-32601, "Resource not found", "read_resource", uri)
+            mistakes = "\n".join(f"  - {item}" for item in exercise["common_mistakes"])
+            return (
+                f"=== {exercise['name']} ===\n"
+                f"类型: {exercise['type']} | 难度: {exercise['difficulty']} | 器械: {exercise['equipment']}\n"
+                f"目标肌群: {', '.join(exercise['target_muscles'])}\n\n"
+                f"标准做法:\n{exercise['description']}\n\n常见错误:\n{mistakes}"
+            )
         if uri == "exercises://all":
             return json.dumps(_query.list_all(limit=200), ensure_ascii=False)
         if uri.startswith("exercises://"):
-            name = uri.split("://")[1]
+            name = uri.split("://", 1)[1]
             detail = _query.get_by_name(name)
             return json.dumps(detail, ensure_ascii=False) if detail else "{}"
-        raise McpToolError(-32602, f"Unknown resource: {uri}")
+        raise McpToolError(-32601, "Resource not found", "read_resource", uri)
+
+
+# Resource-capable compatibility export used by ToolRegistry.
+exercise_mcp = ExerciseMCPServer()
 
 # ---------------------------------------------------------------------------
 # MCP Tools — 由 run_mcp_server.py 注册
