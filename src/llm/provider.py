@@ -43,9 +43,10 @@
 
 from __future__ import annotations
 import logging
+import re
 import time
 from dataclasses import dataclass, field
-from typing import Generator
+from typing import Generator, Iterator
 
 from openai import OpenAI, APIStatusError, APIConnectionError, RateLimitError, APITimeoutError
 
@@ -61,9 +62,22 @@ logger = logging.getLogger(__name__)
 _RETRYABLE = (APIConnectionError, RateLimitError, APITimeoutError,
               TimeoutError, ConnectionError, OSError)
 
+_ERROR_DETAIL_LIMIT = 200
+_SECRET_PATTERNS = (
+    re.compile(r"(?i)\bBearer\s+[^\s,;]+"),
+    re.compile(r"(?i)\b(Authorization|api[_-]?key|credential|(?:session[_-]?)?cookie)\b\s*[:=]\s*[^\s,;]+"),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
+)
+
+
 def _error_summary(error: Exception) -> str:
-    """Return a bounded error summary suitable for diagnostics."""
-    detail = str(error).replace("\n", " ")[:200]
+    """Return a single-line, redacted, strictly bounded error summary."""
+    detail = " ".join(str(error).splitlines())
+    for pattern in _SECRET_PATTERNS:
+        detail = pattern.sub(lambda match: (
+            f"{match.group(1)}=[REDACTED]" if match.lastindex else "[REDACTED]"
+        ), detail)
+    detail = detail[:_ERROR_DETAIL_LIMIT]
     return f"{type(error).__name__}: {detail}"
 
 
@@ -141,6 +155,28 @@ class LLMResponse:
     degraded: bool = False
     # 记录实际经过的模型链路，方便排查
     attempted_models: list[str] = field(default_factory=list)
+
+
+@dataclass
+class LLMStreamMetadata:
+    """Caller-visible status for one streaming call, updated during iteration."""
+    degraded: bool = False
+    model: str | None = None
+    attempted_models: list[str] = field(default_factory=list)
+
+
+class LLMStream(Iterator[str]):
+    """String iterator with metadata that remains compatible with existing callers."""
+
+    def __init__(self, iterator: Iterator[str], metadata: LLMStreamMetadata):
+        self._iterator = iterator
+        self.metadata = metadata
+
+    def __iter__(self) -> "LLMStream":
+        return self
+
+    def __next__(self) -> str:
+        return next(self._iterator)
 
 
 class LLMUnavailableError(RuntimeError):
@@ -274,9 +310,10 @@ class LLMProvider:
             except _RETRYABLE as e:
                 last_error = e
                 wait = _BACKOFF_BASE ** attempt
+                summary = _error_summary(e)
                 logger.warning(
                     f"[Retry] {model_name} attempt {attempt + 1}/{_MAX_RETRIES} "
-                    f"failed: {type(e).__name__}: {e} | waiting {wait}s"
+                    f"failed: {summary} | waiting {wait}s"
                 )
                 time.sleep(wait)
             # 非可重试异常（如 401 认证失败、400 参数错误）直接抛出
@@ -317,7 +354,7 @@ class LLMProvider:
             if i > 0:
                 logger.warning(
                     f"[Fallback] Primary model failed, switching to {mn} "
-                    f"(alias={alias}) | errors so far: {[str(e) for e in errors]}"
+                    f"(alias={alias}) | errors so far: {errors}"
                 )
 
             try:
@@ -331,8 +368,9 @@ class LLMProvider:
                 self._breaker.record_success(alias)
                 return resp
             except Exception as e:
-                errors.append(f"{mn}: {_error_summary(e)}")
-                logger.error(f"[LLM] {mn} failed: {type(e).__name__}: {e}")
+                summary = _error_summary(e)
+                errors.append(f"{mn}: {summary}")
+                logger.error(f"[LLM] {mn} failed: {summary}")
                 self._breaker.record_failure(alias)
                 continue
 
@@ -352,72 +390,58 @@ class LLMProvider:
     # ------------------------------------------------------------------
 
     def chat_stream(self, messages: list, temperature: float = 0.3,
-                    model: str = None) -> Generator[str, None, None]:
-        """流式对话调用，含重试 + 降级链。
+                    model: str = None) -> LLMStream:
+        """流式对话调用，yield str while exposing per-call metadata."""
+        metadata = LLMStreamMetadata()
 
-        注意：流式场景下，如果已经开始输出 token 后中断，无法回退重来。
-        因此重试/降级只作用于连接建立阶段（create() 调用），流式输出
-        过程中的异常直接向上传播，由 Orchestrator 层处理。
+        def generate() -> Iterator[str]:
+            client, primary_alias, primary_model_name = self._resolve(model)
+            chain = self._build_fallback_chain(primary_alias)
+            errors = []
 
-        Args:
-            messages: OpenAI 格式消息列表
-            temperature: 生成随机性
-            model: 模型别名 / 完整模型名 / None
-        """
-        client, primary_alias, primary_model_name = self._resolve(model)
-        chain = self._build_fallback_chain(primary_alias)
-        attempted = []
-        errors = []
+            for i, alias in enumerate(chain):
+                cl = self._clients[alias]
+                mn = self._models[alias]
+                metadata.attempted_models.append(mn)
+                metadata.model = mn
+                if i > 0:
+                    logger.warning(f"[Fallback:stream] Switching to {mn} after errors: {errors}")
 
-        for i, alias in enumerate(chain):
-            cl = self._clients[alias]
-            mn = self._models[alias]
-            attempted.append(mn)
+                started_output = False
+                try:
+                    stream = self._create_stream_with_retry(cl, mn, messages, temperature)
+                    total_content = []
+                    for chunk in stream:
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            started_output = True
+                            total_content.append(delta.content)
+                            yield delta.content
+                    if not started_output:
+                        raise RuntimeError("empty stream response")
 
-            if i > 0:
-                logger.warning(
-                    f"[Fallback:stream] Switching to {mn} after errors: "
-                    f"{[str(e) for e in errors]}"
-                )
+                    output_text = "".join(total_content)
+                    cost_tracker.record(mn, max(1, len(output_text) // 2),
+                                        extra="stream:fallback" if i > 0 else "stream")
+                    self._breaker.record_success(alias)
+                    metadata.degraded = i > 0
+                    return
+                except Exception as e:
+                    if started_output:
+                        raise
+                    summary = _error_summary(e)
+                    errors.append(f"{mn}: {summary}")
+                    logger.error(f"[LLM:stream] {mn} failed: {summary}")
+                    self._breaker.record_failure(alias)
 
-            started_output = False
-            try:
-                # 连接建立阶段含重试
-                stream = self._create_stream_with_retry(cl, mn, messages, temperature)
-                total_content = []
-                for chunk in stream:
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        started_output = True
-                        total_content.append(delta.content)
-                        yield delta.content
+            logger.critical(f"[LLM:stream] All models exhausted. Chain: {chain}, errors: {errors}")
+            raise LLMUnavailableError(
+                "所有配置的 LLM provider 均不可用",
+                attempted_models=metadata.attempted_models,
+                errors=errors,
+            )
 
-                # 流式成功完成
-                output_text = "".join(total_content)
-                estimated_tokens = max(1, len(output_text) // 2)
-                tag = "stream:fallback" if i > 0 else "stream"
-                cost_tracker.record(mn, estimated_tokens, extra=tag)
-                self._breaker.record_success(alias)
-                return
-
-            except Exception as e:
-                if started_output:
-                    raise
-                errors.append(f"{mn}: {_error_summary(e)}")
-                logger.error(f"[LLM:stream] {mn} failed: {type(e).__name__}: {e}")
-                self._breaker.record_failure(alias)
-                continue
-
-        # 所有模型都失败了 → 抛出明确的不可用异常，不生成伪造 token
-        logger.critical(
-            f"[LLM:stream] All models exhausted. Chain: {chain}, "
-            f"errors: {errors}"
-        )
-        raise LLMUnavailableError(
-            "所有配置的 LLM provider 均不可用",
-            attempted_models=attempted,
-            errors=errors,
-        )
+        return LLMStream(generate(), metadata)
 
     def _create_stream_with_retry(self, client: OpenAI, model_name: str,
                                   messages: list, temperature: float):
@@ -436,7 +460,7 @@ class LLMProvider:
                 wait = _BACKOFF_BASE ** attempt
                 logger.warning(
                     f"[Retry:stream] {model_name} attempt {attempt + 1}/{_MAX_RETRIES} "
-                    f"failed: {type(e).__name__} | waiting {wait}s"
+                    f"failed: {_error_summary(e)} | waiting {wait}s"
                 )
                 time.sleep(wait)
             except Exception:
