@@ -4,6 +4,7 @@ from src.agents.writer import WriterAgent
 
 
 class TestWriterAgent:
+    @pytest.mark.integration
     def test_write_analysis_returns_structured_result(self):
         writer = WriterAgent()
         retrieved = {"exercises": []}

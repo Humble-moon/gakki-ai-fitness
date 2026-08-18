@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# Offline test runner and direct test dependencies.
+pytest>=8.0,<9
+anyio>=4.0,<5
+httpx>=0.27,<1

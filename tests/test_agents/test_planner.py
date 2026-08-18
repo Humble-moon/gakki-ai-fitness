@@ -1,6 +1,8 @@
 import pytest
 from src.agents.planner import PlannerAgent
 
+pytestmark = pytest.mark.integration
+
 @pytest.fixture
 def planner():
     return PlannerAgent()

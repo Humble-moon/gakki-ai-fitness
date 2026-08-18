@@ -2,6 +2,8 @@ import pytest
 from src.rag.embedding import EmbeddingService
 from src.config import EMBEDDING_DIM
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(scope="module")
 def emb():

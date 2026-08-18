@@ -3,6 +3,8 @@ import json
 import numpy as np
 from src.storage.redis_client import RedisClient
 
+pytestmark = pytest.mark.integration
+
 @pytest.fixture
 def redis():
     client = RedisClient()
