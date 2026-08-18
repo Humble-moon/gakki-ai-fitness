@@ -63,6 +63,7 @@ _RETRYABLE = (APIConnectionError, RateLimitError, APITimeoutError,
               TimeoutError, ConnectionError, OSError)
 
 _ERROR_DETAIL_LIMIT = 200
+_LOG_MESSAGE_LIMIT = 499
 _SECRET_PATTERNS = (
     re.compile(r"(?i)\bBearer\s+[^\s,;]+"),
     re.compile(r"(?i)\b(Authorization|api[_-]?key|credential|(?:session[_-]?)?cookie)\b\s*[:=]\s*[^\s,;]+"),
@@ -79,6 +80,11 @@ def _error_summary(error: Exception) -> str:
         ), detail)
     detail = detail[:_ERROR_DETAIL_LIMIT]
     return f"{type(error).__name__}: {detail}"
+
+
+def _bounded_log_message(message: str) -> str:
+    """Apply the strict limit to a complete, already-redacted log message."""
+    return message[:_LOG_MESSAGE_LIMIT]
 
 
 # 退避参数
@@ -375,10 +381,10 @@ class LLMProvider:
                 continue
 
         # 所有模型都失败了 → 抛出明确的不可用异常，不生成伪成功内容
-        logger.critical(
+        logger.critical(_bounded_log_message(
             f"[LLM] All models exhausted. Chain: {chain}, "
             f"errors: {errors}"
-        )
+        ))
         raise LLMUnavailableError(
             "所有配置的 LLM provider 均不可用",
             attempted_models=attempted,
@@ -434,7 +440,9 @@ class LLMProvider:
                     logger.error(f"[LLM:stream] {mn} failed: {summary}")
                     self._breaker.record_failure(alias)
 
-            logger.critical(f"[LLM:stream] All models exhausted. Chain: {chain}, errors: {errors}")
+            logger.critical(_bounded_log_message(
+                f"[LLM:stream] All models exhausted. Chain: {chain}, errors: {errors}"
+            ))
             raise LLMUnavailableError(
                 "所有配置的 LLM provider 均不可用",
                 attempted_models=metadata.attempted_models,
