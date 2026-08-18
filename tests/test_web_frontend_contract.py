@@ -232,6 +232,15 @@ def test_no_result_root_destructive_clear():
     assert "resultArea.innerHTML = ''" not in HTML
 
 
+def test_plan_desktop_header_and_rows_share_column_grid():
+    shared_grid = "--plan-columns: minmax(0, 2.4fr) minmax(56px, .7fr) minmax(72px, .9fr) minmax(92px, 1.1fr);"
+    assert shared_grid in HTML
+    assert ".plan-ex-heading," in HTML
+    assert ".plan-ex-row {" in HTML
+    assert "grid-template-columns: var(--plan-columns);" in HTML
+    assert "dataset.planColumn" in HTML
+
+
 def test_plan_mobile_card_copy_is_readable():
     assert ".plan-ex-name { flex: 1 1 100%;" in HTML
     assert ".plan-ex-notes { flex: 1 1 100%;" in HTML

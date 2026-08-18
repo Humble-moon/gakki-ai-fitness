@@ -435,7 +435,7 @@ body::after {
   .plan-day-body { padding: 12px 14px; }
   .plan-ex-row { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 12px 0; }
   .plan-ex-name { flex: 1 1 100%; font-size: 14px; }
-  .plan-ex-sets, .plan-ex-reps, .plan-ex-rest { font-size: 12px; }
+  .plan-ex-sets, .plan-ex-reps, .plan-ex-rest { flex: 0 0 auto; font-size: 12px; text-align: left; }
   .plan-ex-notes { flex: 1 1 100%; line-height: 1.5; }
 }
 @media (min-width: 768px) and (max-width: 1200px) {
@@ -507,12 +507,38 @@ body::after {
   pointer-events: none;
 }
 
-.plan-day-body { padding: 14px 20px; }
+.plan-day-body {
+  --plan-columns: minmax(0, 2.4fr) minmax(56px, .7fr) minmax(72px, .9fr) minmax(92px, 1.1fr);
+  padding: 14px 20px;
+}
 
+.plan-ex-heading,
 .plan-ex-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 0.8fr;
-  gap: 8px;
+  grid-template-columns: var(--plan-columns);
+  column-gap: 12px;
+}
+
+.plan-ex-heading {
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--steel-light);
+  color: var(--chalk-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.plan-ex-heading > span:not(:first-child),
+.plan-ex-sets,
+.plan-ex-reps,
+.plan-ex-rest {
+  text-align: center;
+}
+
+.plan-ex-row {
+  gap: 0;
   padding: 10px 0;
   border-bottom: 1px solid var(--steel);
   font-size: 13px;
@@ -1579,7 +1605,7 @@ body::after {
     align-items: baseline;
   }
   .plan-ex-name { grid-column: 1 / -1; font-size: 14px; line-height: 1.4; }
-  .plan-ex-sets, .plan-ex-reps, .plan-ex-rest { font-size: 11px; white-space: nowrap; }
+  .plan-ex-sets, .plan-ex-reps, .plan-ex-rest { font-size: 11px; white-space: nowrap; text-align: left; }
   .plan-ex-notes { grid-column: 1 / -1; font-size: 11px; line-height: 1.55; color: var(--chalk-dim); }
   .file-upload-area, #file-upload-area { min-height: 44px; }
   .query-input { min-height: 96px; }
@@ -2497,13 +2523,15 @@ function renderPlanResult(container, data) {
       header.appendChild(el('span', '', `${exercises.length} EX`));
       card.appendChild(header);
       const body = el('div', 'plan-day-body', '');
-      body.appendChild(el('div', 'plan-ex-heading', '动作    组数    次数    休息'));
+      const heading = el('div', 'plan-ex-heading', '');
+      ['动作', '组数', '次数', '休息'].forEach(label => heading.appendChild(el('span', '', label)));
+      body.appendChild(heading);
       exercises.forEach(exercise => {
         const row = el('div', 'plan-ex-row', '');
-        row.appendChild(el('span', 'plan-ex-name', exercise?.name || '未命名动作'));
-        row.appendChild(el('span', 'plan-ex-sets', `${exercise?.sets ?? '?'} 组`));
-        row.appendChild(el('span', 'plan-ex-reps', `${exercise?.reps ?? '?'} 次`));
-        row.appendChild(el('span', 'plan-ex-rest', `休息 ${exercise?.rest || '60 秒'}`));
+        const nameCell = el('span', 'plan-ex-name', exercise?.name || '未命名动作'); nameCell.dataset.planColumn = '动作'; row.appendChild(nameCell);
+        const setsCell = el('span', 'plan-ex-sets', `${exercise?.sets ?? '?'} 组`); setsCell.dataset.planColumn = '组数'; row.appendChild(setsCell);
+        const repsCell = el('span', 'plan-ex-reps', `${exercise?.reps ?? '?'} 次`); repsCell.dataset.planColumn = '次数'; row.appendChild(repsCell);
+        const restCell = el('span', 'plan-ex-rest', `休息 ${exercise?.rest || '60 秒'}`); restCell.dataset.planColumn = '休息'; row.appendChild(restCell);
         if (exercise?.notes) row.appendChild(el('div', 'plan-ex-notes', exercise.notes));
         body.appendChild(row);
       });
