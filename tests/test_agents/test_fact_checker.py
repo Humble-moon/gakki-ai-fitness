@@ -1,4 +1,8 @@
+import pytest
+
 from src.agents.fact_checker import FactCheckerAgent
+
+pytestmark = pytest.mark.integration
 
 def test_fact_checker_returns_structured_result():
     checker = FactCheckerAgent()

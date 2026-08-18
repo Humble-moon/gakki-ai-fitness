@@ -2,6 +2,8 @@ import pytest
 from src.graphrag.search import GraphSearch
 from src.graphrag.builder import GraphBuilder
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(scope="module")
 def gs():

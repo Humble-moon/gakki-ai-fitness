@@ -1,6 +1,8 @@
 import pytest
 from src.storage.neo4j_client import Neo4jClient
 
+pytestmark = pytest.mark.integration
+
 @pytest.fixture
 def neo4j():
     client = Neo4jClient()

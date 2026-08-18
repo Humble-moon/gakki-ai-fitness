@@ -10,6 +10,7 @@ def orch():
     return Orchestrator()
 
 
+@pytest.mark.integration
 class TestOrchestrator:
     def test_generate_plan_complete_flow(self, orch):
         profile = UserProfileInput(height=180, weight=80, training_years=1, goal="增肌", available_equipment=["哑铃", "杠铃"], days_per_week=4)
@@ -32,6 +33,7 @@ class TestOrchestrator:
 
 
 class TestStreamingContracts:
+    @pytest.mark.integration
     def test_stream_aggregates_advice_and_writer_degraded_and_forwards_context(self):
         orch = Orchestrator()
         profile = UserProfileInput(height=180, weight=80, training_years=1, goal="增肌", available_equipment=["哑铃"], days_per_week=4)

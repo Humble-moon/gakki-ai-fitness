@@ -1,6 +1,8 @@
 import pytest
 from src.storage.minio_client import MinioClient
 
+pytestmark = pytest.mark.integration
+
 @pytest.fixture
 def minio():
     return MinioClient()

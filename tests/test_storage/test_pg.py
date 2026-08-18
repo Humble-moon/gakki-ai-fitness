@@ -1,6 +1,8 @@
 import pytest
 from src.storage.pg import PGClient
 
+pytestmark = pytest.mark.integration
+
 @pytest.fixture
 def pg():
     client = PGClient()

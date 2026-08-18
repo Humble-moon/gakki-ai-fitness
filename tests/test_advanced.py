@@ -3,11 +3,14 @@
 import json
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 # ---------- ExerciseMCPServer（MCP 动作库服务）----------
 
 from src.mcp.exercise_server import ExerciseMCPServer
 
 
+@pytest.mark.integration
 def test_exercise_mcp_search_by_muscle():
     server = ExerciseMCPServer()
     results = server.call_tool("search_by_muscle", {"muscle": "胸大肌"})
@@ -15,6 +18,7 @@ def test_exercise_mcp_search_by_muscle():
     assert any(e["name"] == "哑铃卧推" for e in results)
 
 
+@pytest.mark.integration
 def test_exercise_mcp_search_by_equipment():
     server = ExerciseMCPServer()
     results = server.call_tool("search_by_equipment", {"equipment": "哑铃"})
@@ -22,6 +26,7 @@ def test_exercise_mcp_search_by_equipment():
     assert all("哑铃" in e["equipment"] for e in results)
 
 
+@pytest.mark.integration
 def test_exercise_mcp_search_by_difficulty():
     server = ExerciseMCPServer()
     results = server.call_tool("search_by_difficulty", {"difficulty": "中级"})
@@ -29,6 +34,7 @@ def test_exercise_mcp_search_by_difficulty():
     assert all(e["difficulty"] == "中级" for e in results)
 
 
+@pytest.mark.integration
 def test_exercise_mcp_get_exercise_detail_found():
     server = ExerciseMCPServer()
     results = server.call_tool("get_exercise_detail", {"name": "杠铃深蹲"})
@@ -36,6 +42,7 @@ def test_exercise_mcp_get_exercise_detail_found():
     assert results[0]["name"] == "杠铃深蹲"
 
 
+@pytest.mark.integration
 def test_exercise_mcp_get_exercise_detail_not_found():
     """v2: 未找到动作抛出 McpToolError 而非返回 []。"""
     from src.mcp.exercise_server import McpToolError
@@ -71,6 +78,7 @@ def test_exercise_mcp_list_tools():
 
 # ---------- ToolRegistry（使用模拟数据库依赖）----------
 
+@pytest.mark.integration
 @patch("src.mcp.tool_registry.GraphSearch")
 def test_tool_registry_call_mcp_tool(mock_graph):
     from src.mcp.tool_registry import ToolRegistry
@@ -261,6 +269,7 @@ def test_hitl_review_warning_issue():
 from src.memory.long_term import LongTermMemory
 
 
+@pytest.mark.integration
 def test_long_term_memory_save_and_get_preferences():
     memory = LongTermMemory()
     memory.redis.flushdb()
@@ -272,6 +281,7 @@ def test_long_term_memory_save_and_get_preferences():
     memory.redis.flushdb()
 
 
+@pytest.mark.integration
 def test_long_term_memory_get_injury_history_empty():
     memory = LongTermMemory()
     memory.redis.flushdb()
@@ -280,6 +290,7 @@ def test_long_term_memory_get_injury_history_empty():
     memory.redis.flushdb()
 
 
+@pytest.mark.integration
 def test_long_term_memory_record_feedback():
     memory = LongTermMemory()
     memory.redis.flushdb()
@@ -295,6 +306,7 @@ def test_long_term_memory_record_feedback():
     memory.redis.flushdb()
 
 
+@pytest.mark.integration
 def test_long_term_memory_build_context_for_prompt():
     memory = LongTermMemory()
     memory.redis.flushdb()
