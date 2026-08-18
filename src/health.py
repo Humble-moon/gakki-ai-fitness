@@ -17,9 +17,10 @@ def check_dependencies() -> dict[str, str]:
 
 
 def readiness_checks(
-    dependency_checker: Callable[[], dict[str, str]] = check_dependencies,
+    dependency_checker: Callable[[], dict[str, str]] | None = None,
 ) -> tuple[dict[str, str], bool]:
-    checks = dependency_checker()
+    checker = dependency_checker if dependency_checker is not None else check_dependencies
+    checks = checker()
     ready = bool(checks) and all(value in {"ok", "configured", "demo"} for value in checks.values())
     return checks, ready
 

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from src.rag.semantic_cache import SemanticCache
+from src.rag.semantic_cache import SemanticCache, _MAX_SCAN
 
 
 class FakeRedisConnection:
@@ -109,3 +109,40 @@ def test_semantic_hit_is_limited_to_current_namespace(cache):
     key = cache._make_key(profile, "stored")
     cache.redis.conn.entries[key] = make_entry(cache, profile, "stored", {"answer": "right"})
     assert cache.get(profile, "different") == {"answer": "right"}
+
+
+def test_malformed_keys_consume_semantic_scan_budget(cache):
+    profile = {"goal": "增肌"}
+    prefix = cache._make_key(profile, "query").rsplit(":", 1)[0]
+    for index in range(_MAX_SCAN + 25):
+        cache.redis.conn.entries[f"{prefix}:{index:064x}"] = "{bad json"
+
+    calls = 0
+    original_get = cache.redis.get
+
+    def counting_get(key):
+        nonlocal calls
+        calls += 1
+        return original_get(key)
+
+    cache.redis.get = counting_get
+    assert cache._semantic_get(profile, "different") is None
+    assert calls == _MAX_SCAN
+
+
+def test_failing_keys_consume_semantic_scan_budget(cache):
+    profile = {"goal": "增肌"}
+    prefix = cache._make_key(profile, "query").rsplit(":", 1)[0]
+    for index in range(_MAX_SCAN + 25):
+        cache.redis.conn.entries[f"{prefix}:{index:064x}"] = "unused"
+
+    calls = 0
+
+    def failing_get(key):
+        nonlocal calls
+        calls += 1
+        raise ConnectionError("offline")
+
+    cache.redis.get = failing_get
+    assert cache._semantic_get(profile, "different") is None
+    assert calls == _MAX_SCAN
