@@ -428,10 +428,11 @@ body::after {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 @media (max-width: 767px) {
   .plan-result-grid { grid-template-columns: 1fr; gap: 12px; }
+  .plan-day-column { height: auto; }
   .plan-day-body { padding: 12px 14px; }
   .plan-ex-row { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 12px 0; }
   .plan-ex-name { flex: 1 1 100%; font-size: 14px; }
@@ -449,6 +450,9 @@ body::after {
   overflow: hidden;
   transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 .plan-day-column::before {
   content: '';
@@ -510,6 +514,7 @@ body::after {
 .plan-day-body {
   --plan-columns: minmax(0, 2.4fr) minmax(56px, .7fr) minmax(72px, .9fr) minmax(92px, 1.1fr);
   padding: 14px 20px;
+  flex: 1;
 }
 
 .plan-ex-heading,
