@@ -40,46 +40,40 @@ class DocumentStore:
              file_size: int, full_text: str, page_count: int,
              title: str, has_text: bool, parse_error: str) -> int:
         """保存文档并切块入库。返回 document_id。"""
-        # 1. 清理旧文档（超过上限则删最旧的）
-        self._enforce_limit(session_id)
+        with self.db.transaction() as tx:
+            # 清理、文档写入、embedding 和 chunks 必须共享同一事务。
+            self._enforce_limit(session_id, tx)
 
-        # 2. 写入 user_documents
-        doc_id = self.db.fetch_one(
-            """INSERT INTO user_documents
-               (session_id, filename, file_type, file_size, raw_content,
-                page_count, title, has_text, parse_error, created_at)
-               VALUES (:sid, :fn, :ft, :fs, :rc, :pc, :ti, :ht, :pe, :ts)
-               RETURNING id""",
-            {"sid": session_id, "fn": filename, "ft": file_type, "fs": file_size,
-             "rc": full_text, "pc": page_count, "ti": title, "ht": 1 if has_text else 0,
-             "pe": parse_error or "", "ts": datetime.utcnow()},
-        ).id
+            row = tx.fetch_one(
+                """INSERT INTO user_documents
+                   (session_id, filename, file_type, file_size, raw_content,
+                    page_count, title, has_text, parse_error, created_at)
+                   VALUES (:sid, :fn, :ft, :fs, :rc, :pc, :ti, :ht, :pe, :ts)
+                   RETURNING id""",
+                {"sid": session_id, "fn": filename, "ft": file_type, "fs": file_size,
+                 "rc": full_text, "pc": page_count, "ti": title, "ht": 1 if has_text else 0,
+                 "pe": parse_error or "", "ts": datetime.utcnow()},
+            )
+            doc_id = row.id
 
-        # 3. 切块
-        if has_text and full_text.strip():
-            chunks = chunk_text(full_text)
-            logger.info(f"Document {doc_id}: {len(chunks)} chunks from {len(full_text)} chars")
-
-            # 4. embedding + 写入 document_chunks
-            for i, chunk_text_content in enumerate(chunks):
-                try:
+            if has_text and full_text.strip():
+                chunks = chunk_text(full_text)
+                logger.info(f"Document {doc_id}: {len(chunks)} chunks from {len(full_text)} chars")
+                for i, chunk_text_content in enumerate(chunks):
+                    # Embedding failures are part of the save operation and must abort it.
                     vec = self.embedder.embed(chunk_text_content)
-                except Exception as e:
-                    logger.warning(f"Embedding failed for chunk {i} of doc {doc_id}: {e}")
-                    continue
+                    tx.execute(
+                        """INSERT INTO document_chunks
+                           (document_id, session_id, chunk_index, content,
+                            chunk_type, title_path, page_number, embedding, created_at)
+                           VALUES (:did, :sid, :ci, :ct, :ty, :tp, :pn, :emb, :ts)""",
+                        {"did": doc_id, "sid": session_id, "ci": i,
+                         "ct": self._inject_context(chunk_text_content, title, i + 1, len(chunks)),
+                         "ty": "text", "tp": title, "pn": 1, "ts": datetime.utcnow(),
+                         "emb": vec},
+                    )
 
-                self.db.execute(
-                    """INSERT INTO document_chunks
-                       (document_id, session_id, chunk_index, content,
-                        chunk_type, title_path, page_number, embedding, created_at)
-                       VALUES (:did, :sid, :ci, :ct, :ty, :tp, :pn, :emb, :ts)""",
-                    {"did": doc_id, "sid": session_id, "ci": i,
-                     "ct": self._inject_context(chunk_text_content, title, i + 1, len(chunks)),
-                     "ty": "text", "tp": title, "pn": 1, "ts": datetime.utcnow(),
-                     "emb": vec},
-                )
-
-        return doc_id
+            return doc_id
 
     # ------------------------------------------------------------------
     # 检索
@@ -144,26 +138,26 @@ class DocumentStore:
             {"sid": session_id},
         )
 
-    def _enforce_limit(self, session_id: str):
+    def _enforce_limit(self, session_id: str, db=None):
         """保持每个 session 最多 MAX_DOCS_PER_SESSION 个文档。"""
-        count_row = self.db.fetch_one(
+        db = db or self.db
+        count_row = db.fetch_one(
             "SELECT COUNT(*) as cnt FROM user_documents WHERE session_id = :sid",
             {"sid": session_id},
         )
         if count_row and count_row.cnt >= MAX_DOCS_PER_SESSION:
-            # 删最旧的
-            old = self.db.fetch_all(
+            old = db.fetch_all(
                 """SELECT id FROM user_documents
                    WHERE session_id = :sid ORDER BY created_at ASC
                    LIMIT :n""",
                 {"sid": session_id, "n": count_row.cnt - MAX_DOCS_PER_SESSION + 1},
             )
             for row in old:
-                self.db.execute(
+                db.execute(
                     "DELETE FROM document_chunks WHERE document_id = :did",
                     {"did": row.id},
                 )
-                self.db.execute(
+                db.execute(
                     "DELETE FROM user_documents WHERE id = :did",
                     {"did": row.id},
                 )
