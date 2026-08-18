@@ -89,9 +89,13 @@ class WriterAgent:
             )
             messages[-1]["content"] += context_hint
         full_text = ""
-        for chunk in self.llm.chat_stream(messages, temperature=0.3, model="reasoner"):
+        stream = self.llm.chat_stream(messages, temperature=0.3, model="reasoner")
+        for chunk in stream:
             full_text += chunk
             yield ("chunk", chunk)
+        # Provider metadata is updated when the stream is exhausted. Preserve the
+        # degraded state so the orchestrator can fail closed before persistence.
+        provider_degraded = bool(getattr(stream, "metadata", None) and stream.metadata.degraded)
         # === 解析累积的流式输出文本 ===
         content = full_text
         # 剥离可能的 markdown 代码块包裹：```json ... ``` 或 ``` ... ```
@@ -106,6 +110,7 @@ class WriterAgent:
             result = {"raw": full_text}
         result["plan_id"] = str(uuid.uuid4())[:8]
         result["user_id"] = profile.get("id", 0)
+        result["_degraded"] = provider_degraded
         yield ("done", result)
 
     def _parse_json_output(self, content: str) -> dict:
@@ -237,9 +242,11 @@ class WriterAgent:
         if conv_context:
             prompt = f"{conv_context}\n\n{prompt}"
         full_text = ""
-        for chunk in self.llm.chat_stream([{"role": "user", "content": prompt}], temperature=0.3):
+        stream = self.llm.chat_stream([{"role": "user", "content": prompt}], temperature=0.3)
+        for chunk in stream:
             full_text += chunk
             yield ("chunk", chunk)
+        provider_degraded = bool(getattr(stream, "metadata", None) and stream.metadata.degraded)
         content = full_text
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0]
@@ -254,4 +261,5 @@ class WriterAgent:
         result.setdefault("severity", "安全")
         result.setdefault("suggestions", [])
         result.setdefault("confidence", 0.5)
+        result["_degraded"] = provider_degraded
         yield ("done", result)

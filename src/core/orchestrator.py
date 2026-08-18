@@ -224,12 +224,18 @@ class Orchestrator:
             advice_context += f"\n\n[这个用户之前来过，他的历史画像]：\n{long_term_context}"
         if plan_context:
             advice_context += f"\n\n用户之前已经有了一个训练计划：\n{plan_context}\n用户现在说：{query}\n请结合这个上下文给出建议。"
+        provider_degraded = False
         advice_text = ""
-        for chunk in self.writer.llm.chat_stream(
+        advice_stream = self.writer.llm.chat_stream(
             [{"role": "user", "content": self._build_advice_prompt(profile_dict, query) + advice_context}], temperature=0.5
-        ):
+        )
+        provider_degraded = bool(getattr(advice_stream, "metadata", None) and advice_stream.metadata.degraded)
+        for chunk in advice_stream:
             advice_text += chunk
             yield ("advice_chunk", chunk)
+        provider_degraded = provider_degraded or bool(
+            getattr(advice_stream, "metadata", None) and advice_stream.metadata.degraded
+        )
         yield ("advice_done", advice_text)
 
         yield ("stage", "[规划] Planner 正在拆解任务...")
@@ -243,12 +249,16 @@ class Orchestrator:
         yield ("stage", "[生成] Writer 正在生成训练计划...")
         full_text = ""
         result = {}
-        for event, data in self.writer.write_plan_stream(retrieved, profile_dict, plan.get("skill_config", {})):
+        for event, data in self.writer.write_plan_stream(
+            retrieved, profile_dict, plan.get("skill_config", {}),
+            plan_context=plan_context, user_query=query,
+        ):
             if event == "chunk":
                 full_text += data
                 yield ("writer_chunk", data)
             elif event == "done":
                 result = data
+                provider_degraded = provider_degraded or bool(data.get("_degraded"))
         yield ("writer_done_raw", full_text)
         result = self._normalize_plan(result)
 
@@ -260,11 +270,13 @@ class Orchestrator:
         while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < 3:
             yield ("stage", f"[修正] 安全检查发现 {len(check.get('issues', []))} 个问题，第 {rewrite_count + 1} 次重写...")
             result = self._normalize_plan(self.writer.rewrite_plan(result, check.get("issues", []), retrieved, profile_dict))
+            provider_degraded = provider_degraded or bool(result.get("_degraded"))
             rewrite_count += 1
             check = self.fact_checker.check(result, profile_dict)
             all_checks.append(check)
+            yield ("factcheck_done", {"safe": check.get("is_safe", True), "issues": len(check.get("issues", [])), "confidence": check.get("confidence", 0)})
         result = self._finalize_result(result, all_checks, rewrite_count,
-                                       provider_degraded=bool(result.get("_degraded")))
+                                       provider_degraded=provider_degraded)
         self._persist_if_safe(profile_dict, query, result, session_id=session_id)
         yield ("done", result)
 
