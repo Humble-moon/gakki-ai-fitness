@@ -88,17 +88,26 @@ class Orchestrator:
         """Normalize one terminal state and decide whether persistence is allowed."""
         result = dict(result) if isinstance(result, dict) else {}
         checks = checks if isinstance(checks, list) else []
-        warnings = []
-        seen = set()
-        for check in checks:
+        final = checks[-1] if checks and isinstance(checks[-1], dict) else {}
+        active_issues = final.get("issues") if isinstance(final.get("issues"), list) else []
+        active_issue_values = {
+            issue.get("issue", str(issue)) if isinstance(issue, dict) else str(issue)
+            for issue in active_issues
+        }
+        resolved_issues = []
+        seen_resolved = set()
+        for check in checks[:-1]:
             if not isinstance(check, dict):
                 continue
             for issue in check.get("issues") or []:
                 value = issue.get("issue", str(issue)) if isinstance(issue, dict) else str(issue)
-                if value not in seen:
-                    seen.add(value)
-                    warnings.append(value)
-        final = checks[-1] if checks and isinstance(checks[-1], dict) else {}
+                if value not in active_issue_values and value not in seen_resolved:
+                    seen_resolved.add(value)
+                    resolved_issues.append(issue)
+        warnings = [
+            issue.get("issue", str(issue)) if isinstance(issue, dict) else str(issue)
+            for issue in active_issues
+        ]
         try:
             validate_training_plan(result)
             schema_valid = True
@@ -109,8 +118,11 @@ class Orchestrator:
         requires_review = any(isinstance(c, dict) and c.get("requires_human_review") is True for c in checks)
         confidence = final.get("confidence")
         confidence_valid = isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
-        result.update({"warnings": warnings, "requires_review": requires_review or not checks or not is_safe,
-                       "confidence": confidence if confidence_valid else 0, "rewrite_count": rewrite_count})
+        result.update({"warnings": warnings, "active_issues": active_issues,
+                       "resolved_issues": resolved_issues,
+                       "requires_review": requires_review or not checks or not is_safe,
+                       "confidence": confidence if confidence_valid else 0,
+                       "rewrite_count": rewrite_count})
         result["_persistence_allowed"] = bool(schema_valid and is_safe and issues_empty and not requires_review
             and confidence_valid and not provider_degraded and not result.get("_degraded", False))
         return result
@@ -162,7 +174,9 @@ class Orchestrator:
         result = self.writer.write_plan(
             retrieved, profile_dict, plan.get("skill_config", {})
         )
-        result = self._normalize_plan(result)
+        result = self._normalize_plan(
+            result, profile=profile_dict, plan_config=plan.get("skill_config", {})
+        )
         provider_degraded = bool(result.get("_degraded"))
         task.add_artifact(Artifact(
             artifact_id=task.task_id, artifact_type="training_plan", content=result
@@ -185,7 +199,9 @@ class Orchestrator:
             result = self.writer.rewrite_plan(
                 result, check.get("issues", []), retrieved, profile_dict
             )
-            result = self._normalize_plan(result)
+            result = self._normalize_plan(
+                result, profile=profile_dict, plan_config=plan.get("skill_config", {})
+            )
             provider_degraded = provider_degraded or bool(result.get("_degraded"))
             rewrite_count += 1
             check = self.fact_checker.check(result, profile_dict)
@@ -262,7 +278,9 @@ class Orchestrator:
                 result = data
                 provider_degraded = provider_degraded or bool(data.get("_degraded"))
         yield ("writer_done_raw", full_text)
-        result = self._normalize_plan(result)
+        result = self._normalize_plan(
+            result, profile=profile_dict, plan_config=plan.get("skill_config", {})
+        )
 
         rewrite_count = 0
         all_checks = []
@@ -272,7 +290,11 @@ class Orchestrator:
         yield ("factcheck_done", {"safe": check.get("is_safe", True), "issues": len(check.get("issues", [])), "confidence": check.get("confidence", 0)})
         while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < 3:
             yield ("stage", f"[修正] 安全检查发现 {len(check.get('issues', []))} 个问题，第 {rewrite_count + 1} 次重写...")
-            result = self._normalize_plan(self.writer.rewrite_plan(result, check.get("issues", []), retrieved, profile_dict))
+            result = self._normalize_plan(
+                self.writer.rewrite_plan(result, check.get("issues", []), retrieved, profile_dict),
+                profile=profile_dict,
+                plan_config=plan.get("skill_config", {}),
+            )
             provider_degraded = provider_degraded or bool(result.get("_degraded"))
             rewrite_count += 1
             check = self.fact_checker.check(result, profile_dict)
@@ -284,16 +306,33 @@ class Orchestrator:
         self._persist_if_safe(profile_dict, query, result, session_id=session_id)
         yield ("done", result)
 
-    def _normalize_plan(self, result: dict) -> dict:
-        """归一化 LLM 输出的训练计划 JSON。
-
-        不同 LLM 可能返回不同的键名（weekly_plan / schedule / plan / days），
-        这里统一映射为 "days"。同时归一化动作内部字段名。
-        """
+    def _normalize_plan(self, result: dict, *, profile: dict | None = None,
+                        plan_config: dict | None = None) -> dict:
+        """Normalize model keys and add only deterministic request metadata."""
+        if not isinstance(result, dict):
+            return {}
+        profile = profile if isinstance(profile, dict) else {}
+        plan_config = plan_config if isinstance(plan_config, dict) else {}
         for key in ("weekly_plan", "weekly_schedule", "days", "schedule", "plan"):
             if key in result:
                 result["days"] = result.pop(key)
                 break
+
+        sessions_per_week = profile.get("days_per_week")
+        if sessions_per_week is None:
+            sessions_per_week = plan_config.get("sessions_per_week")
+        if sessions_per_week is not None:
+            result["sessions_per_week"] = sessions_per_week
+        elif "sessions_per_week" not in result and "days_per_week" in result:
+            result["sessions_per_week"] = result["days_per_week"]
+
+        configured_weeks = plan_config.get("weeks")
+        if configured_weeks is not None:
+            result["weeks"] = configured_weeks
+        else:
+            result.setdefault("weeks", None)
+
+        result.pop("days_per_week", None)
         for day in result.get("days", []):
             for ex in day.get("exercises", []):
                 if "rest_seconds" in ex and "rest" not in ex:

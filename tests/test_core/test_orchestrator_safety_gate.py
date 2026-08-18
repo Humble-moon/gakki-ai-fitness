@@ -99,6 +99,75 @@ def test_schema_invalid_result_is_fail_closed():
     orch.cache.assert_empty(); orch.conversation.assert_empty(); orch.long_term.assert_empty()
 
 
+def test_prompt_conformant_plan_passes_final_gate():
+    orch = make_orch()
+    prompt_result = {
+        "plan_name": "一周全身训练",
+        "goal": "增肌",
+        "weeks": None,
+        "sessions_per_week": 3,
+        "days": [{"day": 1, "focus": "全身", "exercises": []}],
+        "notes": "循序渐进",
+        "plan_id": "plan-1",
+        "user_id": 1,
+    }
+
+    normalized = orch._normalize_plan(
+        prompt_result,
+        profile={"days_per_week": 3},
+        plan_config={},
+    )
+    result = orch._finalize_result(normalized, [safe_check()], 0)
+
+    assert result["weeks"] is None
+    assert result["sessions_per_week"] == 3
+    assert result["_persistence_allowed"] is True
+    assert orch._persist_if_safe({"goal": "增肌"}, "q", result) is True
+
+
+def test_normalization_uses_deterministic_profile_and_config_metadata_only():
+    orch = make_orch()
+    normalized = orch._normalize_plan(
+        {
+            "plan_id": "plan-1",
+            "user_id": 1,
+            "goal": "增肌",
+            "days_per_week": 5,
+            "days": [{"day": 1, "focus": "全身", "exercises": []}],
+        },
+        profile={"days_per_week": 3},
+        plan_config={"weeks": 8},
+    )
+
+    assert normalized["sessions_per_week"] == 3
+    assert normalized["weeks"] == 8
+
+    unknown_weeks = orch._normalize_plan(
+        {"days_per_week": 3, "days": []},
+        profile={"days_per_week": 3},
+        plan_config={},
+    )
+    assert unknown_weeks["weeks"] is None
+
+
+def test_successful_rewrite_separates_resolved_from_active_issues_and_persists():
+    orch = make_orch()
+    initial_issue = {"issue": "深蹲对当前伤情不安全", "severity": "warning"}
+
+    result = orch._finalize_result(
+        valid_plan(),
+        [safe_check(is_safe=False, issues=[initial_issue]), safe_check()],
+        1,
+    )
+
+    assert result["active_issues"] == []
+    assert result["resolved_issues"] == [initial_issue]
+    assert result["warnings"] == []
+    assert result["_persistence_allowed"] is True
+    assert orch._persist_if_safe({"goal": "增肌"}, "q", result) is True
+    assert [name for name, _, _ in orch.cache.calls] == ["set"]
+
+
 def test_degraded_fact_check_including_rewrite_cannot_authorize_persistence():
     orch = make_orch()
     orch.planner = SimpleNamespace(plan=lambda *args, **kwargs: {"skill_config": {}})

@@ -112,8 +112,8 @@ class TrainingPlanOutput(BaseModel):
     goal: str
     # 训练目标（"增肌" 或 "减脂"）
 
-    weeks: int
-    # 计划总周数，如 4（周）
+    weeks: int | None = None
+    # 计划总周数；仅在用户画像或计划配置给出确定值时填写
 
     sessions_per_week: int
     # 每周训练次数
