@@ -32,8 +32,8 @@
     应对瞬时网络抖动、API 限流（429）。
   第二层 — 降级（Fallback）：重试耗尽后，按 LLM_FALLBACK_CHAIN 顺序
     切换到备用模型（如 deepseek-chat → qwen-turbo）。
-  第三层 — 兜底（Graceful Degradation）：所有模型都不可用时，不抛异常，
-    返回带 degraded=True 标记的降级响应，由 Orchestrator 层返回给前端。
+  第三层 — 明确失败语义：所有模型都不可用时抛出 LLMUnavailableError，
+    由上层决定如何将错误呈现给用户；不返回伪成功内容。
 
   配置方式：
     .env 中设置 LLM_FALLBACK_CHAIN=default,fast
@@ -60,6 +60,12 @@ logger = logging.getLogger(__name__)
 # 可重试的异常类型 — 瞬时故障，重试大概率恢复
 _RETRYABLE = (APIConnectionError, RateLimitError, APITimeoutError,
               TimeoutError, ConnectionError, OSError)
+
+def _error_summary(error: Exception) -> str:
+    """Return a bounded error summary suitable for diagnostics."""
+    detail = str(error).replace("\n", " ")[:200]
+    return f"{type(error).__name__}: {detail}"
+
 
 # 退避参数
 _MAX_RETRIES = 3
@@ -135,6 +141,15 @@ class LLMResponse:
     degraded: bool = False
     # 记录实际经过的模型链路，方便排查
     attempted_models: list[str] = field(default_factory=list)
+
+
+class LLMUnavailableError(RuntimeError):
+    """Raised when every configured LLM model fails before producing output."""
+
+    def __init__(self, message: str, *, attempted_models: list[str], errors: list[str]):
+        super().__init__(message)
+        self.attempted_models = attempted_models
+        self.errors = errors
 
 
 class LLMProvider:
@@ -316,22 +331,20 @@ class LLMProvider:
                 self._breaker.record_success(alias)
                 return resp
             except Exception as e:
-                errors.append(f"{mn}: {type(e).__name__}: {e}")
+                errors.append(f"{mn}: {_error_summary(e)}")
                 logger.error(f"[LLM] {mn} failed: {type(e).__name__}: {e}")
                 self._breaker.record_failure(alias)
                 continue
 
-        # 所有模型都失败了 → 兜底降级响应
+        # 所有模型都失败了 → 抛出明确的不可用异常，不生成伪成功内容
         logger.critical(
             f"[LLM] All models exhausted. Chain: {chain}, "
             f"errors: {errors}"
         )
-        return LLMResponse(
-            content="抱歉，AI 服务暂时不可用，请稍后重试。",
-            model="none",
-            tokens=0,
-            degraded=True,
+        raise LLMUnavailableError(
+            "所有配置的 LLM provider 均不可用",
             attempted_models=attempted,
+            errors=errors,
         )
 
     # ------------------------------------------------------------------
@@ -367,6 +380,7 @@ class LLMProvider:
                     f"{[str(e) for e in errors]}"
                 )
 
+            started_output = False
             try:
                 # 连接建立阶段含重试
                 stream = self._create_stream_with_retry(cl, mn, messages, temperature)
@@ -374,6 +388,7 @@ class LLMProvider:
                 for chunk in stream:
                     delta = chunk.choices[0].delta
                     if delta.content:
+                        started_output = True
                         total_content.append(delta.content)
                         yield delta.content
 
@@ -386,17 +401,23 @@ class LLMProvider:
                 return
 
             except Exception as e:
-                errors.append(f"{mn}: {type(e).__name__}: {e}")
+                if started_output:
+                    raise
+                errors.append(f"{mn}: {_error_summary(e)}")
                 logger.error(f"[LLM:stream] {mn} failed: {type(e).__name__}: {e}")
                 self._breaker.record_failure(alias)
                 continue
 
-        # 所有模型都失败 → yield 降级消息
+        # 所有模型都失败了 → 抛出明确的不可用异常，不生成伪造 token
         logger.critical(
             f"[LLM:stream] All models exhausted. Chain: {chain}, "
             f"errors: {errors}"
         )
-        yield "\n\n[AI 服务暂时不可用，请稍后重试]"
+        raise LLMUnavailableError(
+            "所有配置的 LLM provider 均不可用",
+            attempted_models=attempted,
+            errors=errors,
+        )
 
     def _create_stream_with_retry(self, client: OpenAI, model_name: str,
                                   messages: list, temperature: float):
