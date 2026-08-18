@@ -180,8 +180,9 @@ def test_qa_state_transitions_keep_composer_and_session_controls():
 
 
 def test_plan_events_target_stable_layers():
-    for event_name in ("stage", "advice_chunk", "writer_chunk", "factcheck_done", "done"):
+    for event_name in ("stage", "advice_chunk", "factcheck_done", "done"):
         assert event_name in HTML
+    assert "writer_chunk" not in HTML
     for element_id in ("plan-status", "plan-advice", "plan-stream", "plan-result"):
         assert element_id in HTML
     assert "function updatePlanStage(" in HTML
@@ -237,6 +238,24 @@ def test_plan_mobile_card_copy_is_readable():
     assert "休息 ${exercise?.rest || '60 秒'}" in HTML
     assert "${exercise?.reps ?? '?'} 次" in HTML
 
+
+
+
+def test_plan_backend_json_stream_is_not_rendered_to_users():
+    start = HTML.index("async function streamFrom")
+    end = HTML.index("// ═══════════════ RENDER PLAN", start)
+    body = HTML[start:end]
+    assert "event === 'writer_chunk'" not in body
+    assert "writer_done_raw" not in body
+    assert "renderPlanResult(resultArea, data)" in body
+
+
+def test_analysis_backend_json_stream_is_not_rendered_to_users():
+    start = HTML.index("async function analyzeExercise")
+    end = HTML.index("// ── File Upload", start)
+    body = HTML[start:end]
+    assert "event === 'writer_chunk'" not in body
+    assert "renderAnalysisResult(resultDiv, data || {})" in body
 
 
 
