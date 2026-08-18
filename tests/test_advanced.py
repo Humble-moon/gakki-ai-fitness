@@ -1,16 +1,28 @@
 """Task 14（MCP 协议）和 Task 15（A2A + 记忆 + HITL + Skill）的测试。"""
 
 import json
+import os
+from urllib.parse import urlparse
 from unittest.mock import patch, MagicMock
 
 import pytest
+
+from src.storage.redis_client import RedisClient
 
 # ---------- ExerciseMCPServer（MCP 动作库服务）----------
 
 from src.mcp.exercise_server import ExerciseMCPServer
 
 
-@pytest.mark.integration
+@pytest.fixture(autouse=True)
+def force_offline_mcp_fallback(monkeypatch):
+    """Keep default tests deterministic and prevent PostgreSQL connection probes."""
+    from src.mcp import exercise_server
+
+    monkeypatch.setattr(exercise_server._query, "_pg", None)
+    monkeypatch.setattr(exercise_server._query, "_pg_available", False)
+
+
 def test_exercise_mcp_search_by_muscle():
     server = ExerciseMCPServer()
     results = server.call_tool("search_by_muscle", {"muscle": "胸大肌"})
@@ -18,15 +30,13 @@ def test_exercise_mcp_search_by_muscle():
     assert any(e["name"] == "哑铃卧推" for e in results)
 
 
-@pytest.mark.integration
 def test_exercise_mcp_search_by_equipment():
     server = ExerciseMCPServer()
     results = server.call_tool("search_by_equipment", {"equipment": "哑铃"})
-    assert len(results) >= 2
-    assert all("哑铃" in e["equipment"] for e in results)
+    assert [e["name"] for e in results] == ["哑铃卧推"]
+    assert all(e["equipment"] == "哑铃" for e in results)
 
 
-@pytest.mark.integration
 def test_exercise_mcp_search_by_difficulty():
     server = ExerciseMCPServer()
     results = server.call_tool("search_by_difficulty", {"difficulty": "中级"})
@@ -34,7 +44,6 @@ def test_exercise_mcp_search_by_difficulty():
     assert all(e["difficulty"] == "中级" for e in results)
 
 
-@pytest.mark.integration
 def test_exercise_mcp_get_exercise_detail_found():
     server = ExerciseMCPServer()
     results = server.call_tool("get_exercise_detail", {"name": "杠铃深蹲"})
@@ -42,7 +51,6 @@ def test_exercise_mcp_get_exercise_detail_found():
     assert results[0]["name"] == "杠铃深蹲"
 
 
-@pytest.mark.integration
 def test_exercise_mcp_get_exercise_detail_not_found():
     """v2: 未找到动作抛出 McpToolError 而非返回 []。"""
     from src.mcp.exercise_server import McpToolError
@@ -78,7 +86,6 @@ def test_exercise_mcp_list_tools():
 
 # ---------- ToolRegistry（使用模拟数据库依赖）----------
 
-@pytest.mark.integration
 @patch("src.mcp.tool_registry.GraphSearch")
 def test_tool_registry_call_mcp_tool(mock_graph):
     from src.mcp.tool_registry import ToolRegistry
@@ -264,38 +271,76 @@ def test_hitl_review_warning_issue():
     assert "可能不太适合" in result.suggestions
 
 
-# ---------- LongTermMemory（使用 Redis）----------
+# ---------- LongTermMemory（使用隔离的测试 Redis DB）----------
 
 from src.memory.long_term import LongTermMemory
 
 
-@pytest.mark.integration
-def test_long_term_memory_save_and_get_preferences():
+_TEST_REDIS_DB_ENV = "TEST_REDIS_DB"
+
+
+def _isolated_test_redis_client() -> RedisClient:
+    """只在显式配置非默认测试 DB 时创建客户端。"""
+    raw_db = os.getenv(_TEST_REDIS_DB_ENV)
+    if raw_db is None:
+        pytest.skip(f"set {_TEST_REDIS_DB_ENV} to a dedicated non-zero Redis DB")
+    try:
+        db = int(raw_db)
+    except ValueError:
+        pytest.fail(f"{_TEST_REDIS_DB_ENV} must be an integer")
+    if db <= 0:
+        pytest.fail(f"{_TEST_REDIS_DB_ENV} must select a dedicated non-zero Redis DB")
+
+    redis_url = os.getenv("TEST_REDIS_URL")
+    if not redis_url:
+        pytest.fail("TEST_REDIS_URL must explicitly identify the dedicated test Redis")
+    if os.getenv("ALLOW_TEST_REDIS_FLUSH") != "1":
+        pytest.fail("set ALLOW_TEST_REDIS_FLUSH=1 to confirm the dedicated test DB may be cleared")
+    parsed = urlparse(redis_url)
+    url_db = int(parsed.path.lstrip("/") or 0)
+    if url_db != db:
+        pytest.fail("TEST_REDIS_URL DB must match TEST_REDIS_DB")
+
+    client = RedisClient()
+    client.conn = client.conn.from_url(redis_url, decode_responses=False)
+    return client
+
+
+@pytest.fixture
+def isolated_long_term_memory(monkeypatch):
+    """只清理由调用方明确指定的专用 Redis 测试 DB。"""
+    client = _isolated_test_redis_client()
+    monkeypatch.setattr("src.memory.long_term.RedisClient", lambda: client)
+    monkeypatch.setattr("src.storage.redis_client.logger", MagicMock(), raising=False)
     memory = LongTermMemory()
-    memory.redis.flushdb()
+    memory.redis.flushdb(confirmed=True)
+    try:
+        yield memory
+    finally:
+        memory.redis.flushdb(confirmed=True)
+        memory.redis.close()
+
+
+@pytest.mark.integration
+def test_long_term_memory_save_and_get_preferences(isolated_long_term_memory):
+    memory = isolated_long_term_memory
     memory.save_preference(999, "goal", "增肌")
     memory.save_preference(999, "equipment", ["哑铃", "杠铃"])
     prefs = memory.get_preferences(999)
     assert prefs.get("goal") == "增肌"
     assert prefs.get("equipment") == ["哑铃", "杠铃"]
-    memory.redis.flushdb()
 
 
 @pytest.mark.integration
-def test_long_term_memory_get_injury_history_empty():
-    memory = LongTermMemory()
-    memory.redis.flushdb()
-    injuries = memory.get_injury_history(999)
+def test_long_term_memory_get_injury_history_empty(isolated_long_term_memory):
+    injuries = isolated_long_term_memory.get_injury_history(999)
     assert injuries == []
-    memory.redis.flushdb()
 
 
 @pytest.mark.integration
-def test_long_term_memory_record_feedback():
-    memory = LongTermMemory()
-    memory.redis.flushdb()
+def test_long_term_memory_record_feedback(isolated_long_term_memory):
+    memory = isolated_long_term_memory
     memory.record_feedback(999, "plan_001", 5, "很有效果")
-    # 直接读取 key 进行校验
     key = "memory:user:999:feedback:plan_001"
     raw = memory.redis.get(key)
     assert raw is not None
@@ -303,16 +348,13 @@ def test_long_term_memory_record_feedback():
     assert feedback["rating"] == 5
     assert feedback["plan_id"] == "plan_001"
     assert feedback["comment"] == "很有效果"
-    memory.redis.flushdb()
 
 
 @pytest.mark.integration
-def test_long_term_memory_build_context_for_prompt():
-    memory = LongTermMemory()
-    memory.redis.flushdb()
+def test_long_term_memory_build_context_for_prompt(isolated_long_term_memory):
+    memory = isolated_long_term_memory
     memory.save_preference(999, "goal", "增肌")
     memory.save_preference(999, "injuries", ["肩袖损伤"])
     ctx = memory.build_context_for_prompt(999)
     assert "增肌" in ctx
     assert "肩袖损伤" in ctx
-    memory.redis.flushdb()

@@ -11,6 +11,15 @@ from unittest.mock import patch
 from src.mcp.exercise_server import ExerciseMCPServer, McpToolError
 
 
+@pytest.fixture(autouse=True)
+def force_offline_mcp_fallback(monkeypatch):
+    """Keep default tests deterministic and prevent PostgreSQL connection probes."""
+    from src.mcp import exercise_server
+
+    monkeypatch.setattr(exercise_server._query, "_pg", None)
+    monkeypatch.setattr(exercise_server._query, "_pg_available", False)
+
+
 # =========================================================================
 # ExerciseMCPServer — v2 兼容层测试
 # =========================================================================
@@ -18,35 +27,30 @@ from src.mcp.exercise_server import ExerciseMCPServer, McpToolError
 class TestExerciseMCPServer:
     """v1 兼容层的行为验证。"""
 
-    @pytest.mark.integration
     def test_search_by_muscle(self):
         server = ExerciseMCPServer()
         results = server.call_tool("search_by_muscle", {"muscle": "胸大肌"})
         assert len(results) >= 1
         assert any(e["name"] == "哑铃卧推" for e in results)
 
-    @pytest.mark.integration
     def test_search_by_equipment(self):
         server = ExerciseMCPServer()
         results = server.call_tool("search_by_equipment", {"equipment": "哑铃"})
-        assert len(results) >= 2
-        assert all("哑铃" in e["equipment"] for e in results)
+        assert [e["name"] for e in results] == ["哑铃卧推"]
+        assert all(e["equipment"] == "哑铃" for e in results)
 
-    @pytest.mark.integration
     def test_search_by_difficulty(self):
         server = ExerciseMCPServer()
         results = server.call_tool("search_by_difficulty", {"difficulty": "中级"})
         assert len(results) >= 2
         assert all(e["difficulty"] == "中级" for e in results)
 
-    @pytest.mark.integration
     def test_get_exercise_detail_found(self):
         server = ExerciseMCPServer()
         results = server.call_tool("get_exercise_detail", {"name": "杠铃深蹲"})
         assert len(results) == 1
         assert results[0]["name"] == "杠铃深蹲"
 
-    @pytest.mark.integration
     def test_get_exercise_detail_not_found(self):
         """v2 行为：未找到时抛出 McpToolError，而非返回空列表。
 
@@ -156,7 +160,6 @@ class TestToolRegistryV2:
         assert exc_info.value.code == -32601
         assert "nonexistent" in str(exc_info.value)
 
-    @pytest.mark.integration
     def test_call_mcp_tool(self):
         from src.mcp.tool_registry import ToolRegistry
         registry = ToolRegistry()
