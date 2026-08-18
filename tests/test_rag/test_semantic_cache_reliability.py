@@ -55,7 +55,10 @@ def make_entry(cache, profile, query, result, *, version=2, fingerprint=None, em
 def test_key_contains_version_and_profile_fingerprint(cache):
     key = cache._make_key({"goal": "增肌"}, "q")
     assert key.startswith("cache:fitness:v2:")
-    assert key.count(":") == 3
+    assert key.count(":") == 4
+    _, fingerprint, query_hash = key.rsplit(":", 2)
+    assert len(fingerprint) == 16
+    assert len(query_hash) == 64
     assert key != cache._make_key({"goal": "减脂"}, "q")
 
 
