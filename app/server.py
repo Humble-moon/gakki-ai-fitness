@@ -20,6 +20,7 @@ API 端点总览：
     让前端能实时展示 AI 生成过程（类似 ChatGPT 的逐字输出）。
 """
 import json
+import logging
 import sys
 from pathlib import Path
 # 将项目根目录加入 Python 模块搜索路径，确保 src.* 导入正常
@@ -27,15 +28,39 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 from src.core.orchestrator import Orchestrator
 from src.models.schemas import UserProfileInput
+from src.health import readiness_checks
+from src.llm.provider import LLMUnavailableError
+
+logger = logging.getLogger(__name__)
+_TERMINAL_EVENTS = {"done", "error", "cancelled"}
+STREAM_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
 
 # 创建 FastAPI 应用实例
 app = FastAPI(title="AI Fitness Coach")
+
+
+@app.get("/health/live")
+def health_live():
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def health_ready():
+    checks, ready = readiness_checks()
+    return JSONResponse(
+        {"status": "ok" if ready else "not_ready", "checks": checks},
+        status_code=200 if ready else 503,
+    )
 
 # CORS 中间件：允许前端跨域访问（部署到服务器时收紧 origins）
 app.add_middleware(
@@ -135,28 +160,32 @@ orch = Orchestrator()
 # SSE 流式传输辅助函数
 # ============================================================
 def _stream_events(generator):
-    """
-    将 Python 生成器包装为 SSE（Server-Sent Events）格式
+    """Convert an orchestrator iterator into one stable SSE stream."""
+    terminal = False
 
-    输入参数：
-        generator : Generator - 生成器，每次 yield 一个 (event_name, data) 元组
-                   event_name 如 "token", "plan", "error"
-                   data 如 {"content": "今天"} 或完整计划 dict
-
-    输出：
-        str 生成器 - 逐行产出 SSE 格式文本：
-            data: {"event": "token", "data": {...}}
-
-    核心逻辑：
-        1. 遍历上层生成器的每次产出
-        2. 将 (event, data) 包装为 JSON payload
-        3. 加上 SSE 协议要求的 "data: " 前缀和 "\n\n" 结尾
-
-    说明：必须是同步函数（非 async），因为 FastAPI StreamingResponse 需要同步迭代器。
-    """
-    for event, data in generator:
+    def emit(event, data):
         payload = json.dumps({"event": event, "data": data}, ensure_ascii=False)
-        yield f"data: {payload}\n\n"
+        return f"data: {payload}\n\n"
+
+    try:
+        for event, data in generator:
+            if event in _TERMINAL_EVENTS:
+                if terminal:
+                    continue
+                terminal = True
+            yield emit(event, data)
+        if not terminal:
+            yield emit("done", {"success": True})
+    except GeneratorExit:
+        if not terminal:
+            yield emit("cancelled", {"message": "请求已取消"})
+    except (ConnectionError, LLMUnavailableError):
+        if not terminal:
+            yield emit("error", {"code": "DEPENDENCY_UNAVAILABLE", "message": "演示依赖暂时不可用"})
+    except Exception:
+        logger.exception("SSE stream failed")
+        if not terminal:
+            yield emit("error", {"code": "STREAM_FAILED", "message": "流式请求暂时失败，请稍后重试"})
 
 
 # ============================================================
