@@ -2434,16 +2434,6 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
         detailEl = el('div', 'stage-detail', '');
         appendText(detailEl, `检索到 ${data?.count || 0} 个匹配项: ${(data?.names || []).join('、')}`);
         (mode === 'plan' ? document.getElementById('plan-stream') : resultArea)?.appendChild(detailEl);
-      } else if (event === 'writer_chunk') {
-        const streamArea = mode === 'plan' ? document.getElementById('plan-stream') : resultArea;
-        if (!streamBox || streamBox.parentNode !== streamArea || streamBox.classList.contains('advice-bubble')) {
-          streamBox = el('div', 'stream-box', '');
-          streamArea?.appendChild(streamBox);
-        }
-        streamText += data;
-        streamBox.replaceChildren();
-        appendText(streamBox, streamText);
-        streamBox.appendChild(el('span', 'cursor', ''));
       } else if (event === 'factcheck_done') {
         streamBox?.querySelector('.cursor')?.remove();
         detailEl?.remove();
@@ -2644,9 +2634,6 @@ async function analyzeExercise() {
           stageEl.appendChild(el('span', 'dot-pulse', '')); appendText(stageEl, data); output.appendChild(stageEl);
         } else if (event === 'retriever_done') {
           const detail = el('div', 'stage-detail', ''); appendText(detail, `检索到 ${data?.count || 0} 个相关动作参考`); output.appendChild(detail);
-        } else if (event === 'writer_chunk') {
-          if (!streamBox) { streamBox = el('div', 'live-stage', ''); output.appendChild(streamBox); }
-          appendText(streamBox, data);
         }
       },
       onTerminal: (event, data) => {
