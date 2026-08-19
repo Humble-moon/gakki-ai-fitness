@@ -50,6 +50,8 @@ agentic_rag.py — Agentic RAG 迭代检索（第 3 层）
 =============================================================================
 """
 
+import math
+
 from src.rag.vector_search import VectorSearch
 from src.rag.keyword_search import KeywordSearch
 from src.llm.provider import LLMProvider
@@ -110,20 +112,39 @@ class AgenticRAG:
         return self._legacy_search(query, filters=filters, max_retries=max_retries)
 
     def _legacy_search(self, query: str, filters: dict = None, max_retries: int = None) -> list:
-        max_retries = max_retries or AGENTIC_RAG_MAX_RETRIES
+        if max_retries is None or max_retries == 0:
+            max_retries = AGENTIC_RAG_MAX_RETRIES
+        elif max_retries < 0:
+            raise ValueError("max_retries must be non-negative")
+
         current_query = query
         all_results = []
         for attempt in range(max_retries):
             vec_results = self.vector.search(current_query, top_k=5, filters=filters)
             kw_results = self.keyword.search(current_query, top_k=5)
-            combined = self._deduplicate(vec_results + kw_results)
+            combined = self._deduplicate(
+                (vec_results if isinstance(vec_results, list) else [])
+                + (kw_results if isinstance(kw_results, list) else [])
+            )
             all_results.extend(combined)
             if attempt < max_retries - 1:
                 eval_msgs = build_retriever_eval_messages(query, combined[:10])
                 eval_result = self.llm.chat_with_json_mode(eval_msgs, model=REWRITE_MODEL)
-                if eval_result.get("quality_score", 0) >= 0.7:
+                if not isinstance(eval_result, dict):
+                    eval_result = {}
+
+                quality_score = eval_result.get("quality_score", 0)
+                if (
+                    isinstance(quality_score, (int, float))
+                    and not isinstance(quality_score, bool)
+                    and math.isfinite(quality_score)
+                    and quality_score >= 0.7
+                ):
                     break
-                current_query = eval_result.get("rewritten_query", current_query)
+
+                rewritten_query = eval_result.get("rewritten_query")
+                if isinstance(rewritten_query, str) and rewritten_query.strip():
+                    current_query = rewritten_query
         return self._deduplicate(all_results)
 
     def _deduplicate(self, results: list) -> list:
@@ -145,7 +166,12 @@ class AgenticRAG:
         seen = set()
         unique = []
         for r in results:
-            if r["name"] not in seen:
-                seen.add(r["name"])
+            if not isinstance(r, dict):
+                continue
+            name = r.get("name")
+            if not isinstance(name, str) or not name.strip():
+                continue
+            if name not in seen:
+                seen.add(name)
                 unique.append(r)
         return unique
