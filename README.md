@@ -140,3 +140,15 @@ python scripts/verify_project_facts.py --json
 ```
 
 该命令只读统计当前仓库的动作、知识文档、评测样本和测试文件；输出中的 `warnings` 会保留无法独立复核的历史口径。
+
+## 评测与验证入口
+
+默认 `pytest` 通过 `pytest.ini` 排除 `integration/live`；这两类测试必须显式 opt-in，不代表默认离线测试覆盖真实外部服务。评测元数据与指标范围可运行：
+
+```bash
+make facts
+make eval
+make test
+```
+
+`make e2e` 仅运行当前仓库可用的离线/核心 E2E 检查；缺少真实依赖时必须明确失败或跳过，不伪造成功。评测数据集、历史状态、可比性和限制见 [评测索引](eval/README.md)。

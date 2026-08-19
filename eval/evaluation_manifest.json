@@ -1,0 +1,56 @@
+{
+  "schema_version": "1",
+  "experiments": [
+    {
+      "id": "retrieval_main_206",
+      "kind": "retrieval",
+      "dataset_size": 206,
+      "source_path": "eval/results.json",
+      "status": "historical",
+      "comparability": "only-with-same-dataset-and-protocol",
+      "known_limits": ["historical result; no production SLA claim"],
+      "metrics": {"precision@5": 0.5084745763, "recall@5": 0.3063067343, "ndcg@5": 0.5453841072, "mrr": 0.7428436911}
+    },
+    {
+      "id": "retrieval_knowledge_subset_54",
+      "kind": "retrieval",
+      "dataset_size": 54,
+      "source_path": "eval/knowledge_results.json",
+      "status": "historical",
+      "comparability": "not-comparable-to-main",
+      "metric_definition": "Recall is multi-label cumulative coverage and may exceed 1; this is not ordinary single-label recall.",
+      "known_limits": ["LLM-generated knowledge questions", "special multi-label recall definition"],
+      "metrics": {"precision@5": 0.3555555556, "ndcg@5": 0.7751851852, "mrr": 0.8040343915}
+    },
+    {
+      "id": "generation_conditioned_10",
+      "kind": "generation_conditioned",
+      "dataset_size": 10,
+      "source_path": "eval/e2e_results.json",
+      "status": "historical",
+      "comparability": "only-with-same-model-and-judge",
+      "known_limits": ["not full retrieval E2E", "given-correct-context generation only"],
+      "metrics": {"accuracy": 5.0, "safety": 5.0, "usefulness": 5.0}
+    },
+    {
+      "id": "ragas_subset_68",
+      "kind": "ragas_subset",
+      "dataset_size": 68,
+      "source_path": "eval/ragas_results.json",
+      "status": "historical",
+      "comparability": "only-with-same-model-and-protocol",
+      "known_limits": ["subset, not full 206-query set", "LLM-as-judge scores"],
+      "metrics": {"faithfulness": 0.5478, "answer_relevancy": 0.5046, "context_relevance": 0.9449}
+    },
+    {
+      "id": "load_local_historical",
+      "kind": "load_local",
+      "dataset_size": 1,
+      "source_path": "eval/load_test_results.json",
+      "status": "historical",
+      "comparability": "not-comparable-to-production-SLA",
+      "known_limits": ["local environment only", "not a production SLA"],
+      "metrics": {}
+    }
+  ]
+}
