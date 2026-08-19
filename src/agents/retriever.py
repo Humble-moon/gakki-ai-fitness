@@ -18,6 +18,7 @@
 
 from src.rag.agentic_rag import AgenticRAG
 from src.mcp.tool_registry import ToolRegistry
+from src.mcp.exercise_server import McpToolError
 
 
 class RetrieverAgent:
@@ -54,41 +55,70 @@ class RetrieverAgent:
             两路合并可兼顾语义覆盖面和精确匹配，提高最终计划的动作丰富度。
         """
         results = {"exercises": [], "knowledge": []}
+        if not isinstance(plan, dict):
+            return results
+
+        subtasks = plan.get("subtasks")
+        if not isinstance(subtasks, list):
+            return results
+        subtasks = [item for item in subtasks if isinstance(item, str) and item.strip()]
+        if not subtasks:
+            return results
+
+        skill_config = plan.get("skill_config", {})
+        if not isinstance(skill_config, dict):
+            skill_config = {}
+        filters = skill_config.get("retrieval_filters", {})
+        if not isinstance(filters, dict):
+            filters = {}
 
         # === 路 1：AgenticRAG 语义检索 ===
         # 对每个子任务逐一检索。AgenticRAG 内部含自校正循环：
         # 检索 → 评估质量 → 不够好就改写查询 → 再检索，直到满意或达到最大轮次
-        for subtask in plan.get("subtasks", []):
-            filters = plan.get("skill_config", {}).get("retrieval_filters", {})
+        for subtask in subtasks:
             if route is None:
                 # Preserve the historical call shape for older injected fakes.
                 rag_results = self.agentic_rag.search(subtask, filters=filters)
             else:
                 rag_results = self.agentic_rag.search(subtask, filters=filters, route=route)
-            results["exercises"].extend(rag_results)
+            results["exercises"].extend(self._valid_rows(rag_results))
+
+        # Explicit graph/injury routes fail closed; do not supplement them with
+        # generic muscle search results when the routed backend returns nothing.
+        route_name = str(getattr(route, "name", route)).split(".")[-1].lower()
+        if route is not None and route_name in {"graph", "injury_sensitive"}:
+            results["exercises"] = self._deduplicate(results["exercises"])
+            return results
 
         # === 路 2：MCP 按肌肉名称精确检索 ===
         # 从子任务文本中提取目标肌群（推→胸/肩/三头，拉→背/二头，腿→腿/臀）
         # 然后对每个肌群调用 MCP 工具精确查询
-        body_parts = self._extract_body_parts(plan)
+        body_parts = self._extract_body_parts(subtasks)
         for part in body_parts:
-            mcp_results = self.tools.call("search_by_muscle", {"muscle": part})
-            if mcp_results:
-                # 统一字段名格式，标记来源为 "mcp"
-                results["exercises"].extend(
-                    [{"name": r["name"], "source": "mcp",
-                      "muscles": r.get("target_muscles", r.get("muscles", [])),
-                      "equipment": r["equipment"], "difficulty": r["difficulty"],
-                      "type": r["type"]}
-                     for r in mcp_results]
+            try:
+                mcp_results = self.tools.call("search_by_muscle", {"muscle": part})
+            except McpToolError:
+                # MCP is a best-effort supplement; preserve RAG and other MCP hits.
+                continue
+            for row in self._valid_rows(mcp_results):
+                results["exercises"].append(
+                    {
+                        "name": row["name"],
+                        "source": "mcp",
+                        "muscles": row.get("target_muscles", row.get("muscles", [])),
+                        "equipment": row.get("equipment"),
+                        "difficulty": row.get("difficulty"),
+                        "type": row.get("type"),
+                    }
                 )
+        results["exercises"] = self._deduplicate(results["exercises"])
         return results
 
-    def _extract_body_parts(self, plan: dict) -> list:
+    def _extract_body_parts(self, subtasks: list[str]) -> list:
         """【私有方法】从 Planner 产出的子任务文本中提取目标肌群名称。
 
         输入：
-            plan: dict — Planner 产出的规划字典
+            subtasks: list[str] — 已验证的非空子任务列表
         输出：
             list[str] — 目标肌群列表，如 ["胸", "肩", "三头", "背", "二头"]
 
@@ -107,10 +137,35 @@ class RetrieverAgent:
             "拉": ["背", "二头"],
             "腿": ["腿", "臀"],
         }
-        subtasks_str = "".join(plan.get("subtasks", []))
+        subtasks_str = "".join(subtasks)
         parts = []
         for key, vals in parts_map.items():
             if key in subtasks_str:
                 parts.extend(vals)
-        # 兜底：如果完全没有匹配，返回最常见的三大肌群，确保检索不会空跑
+        # Valid but unclassified planner output keeps the historical broad fallback.
         return parts if parts else ["胸", "背", "腿"]
+
+    @staticmethod
+    def _valid_rows(rows) -> list[dict]:
+        """Return only mapping rows with a usable exercise name."""
+        if not isinstance(rows, list):
+            return []
+        return [
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and isinstance(row.get("name"), str)
+            and row["name"].strip()
+        ]
+
+    @staticmethod
+    def _deduplicate(rows: list[dict]) -> list[dict]:
+        """Deduplicate exercise rows by exact name while preserving order."""
+        seen = set()
+        unique = []
+        for row in rows:
+            name = row["name"]
+            if name not in seen:
+                seen.add(name)
+                unique.append(row)
+        return unique
