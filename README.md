@@ -2,6 +2,8 @@
 
 AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 伤病推理，RAG 五层演进的知识问答系统。
 
+> 当前版本定位为 **localhost 单用户演示**，不承诺公网多用户、完整人工审核闭环或生产服务等级。可复核数字、证据路径和未核验口径见 [项目事实基线](docs/project-fact-baseline.md)。
+
 ## 架构
 
 ```
@@ -45,7 +47,7 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 
 - **智能计划生成** — 输入身高体重/目标/场景，AI 先给个性化分析，Multi-Agent 流水线生成周训练计划，FactChecker 安全审查 + 修正回路
 - **动作分析** — 输入动作名 + 训练感受，检索标准规范，诊断问题，给出改进方案
-- **知识问答** — 自然语言健身问题，162 篇知识文档（90 自写 + 32 PubMed 翻译 + 40 扩展专题，824 chunks）混合检索，RRF 融合 + Re-rank 精排，带来源引用
+- **知识问答** — 自然语言健身问题，162 篇知识文档（90 自写 + 32 PubMed 翻译 + 40 扩展专题；824 chunks 为 README 历史声明，当前未独立复核）混合检索，RRF 融合 + Re-rank 精排，带来源引用
 
 ## 快速开始
 
@@ -63,7 +65,7 @@ docker compose up -d
 # 4. 灌入种子数据（338 个动作 → PG + Neo4j）
 python -m src.main --seed
 
-# 5. 摄入知识库（162 篇文档 → 824 chunks → pgvector）
+# 5. 摄入知识库（162 篇文档；chunk 数量以实际摄入输出为准 → pgvector）
 python -m src.rag.knowledge_ingestion --dir data/knowledge
 
 # 6. 启动服务
@@ -117,7 +119,7 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 │   ├── muscle_building/
 │   ├── fat_loss/
 │   └── exercise_analysis/
-├── tests/                        # 81 个测试用例
+├── tests/                        # 测试用例（数量以 pytest 实际收集为准）
 ├── scripts/                      # 数据工具
 │   ├── fetch_knowledge.py        # PubMed 爬取
 │   ├── translate_knowledge.py    # LLM 翻译改写
@@ -125,8 +127,16 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 │   ├── expand_knowledge.py       # LLM 扩展知识库
 │   └── create_hnsw_indexes.sql   # HNSW 索引迁移
 ├── eval/                         # 评测框架（206 条 Golden Dataset + 消融/E2E/RAGAS/压测）
-├── data/knowledge/               # 健身知识库（162 篇文档，824 chunks）
+├── data/knowledge/               # 健身知识库（162 篇文档；chunk 数量以实际摄入输出为准）
 ├── run_mcp_server.py             # MCP 独立服务器（stdio/SSE/HTTP）
 ├── docker-compose.yml
 └── requirements.txt
 ```
+
+## 验证事实
+
+```bash
+python scripts/verify_project_facts.py --json
+```
+
+该命令只读统计当前仓库的动作、知识文档、评测样本和测试文件；输出中的 `warnings` 会保留无法独立复核的历史口径。
