@@ -8,7 +8,14 @@ import sys
 from pathlib import Path
 
 REQUIRED = {"id", "kind", "dataset_size", "source_path", "status", "comparability", "known_limits"}
-KINDS = {"retrieval", "generation_conditioned", "safety", "ragas_subset", "load_local"}
+KINDS = {
+    "retrieval",
+    "generation_conditioned",
+    "safety",
+    "ragas_subset",
+    "load_local",
+    "routing_fixture",
+}
 BOUNDED_NAMES = ("precision", "recall", "ndcg", "mrr")
 
 

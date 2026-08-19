@@ -51,6 +51,23 @@
       "comparability": "not-comparable-to-production-SLA",
       "known_limits": ["local environment only", "not a production SLA"],
       "metrics": {}
+    },
+    {
+      "id": "conditional_route_fixture",
+      "kind": "routing_fixture",
+      "dataset_size": 206,
+      "source_path": "eval/results/conditional-route-fixture.json",
+      "status": "deterministic-fixture",
+      "comparability": "not-a-retrieval-quality-experiment",
+      "known_limits": [
+        "executes deterministic query classification only; no retrieval runs",
+        "fixture metrics are not retrieval quality metrics",
+        "latency and provider calls are not measured"
+      ],
+      "metrics": {
+        "latency_ms": null,
+        "provider_calls": null
+      }
     }
   ]
 }
