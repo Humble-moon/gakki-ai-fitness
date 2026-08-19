@@ -177,7 +177,7 @@ def _stream_events(generator):
             if terminal:
                 break
         if not terminal:
-            yield emit("done", {"success": True})
+            yield emit("error", {"code": "STREAM_INCOMPLETE", "message": "流式请求未返回明确完成事件"})
     except GeneratorExit:
         raise
     except (ConnectionError, LLMUnavailableError):
