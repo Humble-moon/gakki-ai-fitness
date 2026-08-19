@@ -133,7 +133,28 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 └── requirements.txt
 ```
 
-## 验证事实
+## 阶段三运行入口
+
+阶段三保持 localhost 单用户边界，提供不泄露密钥的演示和离线 SSE 验证入口：
+
+```bash
+# 不需要真实 key；启动本地服务（业务依赖仍按现有配置工作）
+python scripts/run_demo.py --mode demo --host 127.0.0.1 --port 8503
+
+# 仅检查 full 配置，不安装或自动启动 PostgreSQL/Neo4j/Redis/MinIO
+python scripts/run_demo.py --mode full --check
+
+# 检查 demo 配置，不输出 .env 或任何 key
+python scripts/run_demo.py --check
+
+# 三条业务 SSE 离线验证；必须收到显式 done/error/cancelled terminal 事件
+python scripts/run_e2e.py --json
+make test
+make e2e
+```
+
+`full` 模式只检查配置并要求 provider 已配置，不处理密钥，也不自动安装或启动外部服务。SSE 流在没有明确 terminal 事件时视为失败，EOF 不代表成功。当前项目未声明或安装 Playwright，因此不覆盖浏览器 E2E；现有前端契约测试仍属于静态/接口级验证。
+
 
 ```bash
 python scripts/verify_project_facts.py --json
