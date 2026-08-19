@@ -32,7 +32,7 @@ class RetrieverAgent:
         # ToolRegistry：MCP 工具注册表，提供 search_by_muscle 等结构化查询能力
         self.tools = ToolRegistry()
 
-    def retrieve(self, plan: dict) -> dict:
+    def retrieve(self, plan: dict, route=None) -> dict:
         """根据规划结果执行多源检索。
 
         输入：
@@ -60,7 +60,11 @@ class RetrieverAgent:
         # 检索 → 评估质量 → 不够好就改写查询 → 再检索，直到满意或达到最大轮次
         for subtask in plan.get("subtasks", []):
             filters = plan.get("skill_config", {}).get("retrieval_filters", {})
-            rag_results = self.agentic_rag.search(subtask, filters=filters)
+            if route is None:
+                # Preserve the historical call shape for older injected fakes.
+                rag_results = self.agentic_rag.search(subtask, filters=filters)
+            else:
+                rag_results = self.agentic_rag.search(subtask, filters=filters, route=route)
             results["exercises"].extend(rag_results)
 
         # === 路 2：MCP 按肌肉名称精确检索 ===
