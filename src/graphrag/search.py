@@ -61,6 +61,20 @@ class GraphSearch:
     def __init__(self):
         self.neo4j = Neo4jClient()  # Neo4j 图数据库客户端
 
+    @staticmethod
+    def _require_text(value: str, field: str) -> str:
+        """Validate a required textual query field without changing its value."""
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field} must be a non-empty string")
+        return value
+
+    @staticmethod
+    def _require_positive_limit(limit: int) -> int:
+        """Reject invalid Cypher LIMIT values before contacting Neo4j."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        return limit
+
     # =====================================================================
     # 单跳查询：动作 → 肌肉
     # =====================================================================
@@ -81,6 +95,8 @@ class GraphSearch:
             从 Exercise 节点出发，沿 TARGETS 关系找到 Muscle 节点
             CONTAINS 做子串模糊匹配（如搜"胸"匹配"胸大肌"、"胸小肌"）
         """
+        muscle = self._require_text(muscle, "muscle")
+        limit = self._require_positive_limit(limit)
         results = self.neo4j.query(
             """
             MATCH (e:Exercise)-[:TARGETS]->(m:Muscle)
@@ -139,6 +155,8 @@ class GraphSearch:
             关系型数据库需要 JOIN 两张表再子查询，SQL 会非常复杂。
             图数据库的路径遍历天然支持多跳查询，性能远优于关系表 JOIN。
         """
+        equipment = self._require_text(equipment, "equipment")
+        target = self._require_text(target, "target")
         results = self.neo4j.query(
             """
             MATCH (e:Exercise)-[:REQUIRES]->(eq:Equipment)
@@ -245,6 +263,10 @@ class GraphSearch:
             但无法推理出"卧推可能引起肩袖损伤，建议做肩外旋康复动作"这样的因果链。
             图结构天然支持这种 multi-hop 推理。
         """
+        # Validate before any graph calls so malformed requests fail locally.
+        exercise = self._require_text(exercise, "exercise")
+        symptom = self._require_text(symptom, "symptom")
+
         # 步骤 1：查找该动作可能导致的伤病
         risks = self.find_injury_risks(exercise)
         causes = []
@@ -267,10 +289,11 @@ class GraphSearch:
                     solutions.append(rehab_ex)
 
         # 步骤 3：组装结果，去重康复动作（同一个康复动作可能被多种伤病推荐）
+        unique_solutions = list(dict.fromkeys(solutions))
         return {
             "exercise": exercise,
             "symptom": symptom,
             "possible_causes": causes,           # 可能的原因列表
-            "suggested_rehab": list(set(solutions)),  # 去重后的康复建议
+            "suggested_rehab": unique_solutions,  # 去重后的康复建议，保持图遍历顺序
             "source": "graph",                   # 标记来源，便于前端展示
         }
