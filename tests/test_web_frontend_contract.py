@@ -198,6 +198,25 @@ def test_plan_stage_does_not_clear_workspace_root():
     assert "plan-stream" in body
 
 
+def test_review_pending_done_renders_only_safe_review_panel_and_skips_history():
+    start = HTML.index("onTerminal: (event, data) =>")
+    end = HTML.index("// ═══════════════ RENDER PLAN", start)
+    terminal = HTML[start:end]
+    assert "data?.delivery_status === 'review_pending'" in terminal
+    assert "renderReviewPending(resultArea, data?.review)" in terminal
+    assert "data?.delivery_status !== 'safe_delivered'" in terminal
+    assert "savePlanToHistory" in terminal
+
+    start = HTML.index("function renderReviewPending")
+    end = HTML.index("function renderPlanResult", start)
+    panel = HTML[start:end]
+    assert ".innerHTML" not in panel
+    assert "审核编号" in panel
+    assert "风险原因" in panel
+    assert "禁止项" in panel
+    assert "下一步" in panel
+
+
 def test_plan_result_uses_safe_dynamic_dom_and_responsive_cards():
     start = HTML.index("function renderPlanResult")
     end = HTML.find("function renderAnalysisResult", start)

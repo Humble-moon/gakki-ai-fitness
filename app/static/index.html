@@ -2477,6 +2477,12 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
       if (event !== 'done') return;
       const resultArea = mode === 'plan' ? document.getElementById('plan-result') : document.getElementById(outputId);
       if (mode !== 'plan') resultArea.replaceChildren();
+      if (mode === 'plan' && data?.delivery_status === 'review_pending') {
+        renderReviewPending(resultArea, data?.review);
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      if (mode === 'plan' && data?.delivery_status !== 'safe_delivered') return;
       renderPlanResult(resultArea, data);
       if (mode === 'plan') {
         const iterBar = el('div', 'iterate-bar', '');
@@ -2495,6 +2501,28 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
 }
 
 // ═══════════════ RENDER PLAN ═══════════════
+function renderReviewPending(container, review) {
+  if (!container) return;
+  container.replaceChildren();
+  const details = review || {};
+  const panel = el('section', 'review-pending-panel', '');
+  panel.setAttribute('aria-label', '人工审核待处理');
+  panel.appendChild(el('h3', '', '安全审核待处理'));
+  const fields = [
+    ['审核编号', details.review_id || '待分配'],
+    ['风险原因', details.reason || '安全检查需要人工确认'],
+    ['禁止项', Array.isArray(details.prohibited_actions) ? details.prohibited_actions.join('；') : '不要执行或调整训练计划'],
+    ['下一步', details.next_step || '请等待专业审核。'],
+  ];
+  fields.forEach(([label, value]) => {
+    const row = el('div', 'review-pending-row', '');
+    row.appendChild(el('strong', '', `${label}：`));
+    appendText(row, value);
+    panel.appendChild(row);
+  });
+  container.appendChild(panel);
+}
+
 function renderPlanResult(container, data) {
   if (!container) return;
   const plan = data || {};

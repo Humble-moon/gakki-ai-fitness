@@ -36,6 +36,7 @@ from src.models.schemas import UserProfileInput
 from src.storage.document_store import DocumentStore
 from src.agents.output_validation import validate_training_plan, OutputValidationError
 from src.core.goal_contract import GoalConsistencyError, plan_goal_issue, plan_goal_matches, validate_requested_goal
+from src.hitl.review_store import InMemoryReviewArtifactStore
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ class Orchestrator:
         self.conversation = ConversationManager()
         self.long_term = LongTermMemory()
         self.documents = DocumentStore()
+        self.review_store = InMemoryReviewArtifactStore()
 
     @staticmethod
     def _safe_cached_result(result: dict | None, expected_goal: str | None = None) -> dict | None:
@@ -140,12 +142,50 @@ class Orchestrator:
         result.update({"warnings": warnings, "active_issues": active_issues,
                        "resolved_issues": resolved_issues,
                        "requires_review": requires_review or not checks or not is_safe,
+                       "review_reason": final.get("review_reason", ""),
+                       "review_severity": final.get("review_severity", ""),
                        "confidence": confidence if confidence_valid else 0,
                        "rewrite_count": rewrite_count})
         goal_matches = expected_goal is None or plan_goal_matches(result, expected_goal)
         result["_persistence_allowed"] = bool(schema_valid and is_safe and issues_empty and not requires_review
             and confidence_valid and goal_matches and not provider_degraded and not result.get("_degraded", False))
         return result
+
+    def _review_pending_result(self, profile: dict, query: str, result: dict) -> dict:
+        """Deliver only a review summary when the final gate requires human review."""
+        if result.get("_persistence_allowed") is True:
+            delivered = dict(result)
+            delivered["delivery_status"] = "safe_delivered"
+            return delivered
+        if not result.get("requires_review"):
+            return result
+        issues = list(result.get("active_issues") or [])
+        severity = next((issue.get("severity") for issue in issues if isinstance(issue, dict) and issue.get("severity")), "warning")
+        artifact = self.review_store.create(
+            profile_summary={key: profile.get(key) for key in ("goal", "injuries", "training_years") if key in profile},
+            query=query,
+            issues=issues,
+            severity=severity,
+            prohibited_actions=["不要开始训练计划", "不要加大训练强度", "不要自行替换或增加动作"],
+        )
+        final_check = result.get("active_issues") or []
+        reason = result.get("review_reason") or (
+            final_check[0].get("issue") if final_check and isinstance(final_check[0], dict) else "安全检查需要人工确认"
+        )
+        return {
+            "delivery_status": "review_pending",
+            "requires_review": True,
+            "review": {
+                "review_id": artifact.review_id,
+                "status": artifact.status,
+                "created_at": artifact.created_at,
+                "reason": reason,
+                "issues": artifact.issues,
+                "severity": artifact.severity,
+                "prohibited_actions": artifact.prohibited_actions,
+                "next_step": "请等待专业审核；在审核完成前不要执行或调整训练计划。",
+            },
+        }
 
     def _persist_if_safe(self, profile: dict, query: str, result: dict,
                          session_id: str | None = None) -> bool:
@@ -240,7 +280,7 @@ class Orchestrator:
             raise GoalConsistencyError("训练计划目标与用户目标不一致")
         self._persist_if_safe(profile_dict, query, result)
         task.complete()
-        return result
+        return self._review_pending_result(profile_dict, query, result)
 
     def generate_plan_stream(self, profile: UserProfileInput, query: str = "",
                              session_id: str = None):
@@ -341,7 +381,7 @@ class Orchestrator:
             yield ("error", {"code": GoalConsistencyError.code, "message": "训练计划目标校验失败，请重试"})
             return
         self._persist_if_safe(profile_dict, query, result, session_id=session_id)
-        yield ("done", result)
+        yield ("done", self._review_pending_result(profile_dict, query, result))
 
     def _normalize_plan(self, result: dict, *, profile: dict | None = None,
                         plan_config: dict | None = None) -> dict:
