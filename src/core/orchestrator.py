@@ -35,6 +35,7 @@ from src.a2a.messaging import MessageBus, Task, Artifact
 from src.models.schemas import UserProfileInput
 from src.storage.document_store import DocumentStore
 from src.agents.output_validation import validate_training_plan, OutputValidationError
+from src.core.goal_contract import GoalConsistencyError, plan_goal_issue, plan_goal_matches, validate_requested_goal
 
 logger = logging.getLogger(__name__)
 
@@ -71,11 +72,13 @@ class Orchestrator:
         self.documents = DocumentStore()
 
     @staticmethod
-    def _safe_cached_result(result: dict | None) -> dict | None:
-        """Accept only cache entries that already passed the final gate."""
+    def _safe_cached_result(result: dict | None, expected_goal: str | None = None) -> dict | None:
+        """Accept only cache entries that already passed the final gate and goal contract."""
         if not isinstance(result, dict) or result.get("_persistence_allowed") is not True:
             return None
         if result.get("requires_review") is not False or result.get("warnings"):
+            return None
+        if expected_goal is not None and not plan_goal_matches(result, expected_goal):
             return None
         try:
             validate_training_plan(result)
@@ -83,11 +86,27 @@ class Orchestrator:
             return None
         return result
 
+    @staticmethod
+    def _check_with_goal_issue(result: dict, check: dict, expected_goal: str) -> dict:
+        """Add the deterministic goal issue to a FactChecker result when needed."""
+        merged = dict(check) if isinstance(check, dict) else {}
+        issues = list(merged.get("issues") or [])
+        issue = plan_goal_issue(result, expected_goal)
+        if issue:
+            issues.append(issue)
+            merged["is_safe"] = False
+        merged["issues"] = issues
+        return merged
+
     def _finalize_result(self, result: dict, checks: list[dict], rewrite_count: int,
-                         *, provider_degraded: bool = False) -> dict:
+                         *, provider_degraded: bool = False,
+                         expected_goal: str | None = None) -> dict:
         """Normalize one terminal state and decide whether persistence is allowed."""
         result = dict(result) if isinstance(result, dict) else {}
         checks = checks if isinstance(checks, list) else []
+        if expected_goal is not None:
+            expected_goal = validate_requested_goal(expected_goal)
+            checks = [self._check_with_goal_issue(result, check, expected_goal) for check in checks]
         final = checks[-1] if checks and isinstance(checks[-1], dict) else {}
         active_issues = final.get("issues") if isinstance(final.get("issues"), list) else []
         active_issue_values = {
@@ -123,8 +142,9 @@ class Orchestrator:
                        "requires_review": requires_review or not checks or not is_safe,
                        "confidence": confidence if confidence_valid else 0,
                        "rewrite_count": rewrite_count})
+        goal_matches = expected_goal is None or plan_goal_matches(result, expected_goal)
         result["_persistence_allowed"] = bool(schema_valid and is_safe and issues_empty and not requires_review
-            and confidence_valid and not provider_degraded and not result.get("_degraded", False))
+            and confidence_valid and goal_matches and not provider_degraded and not result.get("_degraded", False))
         return result
 
     def _persist_if_safe(self, profile: dict, query: str, result: dict,
@@ -132,7 +152,7 @@ class Orchestrator:
         """Persist only a fully safe terminal result."""
         if not isinstance(result, dict) or result.get("_persistence_allowed") is not True:
             return False
-        if not self._safe_cached_result(result):
+        if not self._safe_cached_result(result, expected_goal=profile.get("goal")):
             return False
         if session_id:
             summary = self._summarize_plan_for_context(result)
@@ -149,7 +169,8 @@ class Orchestrator:
     def generate_plan(self, profile: UserProfileInput, query: str = "") -> dict:
         """Generate and finalize a training plan synchronously."""
         profile_dict = profile.model_dump()
-        cached = self._safe_cached_result(self.cache.get(profile_dict, query))
+        expected_goal = validate_requested_goal(profile_dict.get("goal"))
+        cached = self._safe_cached_result(self.cache.get(profile_dict, query), expected_goal=expected_goal)
         if cached:
             logger.info("Cache hit for plan generation")
             return cached
@@ -187,7 +208,9 @@ class Orchestrator:
         rewrite_count = 0
         all_checks = []
 
-        check = self.fact_checker.check(result, profile_dict)
+        check = self._check_with_goal_issue(
+            result, self.fact_checker.check(result, profile_dict), expected_goal
+        )
         provider_degraded = provider_degraded or bool(check.get("_degraded"))
         all_checks.append(check)
 
@@ -204,12 +227,17 @@ class Orchestrator:
             )
             provider_degraded = provider_degraded or bool(result.get("_degraded"))
             rewrite_count += 1
-            check = self.fact_checker.check(result, profile_dict)
+            check = self._check_with_goal_issue(
+                result, self.fact_checker.check(result, profile_dict), expected_goal
+            )
             provider_degraded = provider_degraded or bool(check.get("_degraded"))
             all_checks.append(check)
 
         result = self._finalize_result(result, all_checks, rewrite_count,
-                                       provider_degraded=provider_degraded)
+                                       provider_degraded=provider_degraded,
+                                       expected_goal=expected_goal)
+        if not plan_goal_matches(result, expected_goal):
+            raise GoalConsistencyError("训练计划目标与用户目标不一致")
         self._persist_if_safe(profile_dict, query, result)
         task.complete()
         return result
@@ -219,6 +247,7 @@ class Orchestrator:
         """Stream a plan and persist only after final validation."""
 
         profile_dict = profile.model_dump()
+        expected_goal = validate_requested_goal(profile_dict.get("goal"))
         conv_context = ""
         plan_context = ""
         if session_id:
@@ -230,7 +259,7 @@ class Orchestrator:
         pseudo_uid = self._make_user_key(profile_dict)
         long_term_context = self.long_term.build_context_for_prompt(pseudo_uid)
         if not session_id:
-            cached = self._safe_cached_result(self.cache.get(profile_dict, query))
+            cached = self._safe_cached_result(self.cache.get(profile_dict, query), expected_goal=expected_goal)
             if cached:
                 yield ("cache_hit", cached)
                 yield ("done", cached)
@@ -284,7 +313,9 @@ class Orchestrator:
 
         rewrite_count = 0
         all_checks = []
-        check = self.fact_checker.check(result, profile_dict)
+        check = self._check_with_goal_issue(
+            result, self.fact_checker.check(result, profile_dict), expected_goal
+        )
         provider_degraded = provider_degraded or bool(check.get("_degraded"))
         all_checks.append(check)
         yield ("factcheck_done", {"safe": check.get("is_safe", True), "issues": len(check.get("issues", [])), "confidence": check.get("confidence", 0)})
@@ -297,12 +328,18 @@ class Orchestrator:
             )
             provider_degraded = provider_degraded or bool(result.get("_degraded"))
             rewrite_count += 1
-            check = self.fact_checker.check(result, profile_dict)
+            check = self._check_with_goal_issue(
+                result, self.fact_checker.check(result, profile_dict), expected_goal
+            )
             provider_degraded = provider_degraded or bool(check.get("_degraded"))
             all_checks.append(check)
             yield ("factcheck_done", {"safe": check.get("is_safe", True), "issues": len(check.get("issues", [])), "confidence": check.get("confidence", 0)})
         result = self._finalize_result(result, all_checks, rewrite_count,
-                                       provider_degraded=provider_degraded)
+                                       provider_degraded=provider_degraded,
+                                       expected_goal=expected_goal)
+        if not plan_goal_matches(result, expected_goal):
+            yield ("error", {"code": GoalConsistencyError.code, "message": "训练计划目标校验失败，请重试"})
+            return
         self._persist_if_safe(profile_dict, query, result, session_id=session_id)
         yield ("done", result)
 

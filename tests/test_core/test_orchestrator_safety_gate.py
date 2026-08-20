@@ -1,5 +1,8 @@
 from types import SimpleNamespace
 
+import pytest
+
+from src.core.goal_contract import GoalConsistencyError
 from src.core.orchestrator import Orchestrator
 
 
@@ -166,6 +169,67 @@ def test_successful_rewrite_separates_resolved_from_active_issues_and_persists()
     assert result["_persistence_allowed"] is True
     assert orch._persist_if_safe({"goal": "增肌"}, "q", result) is True
     assert [name for name, _, _ in orch.cache.calls] == ["set"]
+
+
+def test_goal_mismatch_cache_entry_is_a_miss():
+    mismatched = dict(valid_plan(), goal="减脂", _persistence_allowed=True,
+                      requires_review=False, warnings=[])
+
+    assert Orchestrator._safe_cached_result(mismatched, expected_goal="增肌") is None
+
+
+def test_finalization_adds_goal_issue_and_blocks_persistence():
+    orch = make_orch()
+    result = orch._finalize_result(valid_plan() | {"goal": "减脂"}, [safe_check()], 0,
+                                  expected_goal="增肌")
+
+    assert result["_persistence_allowed"] is False
+    assert result["active_issues"][-1]["code"] == "PLAN_GOAL_MISMATCH"
+    assert orch._persist_if_safe({"goal": "增肌"}, "q", result) is False
+    orch.cache.assert_empty(); orch.conversation.assert_empty(); orch.long_term.assert_empty()
+
+
+def test_sync_generation_raises_after_goal_mismatch_rewrite_budget():
+    orch = make_orch()
+    orch.planner = SimpleNamespace(plan=lambda *args, **kwargs: {"skill_config": {}})
+    orch.retriever = SimpleNamespace(retrieve=lambda plan: {"exercises": []})
+    orch.bus = SimpleNamespace(send=lambda task: None)
+    mismatched = valid_plan() | {"goal": "增肌"}
+    orch.writer = SimpleNamespace(write_plan=lambda *args: mismatched,
+                                  rewrite_plan=lambda *args: mismatched)
+    orch.fact_checker = SimpleNamespace(check=lambda *args: safe_check())
+    profile = SimpleNamespace(model_dump=lambda: {"goal": "减脂"}, goal="减脂")
+
+    with pytest.raises(GoalConsistencyError) as exc:
+        orch.generate_plan(profile, "q")
+
+    assert exc.value.code == "GOAL_CONSISTENCY_FAILED"
+
+
+def test_stream_generation_emits_only_goal_error_after_rewrite_budget():
+    orch = make_orch()
+    orch.conversation = SimpleNamespace(add_turn=lambda *args: None,
+                                        build_context_for_prompt=lambda *args: "",
+                                        get_plan_state=lambda *args: "")
+    orch.long_term = SimpleNamespace(build_context_for_prompt=lambda *args: "")
+    orch.planner = SimpleNamespace(plan=lambda *args, **kwargs: {"skill_config": {}})
+    orch.retriever = SimpleNamespace(retrieve=lambda plan: {"exercises": []})
+    mismatched = valid_plan() | {"goal": "增肌"}
+    orch.writer = SimpleNamespace(
+        llm=SimpleNamespace(chat_stream=lambda *args, **kwargs: iter(["建议"])),
+        write_plan_stream=lambda *args, **kwargs: iter([("done", mismatched)]),
+        rewrite_plan=lambda *args: mismatched,
+    )
+    orch.fact_checker = SimpleNamespace(check=lambda *args: safe_check())
+    persisted = []
+    orch._persist_if_safe = lambda *args, **kwargs: persisted.append(True)
+    profile = SimpleNamespace(model_dump=lambda: {"goal": "减脂"}, goal="减脂")
+
+    events = list(orch.generate_plan_stream(profile, "q"))
+    terminals = [(event, data) for event, data in events if event in {"done", "error"}]
+
+    assert terminals == [("error", {"code": "GOAL_CONSISTENCY_FAILED", "message": "训练计划目标校验失败，请重试"})]
+    assert persisted == []
 
 
 def test_degraded_fact_check_including_rewrite_cannot_authorize_persistence():

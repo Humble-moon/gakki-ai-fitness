@@ -33,7 +33,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 from src.core.orchestrator import Orchestrator
-from src.models.schemas import UserProfileInput
+from src.models.schemas import TrainingGoal, UserProfileInput
 from src.health import readiness_checks
 from src.llm.provider import LLMUnavailableError
 
@@ -88,7 +88,7 @@ class PlanRequest(BaseModel):
     # 体重（kg），默认 80
     training_years: float = 1.0
     # 训练年限，默认 1.0
-    goal: str = "增肌"
+    goal: TrainingGoal = "增肌"
     # 训练目标，默认 "增肌"
     available_equipment: list[str] = ["哑铃", "杠铃"]
     # 可用器械列表，默认 ["哑铃", "杠铃"]
@@ -114,7 +114,7 @@ class AnalysisRequest(BaseModel):
     # 体重（kg）
     training_years: float = 1.0
     # 训练年限
-    goal: str = "增肌"
+    goal: TrainingGoal = "增肌"
     # 训练目标
     available_equipment: list[str] = ["哑铃"]
     # 可用器械
@@ -139,7 +139,7 @@ class QuestionRequest(BaseModel):
     height: float = 180
     weight: float = 80
     training_years: float = 1.0
-    goal: str = "增肌"
+    goal: TrainingGoal = "增肌"
     available_equipment: list[str] = ["哑铃"]
     days_per_week: int = 4
     injuries: list[str] = []

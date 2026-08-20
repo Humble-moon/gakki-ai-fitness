@@ -165,6 +165,7 @@ class WriterAgent:
 3. 如果用户的伤病涉及某些部位，完全避开相关动作
 4. 修正后的计划必须仍然是 {profile.get('days_per_week', original_plan.get('sessions_per_week'))} 天
 5. 输出完整的修正后计划 JSON（不是只输出修改的部分），并保留原计划的 weeks 和 sessions_per_week；未知的 weeks 保持 null，不得猜测
+6. 输出 JSON 的 goal 必须严格等于用户的 canonical goal：{goal}；不得输出其他 goal
 
 目标：{goal}
 用户画像：{profile}

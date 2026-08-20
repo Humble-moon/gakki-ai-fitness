@@ -95,6 +95,7 @@ class PlannerAgent:
             plan["low_confidence"] = True
 
         plan["skill"] = llm_skill
+        plan["requested_goal"] = profile.get("goal")
         plan["_keyword_route"] = keyword_skill  # 调试用
         plan["skill_config"] = {
             "retrieval_filters": skill.retrieval_filters,

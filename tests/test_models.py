@@ -39,3 +39,11 @@ class TestTrainingPlanOutput:
         )
         assert plan.weeks == 4
         assert len(plan.days[0].exercises) == 1
+
+    def test_invalid_plan_goal_raises(self):
+        with pytest.raises(Exception):
+            TrainingPlanOutput(
+                plan_id="abc-123", user_id=1, goal="塑形",
+                sessions_per_week=1,
+                days=[TrainingDay(day=1, focus="全身", exercises=[])],
+            )

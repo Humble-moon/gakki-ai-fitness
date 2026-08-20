@@ -47,6 +47,12 @@ async def test_ready_health_reports_dependency_failure(client, monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_generate_plan_rejects_invalid_goal(client):
+    response = await client.post("/api/generate-plan", json={"goal": "塑形"})
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     ("path", "payload"),
     [
