@@ -26,3 +26,12 @@ class TestPlannerAgent:
                    "training_years": 1, "available_equipment": ["哑铃"]}
         result = planner.plan("帮我设计增肌计划", profile)
         assert "subtasks" in result
+
+    def test_plan_records_profile_goal_even_when_safety_route_overrides_skill(self, planner, monkeypatch):
+        profile = {"goal": "减脂"}
+        monkeypatch.setattr(planner.llm, "chat_with_json_mode", lambda _: {"skill": "fat_loss"})
+
+        result = planner.plan("膝盖疼，想减脂", profile)
+
+        assert result["skill"] == "exercise_analysis"
+        assert result["requested_goal"] == "减脂"

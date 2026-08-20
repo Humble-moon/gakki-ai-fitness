@@ -10,7 +10,10 @@ schemas.py - API 数据模型 / Pydantic Schema 定义
 调用者：Pydantic v2 运行时。
 """
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
+
+
+TrainingGoal = Literal["增肌", "减脂"]
 from datetime import datetime
 
 
@@ -34,7 +37,7 @@ class UserProfileInput(BaseModel):
     training_years: float = Field(..., ge=0, le=30, description="训练年限")
     # 训练年限，合法范围 0~30 年
 
-    goal: str = Field(..., pattern="^(增肌|减脂)$")
+    goal: TrainingGoal
     # 训练目标，正则约束只能为 "增肌" 或 "减脂"
 
     available_equipment: List[str] = Field(..., min_length=1)
@@ -109,7 +112,7 @@ class TrainingPlanOutput(BaseModel):
     user_id: int
     # 关联的用户 ID
 
-    goal: str
+    goal: TrainingGoal
     # 训练目标（"增肌" 或 "减脂"）
 
     weeks: int | None = None

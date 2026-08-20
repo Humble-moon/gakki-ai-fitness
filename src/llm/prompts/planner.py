@@ -33,12 +33,15 @@ PLANNER_SYSTEM = """你是健身训练计划编排专家。根据用户的身体
 输出 JSON 格式：
 {{
   "skill": "muscle_building" | "fat_loss" | "exercise_analysis",
+  "requested_goal": "增肌" | "减脂",
   "skill_reasoning": "选择该技能的原因（一句话）",
   "subtasks": ["检索推类动作", "检索拉类动作", "检索腿部动作"],
   "retrieval_strategy": "vector" | "keyword" | "graph" | "all",
   "output_format": "增肌计划" | "减脂计划" | "动作分析",
   "constraints": ["仅哑铃动作", "排除肩伤风险动作"]
 }}
+
+`requested_goal` 必须严格复制用户画像中的 goal；它与 skill 独立，即使安全路由到动作分析，也必须保留用户画像目标。
 
 选择技能的规则：
 - 涉及伤病/疼痛/功能障碍/体态矫正 → exercise_analysis（安全优先，即使同时提增肌/减脂）

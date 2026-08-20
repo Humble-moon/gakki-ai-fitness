@@ -38,6 +38,23 @@ class TestWriterAgent:
         assert "旧计划上下文" in captured["content"]
         assert "把第二天改成哑铃" in captured["content"]
 
+    def test_rewrite_prompt_requires_profile_goal_without_overwriting_model_goal(self, monkeypatch):
+        writer = WriterAgent()
+        captured = {}
+
+        def fake_write(messages, **kwargs):
+            captured["content"] = messages[-1]["content"]
+            return {"goal": "增肌", "days": []}
+
+        monkeypatch.setattr(writer.llm, "chat_with_json_mode", fake_write)
+        result = writer.rewrite_plan(
+            {"plan_id": "p1", "goal": "减脂", "weeks": 4}, [], {"exercises": []},
+            {"id": 1, "goal": "减脂", "days_per_week": 3},
+        )
+
+        assert "goal 必须严格等于用户的 canonical goal：减脂" in captured["content"]
+        assert result["goal"] == "增肌"
+
     def test_write_analysis_stream_forwards_degraded_metadata(self, monkeypatch):
         writer = WriterAgent()
 

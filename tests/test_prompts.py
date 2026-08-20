@@ -21,3 +21,17 @@ def test_writer_prompt_matches_training_plan_output_metadata():
     assert '"weeks"' in system_prompt
     assert '"sessions_per_week"' in system_prompt
     assert '"days_per_week"' not in system_prompt
+
+
+def test_writer_prompt_requires_canonical_goal():
+    messages = build_writer_messages([], {"days_per_week": 3, "goal": "减脂"}, "减脂")
+
+    assert "canonical goal：减脂" in messages[0]["content"]
+    assert "不得输出其他 goal" in messages[0]["content"]
+
+
+def test_planner_prompt_preserves_profile_goal_separately_from_skill():
+    messages = build_planner_messages("膝盖疼，想减脂", {"goal": "减脂"})
+
+    assert '"requested_goal"' in messages[0]["content"]
+    assert "即使安全路由到动作分析，也必须保留" in messages[0]["content"]

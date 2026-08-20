@@ -103,9 +103,14 @@ def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str) -
     if equipment:
         constraints.append(f"器械限制：只能用 {equipment}，不要推荐需要其他器械的动作")
 
+    canonical_goal = profile.get("goal", goal)
+    constraints.extend([
+        f"canonical goal：{canonical_goal}",
+        "输出 JSON 的 goal 必须严格等于 canonical goal，不得输出其他 goal。",
+    ])
     user_msg = "\n".join(constraints) + f"\n\n目标：{goal}\n用户画像：{profile}\n可用动作：{retrieved_exercises}"
 
     return [
-        {"role": "system", "content": WRITER_SYSTEM},
+        {"role": "system", "content": WRITER_SYSTEM + f"\n\ncanonical goal：{canonical_goal}；输出的 goal 必须严格等于该值，不得输出其他 goal。"},
         {"role": "user", "content": user_msg}
     ]
