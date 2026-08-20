@@ -92,6 +92,20 @@ def test_stream_stops_and_closes_upstream_after_first_terminal():
     assert source.closed is True
 
 
+def test_stream_accepts_review_pending_as_the_single_done_terminal_payload():
+    from app.server import _stream_events
+
+    frames = list(_stream_events(iter([
+        ("done", {"delivery_status": "review_pending", "review": {"review_id": "review-1"}}),
+        ("stage", "must not escape"),
+    ])))
+
+    assert len(frames) == 1
+    assert '"event": "done"' in frames[0]
+    assert '"delivery_status": "review_pending"' in frames[0]
+    assert "must not escape" not in frames[0]
+
+
 def test_stream_generator_exit_closes_upstream_without_yielding():
     from app.server import _stream_events
 

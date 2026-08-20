@@ -4,6 +4,7 @@ import pytest
 
 from src.core.goal_contract import GoalConsistencyError
 from src.core.orchestrator import Orchestrator
+from src.hitl.review_store import InMemoryReviewArtifactStore
 
 
 class StoreSpy:
@@ -24,6 +25,7 @@ def make_orch():
     orch.cache = StoreSpy()
     orch.conversation = StoreSpy()
     orch.long_term = StoreSpy()
+    orch.review_store = InMemoryReviewArtifactStore()
     return orch
 
 
@@ -70,12 +72,35 @@ def test_safe_result_persists_regular_cache_and_long_term_memory():
     assert [name for name, _, _ in orch.long_term.calls] == ["save_preference"] * 3
 
 
-def test_review_required_stream_result_is_not_persisted():
+def test_review_required_result_creates_pending_artifact_and_is_not_persisted():
     orch = make_orch()
-    result = orch._finalize_result(valid_plan(), [safe_check(requires_human_review=True)], 0)
+    check = safe_check(
+        requires_human_review=True,
+        issues=[{"issue": "膝盖风险", "severity": "danger"}],
+        review_reason="伤病冲突需要人工确认",
+        review_severity="danger",
+    )
+    result = orch._finalize_result(valid_plan(), [check], 0)
+    delivered = orch._review_pending_result({"goal": "增肌", "injuries": ["膝盖疼"]}, "膝盖疼还能深蹲吗", result)
+
     assert result["requires_review"] is True
-    assert orch._persist_if_safe({}, "q", result, "session") is False
+    assert delivered["delivery_status"] == "review_pending"
+    assert delivered["review"]["review_id"]
+    assert delivered["review"]["reason"] == "伤病冲突需要人工确认"
+    assert delivered["review"]["prohibited_actions"] == ["不要开始训练计划", "不要加大训练强度", "不要自行替换或增加动作"]
+    assert "days" not in delivered
+    assert orch._persist_if_safe({}, "q", delivered, "session") is False
     orch.cache.assert_empty(); orch.conversation.assert_empty(); orch.long_term.assert_empty()
+
+
+def test_safe_result_is_marked_safe_delivered():
+    orch = make_orch()
+
+    delivered = orch._review_pending_result({"goal": "增肌"}, "q", orch._finalize_result(valid_plan(), [safe_check()], 0))
+
+    assert delivered["delivery_status"] == "safe_delivered"
+    assert delivered["days"] == valid_plan()["days"]
+    assert "review" not in delivered
 
 
 def test_degraded_provider_result_cannot_persist():
