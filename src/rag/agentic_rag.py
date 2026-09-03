@@ -54,9 +54,10 @@ import math
 
 from src.rag.vector_search import VectorSearch
 from src.rag.keyword_search import KeywordSearch
+from src.rag.fusion import rrf_fuse
 from src.llm.provider import LLMProvider
 from src.llm.prompts.retriever import build_retriever_eval_messages
-from src.config import AGENTIC_RAG_MAX_RETRIES, REWRITE_MODEL
+from src.config import AGENTIC_RAG_MAX_RETRIES, EXERCISE_FUSION, REWRITE_MODEL
 from src.graphrag.search import GraphSearch
 
 
@@ -122,10 +123,9 @@ class AgenticRAG:
         for attempt in range(max_retries):
             vec_results = self.vector.search(current_query, top_k=5, filters=filters)
             kw_results = self.keyword.search(current_query, top_k=5)
-            combined = self._deduplicate(
-                (vec_results if isinstance(vec_results, list) else [])
-                + (kw_results if isinstance(kw_results, list) else [])
-            )
+            vec_results = vec_results if isinstance(vec_results, list) else []
+            kw_results = kw_results if isinstance(kw_results, list) else []
+            combined = self._fuse_routes(vec_results, kw_results)
             all_results.extend(combined)
             if attempt < max_retries - 1:
                 eval_msgs = build_retriever_eval_messages(query, combined[:10])
@@ -146,6 +146,24 @@ class AgenticRAG:
                 if isinstance(rewritten_query, str) and rewritten_query.strip():
                     current_query = rewritten_query
         return self._deduplicate(all_results)
+
+    def _fuse_routes(self, vec_results: list, kw_results: list) -> list:
+        """融合向量与关键词两路检索结果。
+
+        默认使用 RRF 排名融合（EXERCISE_FUSION=rrf）：两路都命中的动作
+        获得叠加权重，只被单路命中的按各自排名参与排序——与知识库检索层
+        共用同一套融合语义（src/rag/fusion.py）。
+        EXERCISE_FUSION=concat 回退到旧行为（向量在前、关键词追加），
+        仅供消融实验对照使用。
+        """
+        if EXERCISE_FUSION == "concat":
+            return self._deduplicate(vec_results + kw_results)
+        # 传入顺序 [关键词, 向量]：RRF 分数与顺序无关（逐路按排名计分），
+        # 但同名动作的元数据以向量路为准（后传入者覆盖），保持历史
+        # "source 标记反映向量优先命中" 的展示语义。
+        fused = rrf_fuse([kw_results, vec_results],
+                         key=lambda doc: doc.get("name"))
+        return self._deduplicate(fused)
 
     def _deduplicate(self, results: list) -> list:
         """按 'name' 字段去重（保留首次出现的条目）。

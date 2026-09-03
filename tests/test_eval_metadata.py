@@ -21,6 +21,7 @@ def test_manifest_items_have_required_metadata_and_known_kinds():
         "retrieval",
         "generation_conditioned",
         "safety",
+        "ablation_compare",
         "ragas_subset",
         "load_local",
         "routing_fixture",

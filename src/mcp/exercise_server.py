@@ -3,9 +3,12 @@
 exercise_server.py — MCP Exercise Server v2 (数据库接入)
 ===========================================================================
 v2 更新 (2026-07-28):
-  - 工具从硬编码 8 动作切换到 PG 数据库查询 (209 动作)
-  - 保留 EXERCISE_LIBRARY 仅作 MCP 独立演示的 fallback
+  - 工具从硬编码动作切换到 PG 数据库查询（当前语料 338 动作）
+  - 保留 EXERCISE_LIBRARY 仅作 PG 不可用时的降级演示数据（3 个动作）
   - 新增 _db_search() 统一查询入口
+v2.1 更新 (2026-09-03):
+  - 旧版 exercise://library、exercise://muscles、exercise://standards/*
+    资源也切换为数据库优先，与工具层口径一致
 ===========================================================================
 
 FastMCP server exposing exercise library as Tools + Resources.
@@ -316,25 +319,31 @@ class ExerciseMCPServer:
             ) from exc
 
     def read_resource(self, uri: str) -> str:
-        """读取旧版 exercise:// Markdown 资源及新版 exercises:// JSON。"""
+        """读取旧版 exercise:// Markdown 资源及新版 exercises:// JSON。
+
+        旧版资源同样走数据库优先：PG 可用时按库内全部动作渲染，
+        不可用时降级到 EXERCISE_LIBRARY 演示数据，与工具层口径一致。
+        """
         if uri == "exercise://library":
+            exercises = _query.list_all(limit=400) or list(EXERCISE_LIBRARY)
             by_muscle: dict[str, list[dict]] = {}
-            for exercise in EXERCISE_LIBRARY:
+            for exercise in exercises:
                 for muscle in exercise["target_muscles"]:
                     by_muscle.setdefault(muscle, []).append(exercise)
-            lines = [f"# 动作库索引 (共 {len(EXERCISE_LIBRARY)} 个动作)", ""]
-            for muscle, exercises in sorted(by_muscle.items()):
+            lines = [f"# 动作库索引 (共 {len(exercises)} 个动作)", ""]
+            for muscle, exs in sorted(by_muscle.items()):
                 lines.append(f"## {muscle}")
                 lines.extend(
-                    f"  - {exercise['name']} ({exercise['equipment']}, {exercise['difficulty']})"
-                    for exercise in exercises
+                    f"  - {ex['name']} ({ex['equipment']}, {ex['difficulty']})"
+                    for ex in exs
                 )
                 lines.append("")
             return "\n".join(lines)
         if uri == "exercise://muscles":
+            exercises = _query.list_all(limit=400) or list(EXERCISE_LIBRARY)
             counts = Counter(
                 muscle
-                for exercise in EXERCISE_LIBRARY
+                for exercise in exercises
                 for muscle in exercise["target_muscles"]
             )
             return "\n".join(
@@ -343,7 +352,8 @@ class ExerciseMCPServer:
             )
         if uri.startswith("exercise://standards/"):
             name = uri.removeprefix("exercise://standards/")
-            exercise = next((ex for ex in EXERCISE_LIBRARY if ex["name"] == name), None)
+            exercise = _query.get_by_name(name) or next(
+                (ex for ex in EXERCISE_LIBRARY if ex["name"] == name), None)
             if exercise is None:
                 raise McpToolError(-32601, "Resource not found", "read_resource", uri)
             mistakes = "\n".join(f"  - {item}" for item in exercise["common_mistakes"])

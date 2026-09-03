@@ -631,7 +631,7 @@ class Orchestrator:
         })
 
     def _extract_exercise_from_question(self, question: str) -> str | None:
-        """【私有方法】从用户问题文本中通过关键词匹配提取动作名称。
+        """【私有方法】从用户问题文本中提取动作名称。
 
         输入：
             question: str — 用户原始问题文本
@@ -639,22 +639,11 @@ class Orchestrator:
             str | None — 匹配到的动作名称，无匹配则返回 None
 
         用途：为 GraphRAG 伤病推理提供动作锚点。
-        局限性：依赖硬编码的动作列表，无法识别列表中不存在的动作或口语化表述。
-                TODO: 可升级为 NER 模型或 LLM 实体提取以提高召回率。"""
-        common_exercises = [
-            "深蹲", "硬拉", "卧推", "推举", "划船", "弯举", "臂屈伸",
-            "引体向上", "下拉", "飞鸟", "侧平举", "前平举", "面拉",
-            "腿举", "弯举", "耸肩", "提踵", "臀推", "箭步蹲", "分腿蹲",
-            "平板支撑", "举腿", "俄罗斯转体", "双杠臂屈伸", "直臂下压",
-            "保加利亚分腿蹲", "高脚杯深蹲", "罗马尼亚硬拉", "史密斯机深蹲",
-            "哑铃卧推", "杠铃卧推", "上斜卧推", "哑铃飞鸟", "绳索夹胸",
-            "坐姿划船", "高位下拉", "哑铃推举", "杠铃推举", "哑铃弯举",
-            "锤式弯举", "杠铃弯举", "绳索下压", "窄距卧推", "颈后臂屈伸",
-        ]
-        for ex in common_exercises:
-            if ex in question:
-                return ex
-        return None
+        实现：动作名清单由 src.rag.exercise_catalog 数据驱动加载
+        （PG 动作库 → 种子语料 → 内置兜底），按最长优先匹配，
+        不再依赖硬编码列表；覆盖率随动作库扩展自动提升。"""
+        from src.rag.exercise_catalog import extract_exercise_name
+        return extract_exercise_name(question)
 
     @staticmethod
     def _make_user_key(profile: dict) -> int:

@@ -53,7 +53,12 @@ def test_malformed_backend_rows_are_skipped_with_stable_deduplication():
         keyword_results=[duplicate, {"name": []}, second],
     )
 
-    assert rag.search("练胸", max_retries=1) == [first, second]
+    # RRF 融合会为结果附加 rrf_score 注解，按名称与来源断言融合语义：
+    # 双路命中的"卧推"排最前且保留向量路元数据，"飞鸟"次之。
+    result = rag.search("练胸", max_retries=1)
+    assert [(d["name"], d["source"]) for d in result] == [
+        ("卧推", "vector"), ("飞鸟", "keyword")]
+    assert result[0]["rrf_score"] > result[1]["rrf_score"]
 
 
 @pytest.mark.parametrize("malformed_eval", [None, [], "bad", 1])
@@ -103,5 +108,6 @@ def test_numeric_score_at_threshold_stops_before_another_round():
         eval_results=[{"quality_score": 0.7, "rewritten_query": "unused"}],
     )
 
-    assert rag.search("练胸", max_retries=3) == [row]
+    # RRF 融合附加 rrf_score 注解，按名称断言内容不变。
+    assert [d["name"] for d in rag.search("练胸", max_retries=3)] == ["卧推"]
     assert len(vector_calls) == 1

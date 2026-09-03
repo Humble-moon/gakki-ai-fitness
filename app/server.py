@@ -39,6 +39,9 @@ from src.health import readiness_checks
 from src.llm.provider import LLMUnavailableError
 from src.graph import build_inputs, build_runtime, graph_stream_events
 from src.hitl.review_resolution import make_resolution
+from src import config
+from src.security.api_guard import (AdminAuthMiddleware, ApiKeyMiddleware,
+                                    RateLimitMiddleware, cors_allow_origins)
 from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
@@ -66,14 +69,22 @@ def health_ready():
         status_code=200 if ready else 503,
     )
 
-# CORS 中间件：允许前端跨域访问（部署到服务器时收紧 origins）
+# CORS 中间件：白名单由 CORS_ALLOW_ORIGINS 配置（默认仅本机前端来源）。
+# 中间件注册顺序说明：Starlette 中后注册者在外层，因此执行顺序为
+# CORS（预检）→ 限流（先于认证计数，防暴力试探）→ 管理端认证 → 业务认证 → 路由。
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # 开发阶段允许所有来源，生产环境改为具体域名
+    allow_origins=cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RateLimitMiddleware,
+                   requests_per_minute=config.RATE_LIMIT_PER_MINUTE)
+app.add_middleware(AdminAuthMiddleware,
+                   admin_token=config.ADMIN_TOKEN,
+                   api_token=config.API_AUTH_TOKEN)
+app.add_middleware(ApiKeyMiddleware, token=config.API_AUTH_TOKEN)
 
 
 # ============================================================
