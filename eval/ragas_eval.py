@@ -246,9 +246,11 @@ def _stratified_sample(queries: List[dict], target_total: int = 50) -> List[dict
     # 打乱顺序
     random.shuffle(sampled)
 
-    logger.info(f"Stratified sample: {len(sampled)} queries "
-                f"({', '.join(f'{t}={len([q for q in sampled if q["_tags"]["query_type"]==t])}'
-                              for t in sorted(by_type))})")
+    counts = ', '.join(
+        f"{t}={sum(1 for q in sampled if q['_tags']['query_type'] == t)}"
+        for t in sorted(by_type)
+    )
+    logger.info(f"Stratified sample: {len(sampled)} queries ({counts})")
     return sampled
 
 

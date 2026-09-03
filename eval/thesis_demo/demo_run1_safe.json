@@ -1,0 +1,90 @@
+{
+  "plan_name": "基础增肌三分化训练计划",
+  "goal": "增肌",
+  "weeks": null,
+  "sessions_per_week": 3,
+  "notes": "该计划使用哑铃、杠铃和固定器械，每个动作完成4组（第三天为3组）8-12次，组间休息90秒。训练前请充分热身，逐步增加重量，保持动作标准。",
+  "plan_id": "461ba4df",
+  "user_id": 0,
+  "_degraded": false,
+  "days": [
+    {
+      "day": 1,
+      "focus": "胸部与背部",
+      "exercises": [
+        {
+          "name": "杠铃卧推",
+          "sets": 4,
+          "reps": "8-12",
+          "rest": "90s",
+          "notes": "肩胛收紧下沉，落杆触胸"
+        },
+        {
+          "name": "坐姿划船",
+          "sets": 4,
+          "reps": "8-12",
+          "rest": "90s",
+          "notes": "保持躯干稳定，避免借力摆动"
+        }
+      ]
+    },
+    {
+      "day": 2,
+      "focus": "肩部与背部",
+      "exercises": [
+        {
+          "name": "哑铃肩推",
+          "sets": 4,
+          "reps": "8-12",
+          "rest": "90s",
+          "notes": "核心收紧，不要过度反弓腰部"
+        },
+        {
+          "name": "高位下拉",
+          "sets": 4,
+          "reps": "8-12",
+          "rest": "90s",
+          "notes": "肘部引导发力，避免耸肩"
+        }
+      ]
+    },
+    {
+      "day": 3,
+      "focus": "全身综合训练",
+      "exercises": [
+        {
+          "name": "杠铃卧推",
+          "sets": 3,
+          "reps": "8-12",
+          "rest": "90s",
+          "notes": "肩胛收紧下沉，落杆触胸"
+        },
+        {
+          "name": "高位下拉",
+          "sets": 3,
+          "reps": "8-12",
+          "rest": "90s",
+          "notes": "肘部引导发力，避免耸肩"
+        },
+        {
+          "name": "哑铃肩推",
+          "sets": 3,
+          "reps": "8-12",
+          "rest": "90s",
+          "notes": "核心收紧，不要过度反弓腰部"
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "active_issues": [],
+  "resolved_issues": [],
+  "requires_review": false,
+  "review_reason": "",
+  "review_severity": "safe",
+  "review_suggestions": [],
+  "confidence": 0.95,
+  "rewrite_count": 0,
+  "_persistence_allowed": true,
+  "delivery_status": "safe_delivered"
+}

@@ -5,42 +5,53 @@
       "id": "retrieval_main_206",
       "kind": "retrieval",
       "dataset_size": 206,
+      "evaluated_queries": 170,
       "source_path": "eval/results.json",
-      "status": "historical",
+      "status": "rerun-2026-08-30",
       "comparability": "only-with-same-dataset-and-protocol",
-      "known_limits": ["historical result; no production SLA claim"],
-      "metrics": {"precision@5": 0.5084745763, "recall@5": 0.3063067343, "ndcg@5": 0.5453841072, "mrr": 0.7428436911}
+      "known_limits": ["36 injury queries excluded (medical-KB dependent)", "corpus expanded to 338 exercises / 162 docs; metrics reflect expanded set", "no production SLA claim"],
+      "metrics": {"precision@5": 0.2424, "recall@5": 0.3915, "ndcg@5": 0.5359, "mrr": 0.411, "hn_recall@5": 0.983}
     },
     {
       "id": "retrieval_knowledge_subset_54",
       "kind": "retrieval",
       "dataset_size": 54,
       "source_path": "eval/knowledge_results.json",
-      "status": "historical",
+      "status": "rerun-2026-08-30",
       "comparability": "not-comparable-to-main",
       "metric_definition": "Recall is multi-label cumulative coverage and may exceed 1; this is not ordinary single-label recall.",
-      "known_limits": ["LLM-generated knowledge questions", "special multi-label recall definition"],
-      "metrics": {"precision@5": 0.3555555556, "ndcg@5": 0.7751851852, "mrr": 0.8040343915}
+      "known_limits": ["LLM-generated knowledge questions", "special multi-label recall definition", "corpus expanded to 162 docs"],
+      "metrics": {"precision@5": 0.1926, "ndcg@5": 0.3993, "mrr": 0.4737}
     },
     {
       "id": "generation_conditioned_10",
       "kind": "generation_conditioned",
       "dataset_size": 10,
       "source_path": "eval/e2e_results.json",
-      "status": "historical",
+      "status": "rerun-2026-08-30",
       "comparability": "only-with-same-model-and-judge",
       "known_limits": ["not full retrieval E2E", "given-correct-context generation only"],
       "metrics": {"accuracy": 5.0, "safety": 5.0, "usefulness": 5.0}
+    },
+    {
+      "id": "compare_direct_vs_rag_10",
+      "kind": "ablation_compare",
+      "dataset_size": 10,
+      "source_path": "eval/compare_results.json",
+      "status": "rerun-2026-08-30",
+      "comparability": "only-with-same-model-and-judge",
+      "known_limits": ["judge prompt not blinded", "small sample; directional evidence only"],
+      "metrics": {"avg_direct": {"accuracy": 4.5, "safety": 5.0, "usefulness": 4.9}, "avg_rag": {"accuracy": 5.0, "safety": 5.0, "usefulness": 5.0}, "per_question_accuracy": "RAG 4 win / 6 tie / 0 loss"}
     },
     {
       "id": "ragas_subset_68",
       "kind": "ragas_subset",
       "dataset_size": 68,
       "source_path": "eval/ragas_results.json",
-      "status": "historical",
+      "status": "rerun-2026-08-30",
       "comparability": "only-with-same-model-and-protocol",
-      "known_limits": ["subset, not full 206-query set", "LLM-as-judge scores"],
-      "metrics": {"faithfulness": 0.5478, "answer_relevancy": 0.5046, "context_relevance": 0.9449}
+      "known_limits": ["subset, not full 206-query set", "LLM-as-judge scores", "expanded corpus 162 docs"],
+      "metrics": {"faithfulness": 0.4357, "answer_relevancy": 0.5125, "context_relevance": 0.864}
     },
     {
       "id": "load_local_historical",
