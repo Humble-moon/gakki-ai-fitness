@@ -22,3 +22,8 @@ data/knowledge_fetched/
 .remember/
 .worktrees/
 .superpowers/
+
+# Runtime artifacts
+*.db-shm
+*.db-wal
+output/

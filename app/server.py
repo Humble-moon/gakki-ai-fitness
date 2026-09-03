@@ -31,11 +31,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 from src.core.orchestrator import Orchestrator
+from src.core.goal_contract import GoalConsistencyError
 from src.models.schemas import TrainingGoal, UserProfileInput
 from src.health import readiness_checks
 from src.llm.provider import LLMUnavailableError
+from src.graph import build_inputs, build_runtime, graph_stream_events
+from src.hitl.review_resolution import make_resolution
+from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
 _TERMINAL_EVENTS = {"done", "error", "cancelled"}
@@ -154,6 +158,10 @@ class QuestionRequest(BaseModel):
 # 全局编排器实例（单例，应用启动时初始化，所有请求复用）
 # ============================================================
 orch = Orchestrator()
+
+# LangGraph 版编排运行时（v2 API）。复用 orch 的同一批 Agent / 缓存 / 记忆 /
+# 审核存储，并附带 checkpointer 以支持 interrupt 暂停与跨重启恢复。
+graph_runtime = build_runtime(orch)
 
 
 # ============================================================
@@ -499,6 +507,127 @@ async def admin_ingestion_status():
         "added": added,
         "deleted": deleted,
         "needs_reingest": len(changed) + len(added) > 0,
+    }
+
+
+# ============================================================
+# v2 API：基于 LangGraph 的计划生成与人工审核闭环
+# ============================================================
+class ReviewResolveRequest(BaseModel):
+    """人工审核解除请求体。"""
+    decision: Literal["approved", "rejected"]
+    reviewer: str = ""
+    comment: str = ""
+
+
+def _profile_from_request(req) -> UserProfileInput:
+    """Reuse the flat request fields shared by PlanRequest-shaped bodies."""
+    return UserProfileInput(
+        height=req.height, weight=req.weight, training_years=req.training_years,
+        goal=req.goal, available_equipment=req.available_equipment,
+        days_per_week=req.days_per_week, injuries=req.injuries,
+    )
+
+
+@app.post("/api/v2/plan")
+def generate_plan_v2(req: PlanRequest):
+    """同步版：走 LangGraph 状态图生成训练计划。
+
+    返回三种情况之一：
+    - 正常交付 → final_payload（delivery_status=safe_delivered）
+    - 命中缓存 → final_payload（缓存计划）
+    - 触发人工审核 → review_pending 载荷（含 thread_id，供后续 resolve）
+    """
+    profile = _profile_from_request(req)
+    thread_id = graph_runtime.new_thread_id()
+    config = graph_runtime.config_for(thread_id)
+    inputs = build_inputs(profile, query=req.query, session_id=req.session_id,
+                          thread_id=thread_id)
+    try:
+        state = graph_runtime.graph.invoke(inputs, config)
+    except GoalConsistencyError as exc:
+        return JSONResponse(status_code=422, content={
+            "error": {"code": exc.code, "message": "训练计划目标校验失败，请重试"}})
+    except LLMUnavailableError:
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "DEPENDENCY_UNAVAILABLE", "message": "演示依赖暂时不可用"}})
+    if state.get("__interrupt__"):
+        payload = dict(state.get("review_payload") or {})
+        payload["thread_id"] = thread_id
+        return payload
+    return state.get("final_payload")
+
+
+@app.post("/api/v2/plan/stream")
+def generate_plan_v2_stream(req: PlanRequest):
+    """流式版（SSE）：复用 _stream_events 与既有事件协议，前端零改动。"""
+    profile = _profile_from_request(req)
+    thread_id = graph_runtime.new_thread_id()
+    config = graph_runtime.config_for(thread_id)
+    inputs = build_inputs(profile, query=req.query, session_id=req.session_id,
+                          thread_id=thread_id)
+    return StreamingResponse(
+        _stream_events(graph_stream_events(graph_runtime, inputs, config)),
+        media_type="text/event-stream", headers=STREAM_HEADERS,
+    )
+
+
+@app.get("/api/v2/reviews/{review_id}")
+def get_review_v2(review_id: str):
+    """查询审核工件及其解除结果（若已解除）。"""
+    artifact = graph_runtime.deps.review_store.get(review_id)
+    if artifact is None:
+        return JSONResponse(status_code=404,
+                            content={"error": {"code": "REVIEW_NOT_FOUND"}})
+    resolution = graph_runtime.resolutions.get(review_id)
+    return {
+        "review": {
+            "review_id": artifact.review_id,
+            "status": artifact.status,
+            "created_at": artifact.created_at,
+            "issues": artifact.issues,
+            "severity": artifact.severity,
+            "prohibited_actions": artifact.prohibited_actions,
+        },
+        "resolution": ({
+            "decision": resolution.decision, "reviewer": resolution.reviewer,
+            "comment": resolution.comment, "resolved_at": resolution.resolved_at,
+        } if resolution else None),
+    }
+
+
+@app.post("/api/v2/reviews/{review_id}/resolve")
+def resolve_review_v2(review_id: str, req: ReviewResolveRequest,
+                      thread_id: Optional[str] = None):
+    """解除人工审核并恢复被暂停的 LangGraph 执行（HITL 闭环的关键一步）。
+
+    旧系统只会创建 review_pending 工件、无法对其作出决定；该路由通过
+    ``Command(resume=...)`` 恢复 checkpoint 中暂停的图，交付
+    review_approved / review_rejected。thread_id 缺省时按 review_id 反查，
+    服务重启后也可显式传入 thread_id 恢复。
+    """
+    resolved_thread = thread_id or graph_runtime.thread_index.thread_for(review_id)
+    if not resolved_thread:
+        return JSONResponse(status_code=404,
+                            content={"error": {"code": "REVIEW_NOT_FOUND"}})
+    config = graph_runtime.config_for(resolved_thread)
+    snapshot = graph_runtime.graph.get_state(config)
+    if "review_gate" not in (snapshot.next or ()):
+        return JSONResponse(status_code=409,
+                            content={"error": {"code": "REVIEW_ALREADY_RESOLVED"}})
+    resolution = make_resolution(review_id, req.decision, req.reviewer, req.comment)
+    graph_runtime.resolutions.record(resolution)
+    state = graph_runtime.graph.invoke(
+        Command(resume={"decision": req.decision, "review_id": review_id,
+                        "reviewer": req.reviewer, "comment": req.comment}),
+        config)
+    return {
+        "thread_id": resolved_thread,
+        "resolution": {
+            "decision": resolution.decision, "reviewer": resolution.reviewer,
+            "comment": resolution.comment, "resolved_at": resolution.resolved_at,
+        },
+        "delivery": state.get("final_payload"),
     }
 
 
