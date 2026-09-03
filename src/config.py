@@ -164,9 +164,20 @@ CACHE_SIMILARITY_THRESHOLD = 0.92
 # 缓存命中阈值：当用户新查询和缓存查询的向量相似度 >= 0.92 时，
 # 直接返回缓存结果，避免重复调用 LLM，节省 API 费用和响应时间
 
+CACHE_SCAN_BACKEND = os.getenv("CACHE_SCAN_BACKEND", "linear").lower()
+# 语义缓存相似度扫描后端：
+#   linear — Redis 键空间线性扫描（默认，单机演示口径，上限 200 键）
+#   ann    — pgvector HNSW 近邻索引（生产口径，突破线性扫描规模瓶颈；
+#            需要 PostgreSQL，索引表 semantic_cache_index 自动创建）
+
 AGENTIC_RAG_MAX_RETRIES = 3
 # Agentic RAG 最大重试次数：当检索结果质量不足时，
 # 系统自动改写查询重新检索，最多重试 3 次
+
+EXERCISE_FUSION = os.getenv("EXERCISE_FUSION", "rrf").lower()
+# 动作检索双路融合策略：
+#   rrf    — 倒数排名融合（默认），向量/关键词两路按排名融合，与知识库检索同一语义
+#   concat — 旧行为（向量结果在前、关键词追加），仅供消融对照使用
 
 HITL_CONFIDENCE_THRESHOLD = 0.7
 # 人工介入（Human-in-the-Loop）阈值：
@@ -177,6 +188,26 @@ REWRITE_MODEL = os.getenv("REWRITE_MODEL", "deepseek-chat")
 # 设计意图：改写是高频低成本操作，不需要大模型，用小的便宜模型即可。
 # 默认 deepseek-chat（DeepSeek 目前最小可用模型），后续可换为更便宜的模型。
 # 用法：配置独立的 LLM_REWRITE_* 或在 .env 设 REWRITE_MODEL=deepseek-chat
+
+# ============================================================
+# HTTP 安全加固（认证 / 限流 / CORS）
+# 全部可选配置：不设置时保持本地单用户演示的默认行为，
+# 其中 /admin/* 端点在未配置任何令牌时按失败关闭原则拒绝访问。
+# ============================================================
+API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "")
+# /api/* 业务接口的 Bearer 令牌。为空则不启用认证（本地演示）；
+# 设置后所有 /api/* 请求须携带 Authorization: Bearer <token>、
+# X-API-Key 头部或 ?api_key=<token>（SSE 浏览器客户端无法设置自定义头部）。
+
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+# /admin/* 管理端点的专用令牌（X-Admin-Token 头部）。
+# ADMIN_TOKEN 与 API_AUTH_TOKEN 都未设置时，管理端点一律 403 拒绝。
+
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+# 每客户端 IP 每分钟请求上限（滑动窗口）。/health/* 探针不受限。
+
+# CORS 白名单在 src/security/api_guard.py 的 cors_allow_origins() 中读取
+# （CORS_ALLOW_ORIGINS，逗号分隔；默认仅本机前端来源）。
 
 # ============================================================
 # 模型定价（元/1K tokens），用于开发侧成本追踪

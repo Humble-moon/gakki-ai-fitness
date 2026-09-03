@@ -211,34 +211,13 @@ class KnowledgeSearch:
                （向量分 0.9 ≠ 关键词分 0.9，RRF 直接忽略原始分数只关心排名）
             3. 对任一列表中的离群值具有鲁棒性
                （即使向量检索的第一名是噪声，RRF 也会因为有平滑常数而不过度惩罚）
+
+        实现委托给项目级共享函数 src.rag.fusion.rrf_fuse（按 chunk_id 键），
+        与动作检索层使用同一套融合语义。
         """
-        scores = {}  # chunk_id → 累计 RRF 分数
-        docs = {}    # chunk_id → 原始文档信息（保留完整的元数据）
-
-        # 遍历向量检索结果，累加 RRF 分数
-        # enumerate(..., start=1) 使排名从 1 开始（不是 0）
-        for rank, doc in enumerate(vector_results, start=1):
-            cid = doc["chunk_id"]
-            # RRF 核心公式：1 / (k + rank)
-            # scores.get(cid, 0) 如果该文档也出现在关键词结果中，则在已有分数上累加
-            scores[cid] = scores.get(cid, 0) + 1.0 / (k + rank)
-            docs[cid] = doc  # 保留文档引用（同一个 chunk_id 只保留一份）
-
-        # 遍历关键词检索结果，累加 RRF 分数
-        for rank, doc in enumerate(keyword_results, start=1):
-            cid = doc["chunk_id"]
-            scores[cid] = scores.get(cid, 0) + 1.0 / (k + rank)
-            docs[cid] = doc
-
-        # 按 RRF 分数降序排列（分数越高 = 综合排名越靠前）
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        fused = []
-        for cid, rrf_score in ranked:
-            doc = docs[cid].copy()  # 复制避免修改原始数据
-            doc["rrf_score"] = round(rrf_score, 6)
-            fused.append(doc)
-
-        return fused
+        from src.rag.fusion import rrf_fuse
+        return rrf_fuse([vector_results, keyword_results],
+                        key=lambda doc: doc.get("chunk_id"), k=k)
 
     # =====================================================================
     # 阶段 3: LLM 重排序

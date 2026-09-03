@@ -39,6 +39,7 @@ def cache():
     instance.emb = FakeEmbedding()
     instance._hits_exact = instance._hits_semantic = 0
     instance._misses = instance._sets = 0
+    instance._ann = None  # linear-scan backend for these reliability tests
     return instance
 
 
