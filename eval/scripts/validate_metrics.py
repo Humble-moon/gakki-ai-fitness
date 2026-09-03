@@ -12,6 +12,7 @@ KINDS = {
     "retrieval",
     "generation_conditioned",
     "safety",
+    "ablation_compare",
     "ragas_subset",
     "load_local",
     "routing_fixture",

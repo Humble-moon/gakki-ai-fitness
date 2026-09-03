@@ -189,6 +189,28 @@ def _make_full_rag_runner():
     return run
 
 
+def _make_hybrid_rrf_runner():
+    """消融组 D（Hybrid-RRF）：向量 + 关键词双路，RRF 融合，无 LLM 改写。
+
+    输入：无（工厂函数，返回 runner 可调用对象）
+    输出：callable(query: str) -> list[dict]
+
+    核心逻辑：
+      复用 AgenticRAG 的单轮检索（max_retries=1），即向量 + 关键词两路
+      结果经 RRF 排名融合后返回；不触发 LLM 质量自评与查询改写。
+
+    设计意图：
+      与组 A（纯向量）对比，单独量化"混合检索 + RRF 融合"的贡献，
+      与组 B（叠加 LLM 自评/改写）解耦——B 与 D 的差值即 Agentic 循环增益。
+    """
+    from src.rag.agentic_rag import AgenticRAG
+    rag = AgenticRAG()
+
+    def run(query: str):
+        return rag.search(query, filters=None, max_retries=1)
+    return run
+
+
 def _extract_injuries_from_query(query: str) -> list:
     """从 query 文本提取伤病关键词，返回 injury 描述列表供 FactChecker 检查。
 
@@ -300,6 +322,8 @@ def run_ablation(queries: list, group: str = "all") -> dict:
         runners["A-VectorOnly"] = _make_vector_only_runner()
     if group in ("B", "all"):
         runners["B-AgenticRAG"] = _make_agentic_rag_runner()
+    if group in ("D", "all"):
+        runners["D-HybridRRF"] = _make_hybrid_rrf_runner()
     if group in ("C", "all"):
         runners["C-Full"] = _make_full_rag_runner()
 
@@ -648,8 +672,9 @@ def main():
     """
     parser = argparse.ArgumentParser(description="gakki-ai-fitness Evaluation Runner")
     parser.add_argument("--all", action="store_true", help="Run all evaluations")
-    parser.add_argument("--ablation", nargs="?", const="all", choices=["A", "B", "C", "all"],
-                        help="Run RAG ablation (default: all groups)")
+    parser.add_argument("--ablation", nargs="?", const="all",
+                        choices=["A", "B", "C", "D", "all"],
+                        help="Run RAG ablation (A/B/C/D or all groups)")
     parser.add_argument("--agent", action="store_true", help="Run Agent evaluation")
     parser.add_argument("--capability", action="store_true",
                         help="Run capability test (semantic + graph query subsets)")
@@ -715,13 +740,30 @@ def main():
         ragas_results = run_ragas_eval(queries, limit=args.ragas_limit)
         print_ragas_report(ragas_results)
 
-    # ---- 步骤 4：持久化结果到 results.json ----
-    # 序列化便于后续 --report-only 复用，也方便人工检查逐 query 结果
+    # ---- 步骤 4：持久化结果到 results.json（增量合并，不覆盖历史分区） ----
+    # 序列化便于后续 --report-only 复用，也方便人工检查逐 query 结果。
+    # 合并语义：消融组按组名合并（部分组重跑不丢其他组），
+    # agent/capability/ragas 分区仅在本次运行时覆盖，否则保留历史值。
     if ablation_results or agent_results or capability_results or ragas_results:
+        merged = {"ablation": {}, "agent": {}, "capability": {}, "ragas": {}}
+        if RESULTS_FILE.exists():
+            try:
+                existing = json.loads(RESULTS_FILE.read_text(encoding="utf-8"))
+                for section in merged:
+                    if isinstance(existing.get(section), dict):
+                        merged[section] = existing[section]
+            except (json.JSONDecodeError, OSError):
+                logger.warning("results.json unreadable, starting fresh")
+        if ablation_results:
+            merged["ablation"].update(ablation_results)
+        if agent_results:
+            merged["agent"] = agent_results
+        if capability_results:
+            merged["capability"] = capability_results
+        if ragas_results:
+            merged["ragas"] = ragas_results
         RESULTS_FILE.write_text(
-            json.dumps({"ablation": ablation_results, "agent": agent_results,
-                        "capability": capability_results, "ragas": ragas_results},
-                       ensure_ascii=False, indent=2),
+            json.dumps(merged, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         logger.info(f"Results saved to {RESULTS_FILE}")

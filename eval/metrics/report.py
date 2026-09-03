@@ -274,7 +274,10 @@ def generate_markdown_report(
     # ---- 1.2 综合对比表（K=5） ----
     lines.append("### 综合对比（K=5）")
     lines.append("")
-    headers = ["指标", "A-纯向量", "B-AgenticRAG", "C-全量", "提升(A→C)"]
+    # 按固定顺序展示实际运行的消融组（D 为可选的混合检索对照组）
+    group_order = ["A-VectorOnly", "B-AgenticRAG", "D-HybridRRF", "C-Full"]
+    present_groups = [g for g in group_order if g in ablation_results]
+    headers = ["指标"] + present_groups + [f"提升(A→{present_groups[-1].split('-')[0]})"]
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "|".join(["------"] * len(headers)) + "|")
 
@@ -286,14 +289,15 @@ def generate_markdown_report(
         ("ndcg@5", "NDCG@5"),
     ]:
         vals = []
-        for group in ["A-VectorOnly", "B-AgenticRAG", "C-Full"]:
+        for group in present_groups:
             # 从 ablation_results 中提取对应组的指标值
             v = ablation_results.get(group, {}).get("averages", {}).get(metric_short, 0)
             vals.append(v)
-        # 计算提升百分比：(C - A) / A * 100%，分母加 0.001 避免除零
-        improvement = f"+{(vals[2] - vals[0]) / max(vals[0], 0.001) * 100:.0f}%"
+        # 计算提升百分比：(末组 - A) / A * 100%，分母加 0.001 避免除零
+        pct = (vals[-1] - vals[0]) / max(vals[0], 0.001) * 100
+        improvement = f"{pct:+.0f}%"
         parts = [f"{v:.4f}" for v in vals]
-        lines.append(f"| {metric_name} | {parts[0]} | {parts[1]} | {parts[2]} | {improvement} |")
+        lines.append(f"| {metric_name} | " + " | ".join(parts) + f" | {improvement} |")
 
     lines.append("")
 
@@ -301,7 +305,7 @@ def generate_markdown_report(
     # 展示各组在每个 K 值下的 Precision/Recall/NDCG，用于深入分析
     lines.append("### 各 K 值详细数据")
     lines.append("")
-    for group_name in ["A-VectorOnly", "B-AgenticRAG", "C-Full"]:
+    for group_name in present_groups:
         avg = ablation_results.get(group_name, {}).get("averages", {})
         lines.append(f"**{group_name}**")
         lines.append("")
