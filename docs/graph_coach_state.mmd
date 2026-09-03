@@ -1,0 +1,39 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	ingest(ingest)
+	check_cache(check_cache)
+	deliver_cached(deliver_cached)
+	plan(plan)
+	retrieve(retrieve)
+	write(write)
+	check(check)
+	rewrite(rewrite)
+	finalize(finalize)
+	open_review(open_review)
+	review_gate(review_gate)
+	deliver(deliver)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> ingest;
+	check -.-> finalize;
+	check -.-> rewrite;
+	check_cache -.-> deliver_cached;
+	check_cache -.-> plan;
+	finalize -.-> deliver;
+	finalize -.-> open_review;
+	ingest --> check_cache;
+	open_review --> review_gate;
+	plan --> retrieve;
+	retrieve --> write;
+	review_gate --> deliver;
+	rewrite --> check;
+	write --> check;
+	deliver --> __end__;
+	deliver_cached --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
