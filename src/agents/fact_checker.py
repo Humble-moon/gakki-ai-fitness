@@ -78,4 +78,7 @@ class FactCheckerAgent:
         result["requires_human_review"] = review.needs_review
         result["review_reason"] = review.reason
         result["review_severity"] = review.severity
+        # 规则引擎/语义匹配的冲突明细单独存放，供审核工件作为人工决策依据；
+        # 不并入 issues，避免影响重写循环对 issues 的既有语义。
+        result["review_suggestions"] = list(review.suggestions or []) if review.needs_review else []
         return result
