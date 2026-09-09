@@ -3,9 +3,19 @@
 
 支持 PDF / Word (.docx) / Markdown (.md) 三种格式。
 暴露 parse_file(file_bytes, filename) → ParsedDocument 作为唯一对外接口。
+
+PDF 有两个可切换后端（DOC_PARSER_BACKEND）：
+    pdfplumber — 默认，零额外依赖，处理有文本层、有框线表格的 PDF
+    mineru     — 可选，处理扫描件 / 无框线表格 / 跨页表格（体检报告的主场景）；
+                 不可用或解析失败时自动回落 pdfplumber，绝不因它中断上传功能
 """
 
-from typing import NamedTuple
+import logging
+from typing import NamedTuple, Optional
+
+from src.config import DOC_PARSER_BACKEND
+
+logger = logging.getLogger(__name__)
 
 
 class ParsedDocument(NamedTuple):
@@ -52,6 +62,44 @@ def parse_file(file_bytes: bytes, filename: str) -> ParsedDocument:
 
 
 def _parse_pdf(file_bytes: bytes, filename: str) -> ParsedDocument:
+    """PDF 解析入口：按配置选后端，MinerU 不可用时回落 pdfplumber。"""
+    if DOC_PARSER_BACKEND == "mineru":
+        parsed = _parse_pdf_mineru(file_bytes, filename)
+        if parsed is not None:
+            return parsed
+        logger.warning("MinerU 后端未产出可用结果，本次回落 pdfplumber")
+    return _parse_pdf_pdfplumber(file_bytes, filename)
+
+
+def _parse_pdf_mineru(file_bytes: bytes, filename: str) -> Optional[ParsedDocument]:
+    """MinerU 后端。返回 None 表示「不可用或失败」，由调用方降级。
+
+    MinerU 输出的是重建过阅读顺序的 Markdown（表格已是 Markdown/HTML 形式），
+    因此不再需要 pdfplumber 那套「表格单独提取再拼回正文」的处理。
+    """
+    try:
+        from src.parsers.mineru_parser import parse_pdf as mineru_parse
+        result = mineru_parse(file_bytes, filename)
+    except Exception as exc:  # 导入失败、配置异常等
+        logger.warning(f"MinerU 后端不可用，回落 pdfplumber: {exc}")
+        return None
+
+    if result is None or not result.full_text:
+        return None
+
+    return ParsedDocument(
+        filename=filename,
+        file_type="pdf",
+        full_text=result.full_text,
+        page_count=result.page_count,
+        total_chars=result.total_chars,
+        title=result.title or filename,
+        has_text=result.has_text,
+        error=result.error,
+    )
+
+
+def _parse_pdf_pdfplumber(file_bytes: bytes, filename: str) -> ParsedDocument:
     from src.parsers.pdf_parser import (
         parse_pdf, pages_to_full_text, detect_body_font_size,
     )

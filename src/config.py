@@ -135,6 +135,36 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")   # MinIO 访问�
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")   # MinIO 秘密密钥
 
 # ============================================================
+# 文档解析后端配置（文件上传 RAG 的第一跳）
+#
+# pdfplumber 依赖 PDF 里的显式表格线框，而体检报告恰好是它的三个盲区叠加：
+# 扫描件（无文本层）、无框线表格、跨页表格。MinerU（OpenDataLab 开源）做的是
+# 版面分析 + OCR + 表格重建 + 阅读顺序恢复，正好补这一块。
+#
+# 接入方式是 CLI 子进程而非常驻服务或装进主 venv：本机 16GB 内存还要同时跑
+# PG / Neo4j / Redis / MinIO 四个容器，常驻的版面分析模型会与之争资源；
+# 子进程用时才起、用完即释放，且主环境零新增依赖。
+# ============================================================
+DOC_PARSER_BACKEND = os.getenv("DOC_PARSER_BACKEND", "pdfplumber").lower()
+# pdfplumber（默认，零额外依赖）| mineru（本地 MinerU CLI，失败自动回落 pdfplumber）
+
+MINERU_CLI = os.getenv("MINERU_CLI", "mineru")
+# mineru 可执行文件名或绝对路径。装法见 https://github.com/opendatalab/MinerU
+#   pip install -U "mineru[all]"        # 装在项目外的独立环境，不要装进本仓库 .venv
+#   export MINERU_MODEL_SOURCE=modelscope   # 国内模型源，避免 HuggingFace 超时
+
+MINERU_BACKEND = os.getenv("MINERU_BACKEND", "pipeline")
+# pipeline — 传统多模型流水线，纯 CPU 可跑（无 GPU 的开发机用这个）
+# vlm-*    — MinerU2.5-1.2B 视觉语言模型后端，需要 GPU，速度快一个量级
+
+MINERU_TIMEOUT = int(os.getenv("MINERU_TIMEOUT", "300"))
+# 单次解析超时（秒）。纯 CPU 的 pipeline 后端约 2~3 秒/页，
+# 另有模型冷启动开销；体检报告通常 3~10 页，300s 是宽松上限。
+
+MINERU_MODEL_SOURCE = os.getenv("MINERU_MODEL_SOURCE", "modelscope")
+# 传给子进程的模型源。留空则沿用 MinerU 自身默认（HuggingFace）。
+
+# ============================================================
 # Embedding（向量嵌入）配置
 # 使用阿里云 DashScope Embedding API（OpenAI 兼容，国内直连稳定）
 # 替换了原来的 BGE 本地模型（解决了 HuggingFace 下载超时问题）
