@@ -687,6 +687,28 @@ def ingest(
         logger.info(f"Ingested {total_chunks} chunks from {len(docs)} documents")
 
 
+_SPARSE_WRITER = None
+
+
+def _sparse_writer():
+    """稀疏向量旁路表的惰性单例。
+
+    只有在 EMBEDDING_API_MODE=native + EMBEDDING_OUTPUT_TYPE 含 sparse 时
+    才会真正拿到非 None 的写入器；任何初始化失败都标记为不可用且不再重试，
+    保证摄入主流程不会因为这一条可选路径而中断。
+    """
+    global _SPARSE_WRITER
+    if _SPARSE_WRITER is None:
+        try:
+            from src.rag.sparse_search import SparseSearch
+            writer = SparseSearch()
+            _SPARSE_WRITER = writer if writer.emb.sparse_enabled else False
+        except Exception as exc:
+            logger.warning(f"稀疏向量写入器初始化失败，本次摄入跳过稀疏落库: {exc}")
+            _SPARSE_WRITER = False
+    return _SPARSE_WRITER or None
+
+
 def _insert_chunk(
     pg: PGClient,
     emb: EmbeddingService,
@@ -696,8 +718,11 @@ def _insert_chunk(
     is_parent: bool = False,
 ):
     """写入单个 chunk 到 PG，支持 Small-to-Big 双表。"""
-    # embedding 时用带上下文前缀的文本
-    vec = emb.embed(chunk.content_for_embedding)
+    # embedding 时用带上下文前缀的文本。
+    # text_type="document" 只在 native 模式下真正下发给 API，compatible 模式
+    # （默认）会忽略它，因此这一行在默认配置下与历史的 emb.embed(...) 等价。
+    # 文档侧统一用 "document"，查询侧统一用 "query"，形成非对称编码。
+    vec, sparse = emb.embed_with_sparse(chunk.content_for_embedding, text_type="document")
     vec_str = f"[{','.join(str(v) for v in vec)}]"
 
     table = "knowledge_chunks"  # 默认表
@@ -733,6 +758,13 @@ def _insert_chunk(
         )
     except Exception as e:
         logger.warning(f"Ingest chunk {chunk_id} failed: {e}")
+
+    # 稀疏向量旁路落库：只有 native + dense&sparse 模式下 sparse 才非空。
+    # 写的是独立的 knowledge_chunks_sparse 表，主表结构与既有向量不受影响。
+    if sparse:
+        writer = _sparse_writer()
+        if writer is not None:
+            writer.upsert(chunk_id, sparse)
 
 
 # =========================================================================
@@ -776,6 +808,19 @@ if __name__ == "__main__":
     }
     logger.info(f"Strategy: {strategy_labels.get(args.strategy, args.strategy)}")
     logger.info(f"Params: chunk_size={args.chunk_size}, overlap={args.overlap}")
+
+    # embedding 调用模式提示。native 模式会改变向量取值（text_type / instruct
+    # 参与编码），与 compatible 模式的向量不在同一语义空间，切换后必须全量重摄入。
+    from src.config import EMBEDDING_API_MODE, EMBEDDING_OUTPUT_TYPE, SPARSE_RETRIEVAL
+    logger.info(
+        f"Embedding: mode={EMBEDDING_API_MODE}, output_type={EMBEDDING_OUTPUT_TYPE}, "
+        f"sparse_retrieval={SPARSE_RETRIEVAL}"
+    )
+    if EMBEDDING_API_MODE == "native" and args.incremental:
+        logger.warning(
+            "native 模式 + --incremental 有向量空间不一致风险：未变更的文档仍是"
+            "旧模式产出的向量。切换 EMBEDDING_API_MODE 后请做一次全量摄入。"
+        )
 
     ingest(
         knowledge_dir=args.dir,

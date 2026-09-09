@@ -148,6 +148,48 @@ EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
 # text-embedding-v4 的向量维度。注意：更换 embedding 模型后需重新摄入所有数据，
 # 因为不同模型的向量空间不兼容。
 
+# ------------------------------------------------------------
+# Embedding 调用模式与检索增强参数
+#
+# 阿里云对 text-embedding-v4 提供两套接口，能力并不对等：
+#   compatible — OpenAI 兼容端点（/compatible-mode/v1/embeddings）。
+#                只接受 model / input / dimensions / encoding_format，
+#                拿不到 text_type、instruct、稀疏向量。项目默认走这条，
+#                因为它与 openai SDK 复用同一套客户端与错误语义。
+#   native     — DashScope 原生端点（/api/v1/services/embeddings/...）。
+#                官方文档明确：稠密/稀疏向量、text_type、instruct
+#                「仅支持通过 DashScope SDK 及 API 启用」。
+#
+# 因此下面三项能力全部挂在 native 模式下；切到 native 会改变向量取值，
+# 属于会影响检索指标的变更，必须重新摄入知识库并重跑消融后再对比数字。
+# ------------------------------------------------------------
+EMBEDDING_API_MODE = os.getenv("EMBEDDING_API_MODE", "compatible").lower()
+# compatible（默认，行为与历史一致）| native（启用下面三项增强）
+
+EMBEDDING_NATIVE_URL = os.getenv(
+    "EMBEDDING_NATIVE_URL",
+    "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding",
+)
+
+EMBEDDING_INSTRUCT_QUERY = os.getenv("EMBEDDING_INSTRUCT_QUERY", "")
+EMBEDDING_INSTRUCT_DOCUMENT = os.getenv("EMBEDDING_INSTRUCT_DOCUMENT", "")
+# 任务指令（instruct）。官方称通常带来 1%~5% 的效果提升，建议用英文撰写。
+# 例：EMBEDDING_INSTRUCT_QUERY="Given a fitness question, retrieve knowledge
+#     chunks that answer it"
+# 留空则不下发该参数。查询侧与文档侧可分别配置，配合 text_type 形成非对称编码。
+
+EMBEDDING_OUTPUT_TYPE = os.getenv("EMBEDDING_OUTPUT_TYPE", "dense").lower()
+# dense（默认）| sparse | dense&sparse
+# 取 dense&sparse 时，同一次调用同时返回稠密向量与类 SPLADE 的稀疏向量，
+# 稀疏路可替代 pg_trgm 三元组匹配（中文 trigram 噪音大，见 EVAL_REPORT）。
+
+SPARSE_RETRIEVAL = os.getenv("SPARSE_RETRIEVAL", "off").lower()
+# 稀疏检索路开关：off（默认，检索行为与历史完全一致）| on
+# on 时知识库检索从「向量 + 关键词」双路变为「向量 + 关键词 + 稀疏」三路，
+# 三路仍走 src/rag/fusion.py 的同一套 RRF 语义。
+# 依赖 EMBEDDING_API_MODE=native 且 EMBEDDING_OUTPUT_TYPE 含 sparse；
+# 依赖不满足时自动按 off 处理，绝不让检索链路因此中断。
+
 # ============================================================
 # LLM 降级链（Resilience）
 # 主模型不可用时，按此顺序尝试备用模型。逗号分隔的别名列表。

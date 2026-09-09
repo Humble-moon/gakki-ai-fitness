@@ -98,6 +98,14 @@ class KnowledgeSearch:
         self.pg = PGClient()           # PostgreSQL 客户端
         self.emb = EmbeddingService()  # 文本向量化服务
         self.llm = LLMProvider()       # LLM 调用服务（用于重排序）
+        # 稀疏词法检索路（可选，SPARSE_RETRIEVAL=on 才生效）。
+        # 构造失败绝不能拖垮整个检索层，因此这里兜住异常并置 None。
+        try:
+            from src.rag.sparse_search import SparseSearch
+            self.sparse = SparseSearch(pg=self.pg, emb=self.emb)
+        except Exception as exc:  # pragma: no cover - 防御性
+            logger.warning(f"稀疏检索路初始化失败，按双路运行: {exc}")
+            self.sparse = None
 
     # =====================================================================
     # 阶段 1a: 向量检索
@@ -189,20 +197,23 @@ class KnowledgeSearch:
         self,
         vector_results: List[dict],
         keyword_results: List[dict],
+        sparse_results: Optional[List[dict]] = None,
         k: int = RRF_K,
     ) -> List[dict]:
-        """倒数排名融合（RRF）：无需分数校准即可合并两个排序列表。
+        """倒数排名融合（RRF）：无需分数校准即可合并多个排序列表。
 
         输入：
             vector_results:  List[dict] — 向量检索结果列表（已按相似度排序）
-            keyword_results: List[dict] — 关键词检索结果列表（已按相似度排序）
+            keyword_results: List[dict] — 关键词检索结果列表（已按 trigram 相似度排序）
+            sparse_results:  List[dict] | None — 稀疏词法检索结果（可选第三路，
+                             仅 SPARSE_RETRIEVAL=on 时非空；None/[] 等价于双路）
             k:              int        — RRF 平滑常数，默认 60
 
         输出：
             List[dict] — 按 RRF 分数降序排列的融合结果，每个 dict 新增 rrf_score 字段
 
         RRF 公式:
-            RRF_score(d) = sum(1 / (k + rank_i(d)))，i 遍历 {vector, keyword}
+            RRF_score(d) = sum(1 / (k + rank_i(d)))，i 遍历所有参与的检索路
 
         为什么 RRF 优于简单去重：
             1. 在两个列表中排名都靠前的文档会得到加权提升
@@ -213,11 +224,14 @@ class KnowledgeSearch:
                （即使向量检索的第一名是噪声，RRF 也会因为有平滑常数而不过度惩罚）
 
         实现委托给项目级共享函数 src.rag.fusion.rrf_fuse（按 chunk_id 键），
-        与动作检索层使用同一套融合语义。
+        与动作检索层使用同一套融合语义。rrf_fuse 本身接受任意条数的排序列表，
+        所以加入稀疏路只是多传一个列表，融合语义与双路完全一致。
         """
         from src.rag.fusion import rrf_fuse
-        return rrf_fuse([vector_results, keyword_results],
-                        key=lambda doc: doc.get("chunk_id"), k=k)
+        routes = [vector_results, keyword_results]
+        if sparse_results:
+            routes.append(sparse_results)
+        return rrf_fuse(routes, key=lambda doc: doc.get("chunk_id"), k=k)
 
     # =====================================================================
     # 阶段 3: LLM 重排序
@@ -319,19 +333,30 @@ class KnowledgeSearch:
                          chunk_index, score, source, rrf_score, rerank_score/rerank_reason
 
         流水线步骤：
-            阶段 1: 双路并行检索 → 向量 20 条 + 关键词 20 条
+            阶段 1: 多路并行检索 → 向量 20 条 + 关键词 20 条（+ 稀疏 20 条，可选）
             阶段 2: RRF 倒数排名融合 → 去重 + 综合排序
             阶段 3: LLM 重排序（可选）→ 精排 Top-5
         """
-        # ---- 阶段 1：双路检索 ----
-        # 向量和关键词检索各自独立，可以并行（当前是串行）
+        # ---- 阶段 1：多路检索 ----
+        # 各路检索相互独立，可以并行（当前是串行）
         # TODO: 可使用 asyncio.gather 并发执行以加速
         vector_results = self.vector_search(query)
         keyword_results = self.keyword_search(query)
 
+        # 稀疏词法路（第三路，默认关闭）。available() 会校验
+        # SPARSE_RETRIEVAL / native 模式 / sparse 输出三个前置条件，
+        # 任一不满足即返回空，检索行为与历史双路版本完全一致。
+        sparse_results: List[dict] = []
+        if self.sparse is not None and self.sparse.available():
+            try:
+                sparse_results = self.sparse.search(query)
+            except Exception as exc:  # 这一路出问题不能影响主链路
+                logger.warning(f"稀疏检索失败，本次按双路融合: {exc}")
+                sparse_results = []
+
         # ---- 阶段 2：RRF 融合 ----
-        # 将两路结果按排名融合，消除不同分数分布的偏差
-        fused = self.rrf_fusion(vector_results, keyword_results)
+        # 将各路结果按排名融合，消除不同分数分布的偏差
+        fused = self.rrf_fusion(vector_results, keyword_results, sparse_results)
 
         # ---- 阶段 3：重排序 ----
         # 注意：只有融合结果多于 top_k 时才需要重排序
