@@ -347,6 +347,12 @@ class LLMProvider:
             temperature: 生成随机性
             model: 模型别名 / 完整模型名 / None(用活跃模型)
         """
+        # 出网前剥离直接标识符（LLM_INJURY_REDACTION=on 才生效）。
+        # 放在这里是刻意的：本地 HITL 规则引擎与语义匹配需要看到完整原文，
+        # 脱敏只应发生在文本即将离开本机的最后一跳。
+        from src.security.injury_redaction import redact_messages, restore_text
+        messages, redaction_map = redact_messages(messages)
+
         client, primary_alias, primary_model_name = self._resolve(model)
         chain = self._build_fallback_chain(primary_alias)
         attempted = []
@@ -372,6 +378,10 @@ class LLMProvider:
                 cost_tracker.record(mn, resp.tokens,
                                     extra="fallback" if resp.degraded else "chat")
                 self._breaker.record_success(alias)
+                # 响应里若复述了占位符，还原成原文再交给上层。
+                # 还原是纯字符串替换、不引入新信息，因此是安全的。
+                if redaction_map and getattr(resp, "content", None):
+                    resp.content = restore_text(resp.content, redaction_map)
                 return resp
             except Exception as e:
                 summary = _error_summary(e)
@@ -398,6 +408,12 @@ class LLMProvider:
     def chat_stream(self, messages: list, temperature: float = 0.3,
                     model: str = None) -> LLMStream:
         """流式对话调用，yield str while exposing per-call metadata."""
+        # 只在发送侧脱敏，不对流式响应做还原：占位符可能跨 chunk 被切断
+        # （「【手」+「机号1】」），逐块替换会漏；跨 chunk 缓冲又会推迟首
+        # token，与流式的目的冲突。详见 injury_redaction 模块 docstring。
+        from src.security.injury_redaction import redact_messages
+        messages, _ = redact_messages(messages)
+
         metadata = LLMStreamMetadata()
 
         def generate() -> Iterator[str]:
