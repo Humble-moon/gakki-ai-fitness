@@ -4,12 +4,14 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 
 > 当前版本定位为 **localhost 单用户演示**，不承诺公网多用户、完整人工审核闭环或生产服务等级。可复核数字、证据路径和未核验口径见 [项目事实基线](docs/project-fact-baseline.md)。
 
+> **开发方式说明**：本项目开发过程中使用了 AI 编码助手（Claude Code）辅助编码与重构；架构设计、技术选型与评测结论由本人决定，并对仓库内容负责。
+
 ## 架构
 
 ```
 用户 → FastAPI (SSE 流式)
          │
-    Orchestrator (自研编排引擎)
+    LangGraph 状态图编排 (src/graph)
          │
     ┌────┼────┬──────────┐
     ▼    ▼     ▼          ▼
@@ -30,7 +32,7 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 
 | 层级 | 技术 |
 |------|------|
-| Agent 框架 | 自研 Orchestrator（Planner → Retriever → Writer → FactChecker） |
+| Agent 编排 | LangGraph 状态图（主路径，含 checkpointer + HITL `interrupt()`）；命令式 Orchestrator 作为对照与降级保留，两套共享 `plan_finalization.py` 终态逻辑 |
 | 协议 | FastMCP 完整协议实现（Tools + Resources + JSON-RPC 错误码） |
 | 模型 | deepseek-chat + deepseek-reasoner 双模型架构 + 熔断器 |
 | RAG | 向量检索（HNSW）+ 关键词检索 → RRF 融合 → LLM Re-rank |
@@ -47,7 +49,7 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 
 - **智能计划生成** — 输入身高体重/目标/场景，AI 先给个性化分析，Multi-Agent 流水线生成周训练计划，FactChecker 安全审查 + 修正回路
 - **动作分析** — 输入动作名 + 训练感受，检索标准规范，诊断问题，给出改进方案
-- **知识问答** — 自然语言健身问题，162 篇知识文档（90 自写 + 32 PubMed 翻译 + 40 扩展专题；824 chunks 为 README 历史声明，当前未独立复核）混合检索，RRF 融合 + Re-rank 精排，带来源引用
+- **知识问答** — 自然语言健身问题，162 篇知识文档（90 自写 + 32 PubMed 翻译 + 40 扩展专题，557 chunks）混合检索，RRF 融合 + Re-rank 精排，带来源引用
 
 ## 快速开始
 
