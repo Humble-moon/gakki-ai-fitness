@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -70,12 +71,40 @@ def collect_facts(repo_root: Path) -> dict[str, Any]:
                 "/api/ask-question",
             ],
         },
-        "warnings": warnings
-        + [
-            "README historical claim of 824 chunks is not independently verified by this inventory",
+        "warnings": warnings + _readme_chunk_warnings(repo_root) + [
             "historical evaluation outputs are counted as artifacts, not certified production accuracy",
         ],
     }
+
+
+def _readme_chunk_warnings(repo_root: Path) -> list[str]:
+    """Report what README currently claims about knowledge-chunk count.
+
+    The chunk count lives in PostgreSQL (`knowledge_chunks`), so this static
+    inventory cannot verify it — unlike the seed/eval counts above, which are
+    read straight from JSON files on disk. Rather than hardcode one historical
+    figure (this script used to warn about a "824 chunks" README claim that the
+    README no longer makes), scan the README and report whatever it says now, so
+    the warning tracks the document instead of going stale.
+    """
+    readme = repo_root / "README.md"
+    try:
+        text = readme.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return [f"unreadable: {readme.as_posix()}"]
+
+    claims = sorted(set(re.findall(r"(\d+)\s*chunks", text)))
+    if not claims:
+        return [
+            "README states no knowledge-chunk count; the figure is only produced "
+            "by an ingestion run and cannot be verified statically"
+        ]
+    listed = "/".join(claims)
+    return [
+        f"README claims {listed} knowledge chunks; chunk count lives in PostgreSQL "
+        "and cannot be verified by this static inventory — re-run "
+        "`python -m src.rag.knowledge_ingestion` to re-measure"
+    ]
 
 
 def main() -> None:
