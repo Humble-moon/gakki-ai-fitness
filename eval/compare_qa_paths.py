@@ -107,7 +107,8 @@ def _run_fixed_path(orch, question: str) -> dict:
     from src.models.schemas import UserProfileInput
 
     profile = UserProfileInput(
-        height=175, weight=70, training_years=2, goal="增肌", injuries=[]
+        height=175, weight=70, training_years=2, goal="增肌",
+        available_equipment=["哑铃", "杠铃"], days_per_week=3, injuries=[],
     )
 
     calls: list[str] = []
@@ -169,8 +170,13 @@ def compare(limit: int, output: Path | None) -> dict:
 
         fixed = _run_fixed_path(orch, question)
         row["fixed"] = {k: v for k, v in fixed.items() if k != "result"}
-        print(f"  固定流水线 : {fixed.get('steps', '?')} 次检索，"
-              f"{fixed.get('seconds', '?')}s")
+        if "error" in fixed:
+            # 如实显示失败原因——多半是依赖服务未启动。把失败伪装成
+            # "0 次检索" 会让对比表看起来正常，实际什么都没测到。
+            print(f"  固定流水线 : 失败 — {fixed['error'].splitlines()[0][:80]}")
+        else:
+            print(f"  固定流水线 : {fixed.get('steps', '?')} 次检索，"
+                  f"{fixed.get('seconds', '?')}s")
 
         agent = _run_agent_path(orch, question)
         row["agent"] = {k: v for k, v in agent.items() if k != "result"}
@@ -257,7 +263,19 @@ def _tool_usage(rows: list[dict]) -> dict:
 
 def _render_summary(summary: dict) -> str:
     f, a = summary["fixed"], summary["agent"]
-    lines = [
+    lines = []
+
+    # 依赖缺失时对比不成立——必须显式说明，否则这张表会被误读成
+    # "两条路径都测过了，自主循环更慢"。
+    if not f.get("calls", {}).get("n"):
+        lines += [
+            "⚠️ 固定流水线全部失败，本次**不构成有效对比**。",
+            "   常见原因：PostgreSQL / Redis 未启动，知识库检索无法执行。",
+            "   请先 `docker compose up -d` 再重跑。",
+            "",
+        ]
+
+    lines += [
         "汇总",
         "",
         f"{'':14s}{'固定流水线':>16s}{'自主循环':>16s}",

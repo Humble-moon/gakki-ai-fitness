@@ -108,6 +108,30 @@ class PromptToolCallingModel:
         rest = [m for m in messages if m.get("role") != "system"]
         return [injected, *existing_system, *rest]
 
+    def format_tool_result(self, call: ToolCall, payload) -> list[dict]:
+        """把工具结果包装成模型能读懂的消息。
+
+        **不能用 ``role="tool"``**：那是原生 function calling 的格式，
+        OpenAI 兼容服务端要求它与前置 assistant 消息里的 ``tool_calls``
+        严格配对；提示词协议下不存在 ``tool_calls``，发出去会被直接拒绝
+        （实测 DeepSeek 返回 400: Messages with role 'tool' must be a
+        response to a preceding message with 'tool_calls'）。
+
+        这里用一条 ``role="user"`` 消息承载结果，并**显式复述调用了什么、
+        传了什么参数**——因为对话里没有 assistant 的 tool_calls 记录，
+        不复述的话模型会不知道自己上一轮请求了什么。
+        """
+        args = json.dumps(call.args, ensure_ascii=False) if call.args else "{}"
+        body = str(payload)
+        return [{
+            "role": "user",
+            "content": (
+                f"[工具结果] 你刚才调用了 {call.name}({args})，返回如下：\n"
+                f"{body}\n\n"
+                "请据此继续：需要更多材料就再调用工具，材料够了就直接给出最终答案。"
+            ),
+        }]
+
     @staticmethod
     def parse_response(content: str, tokens: int = 0) -> ModelTurn:
         """把模型的一段文本解析成 :class:`ModelTurn`。

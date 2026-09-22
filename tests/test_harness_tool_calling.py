@@ -256,10 +256,14 @@ class TestLoopIntegration:
 
         assert result.completed
         assert result.tool_errors == 1
-        # 第二轮的消息里必须带上工具错误
-        second_turn_msgs = llm.seen[1]
-        tool_msgs = [m for m in second_turn_msgs if m.get("role") == "tool"]
-        assert tool_msgs and "库挂了" in tool_msgs[0]["content"]
+        # 第二轮的消息里必须带上工具错误。
+        # 注意：提示词协议下用的是 role="user" 而非 role="tool"——
+        # 后者缺少前置 tool_calls 会被 OpenAI 兼容服务端拒绝，见
+        # PromptToolCallingModel.format_tool_result。
+        second_turn = " ".join(m.get("content", "") for m in llm.seen[1])
+        assert "库挂了" in second_turn
+        assert not any(m.get("role") == "tool" for m in llm.seen[1]), \
+            "提示词协议下不得发出 role=tool 消息"
 
 
 class TestRealToolRegistryIntegration:
@@ -312,8 +316,57 @@ class TestRealToolRegistryIntegration:
 
         assert result.completed
         assert result.tool_errors == 1
-        tool_msgs = [m for m in llm.seen[-1] if m.get("role") == "tool"]
-        assert tool_msgs, "错误必须作为工具消息回喂模型"
+        last_turn = " ".join(m.get("content", "") for m in llm.seen[-1])
+        assert "no_such_tool" in last_turn, "错误必须回喂模型"
+        assert not any(m.get("role") == "tool" for m in llm.seen[-1])
+
+
+class TestToolResultMessageShape:
+    """提示词协议下**绝不能**发出 role="tool" 消息。
+
+    这是一次真实调用才暴露的缺陷：OpenAI 兼容服务端（DeepSeek）返回
+    400 —— `Messages with role 'tool' must be a response to a preceding
+    message with 'tool_calls'`。提示词协议没有 tool_calls，所以那条消息
+    永远缺少配对。假模型不校验消息结构，因此 37 个用例全绿也没发现。
+    """
+
+    def test_never_emits_role_tool(self):
+        model = PromptToolCallingModel(FakeLLM(["x"]))
+        msgs = model.format_tool_result(ToolCall(name="search_knowledge", args={}), {"ok": 1})
+        assert msgs, "必须产出消息"
+        assert all(m["role"] != "tool" for m in msgs)
+
+    def test_echoes_what_was_called(self):
+        """对话里没有 assistant 的 tool_calls 记录，必须复述调用内容，
+        否则模型不知道上一轮请求了什么。"""
+        model = PromptToolCallingModel(FakeLLM(["x"]))
+        msgs = model.format_tool_result(
+            ToolCall(name="search_exercises", args={"query": "胸"}), {"count": 3}
+        )
+        text = " ".join(m["content"] for m in msgs)
+        assert "search_exercises" in text
+        assert "胸" in text
+
+    def test_carries_the_payload(self):
+        model = PromptToolCallingModel(FakeLLM(["x"]))
+        msgs = model.format_tool_result(ToolCall(name="t", args={}), {"count": 42})
+        assert "42" in " ".join(m["content"] for m in msgs)
+
+    def test_loop_uses_native_format_without_the_hook(self):
+        """没有该钩子的模型仍走原生格式——扩展点是可选的。"""
+
+        class NativeModel:
+            def complete(self, messages, tools):
+                from src.harness.loop import ModelTurn
+                return ModelTurn(content="完成", tool_calls=[], tokens=1)
+
+        # ScriptedModel 无 format_tool_result，走默认分支
+        from src.harness.loop import _tool_result_messages
+        msgs = _tool_result_messages(
+            NativeModel(), ToolCall(name="t", args={}, call_id="c1"), {"ok": 1}, 0
+        )
+        assert msgs[0]["role"] == "tool"
+        assert msgs[0]["tool_call_id"] == "c1"
 
 
 class TestStripFence:
