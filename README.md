@@ -64,11 +64,36 @@ HARNESS_AGENT_LOOP=1 python app/server.py
 agent loop 等于失控的账单）；工具报错回喂模型而非中断流程，让它自己换策略；
 每步可挂 checkpoint 回调以支持续跑。
 
+### 知识问答的两条路径
+
+`Orchestrator.answer_question_stream` 是统一入口，按开关分发：
+
+| | 固定流水线（默认） | 自主循环（`HARNESS_AGENT_LOOP=1`） |
+|---|---|---|
+| 检索 | 每次必查知识库 + 动作库，伤病题再查图谱 | 由模型决定查什么、查几次 |
+| 延迟 | 可预测 | 波动 |
+| 代码 | `_answer_question_fixed_stream` | `src/core/qa_agent.py` + `src/harness/qa_tools.py` |
+
+**自主循环失败会自动回退到固定流水线**（预算触顶或调用异常时），并在
+事件流里明确告知用户。把一次提问赌在实验路径上是不负责任的。
+
+两条路径**共用同一份安全实现**（`src/core/qa_safety.py`）——伤病相关的
+安全检测与硬约束若各存一份，迟早会漂移，而用户看不出自己走的是哪条路。
+`tests/test_qa_dispatch.py` 会断言这个共用关系。
+
+对比两条路径的过程开销：
+
+```bash
+python -m eval.compare_qa_paths --limit 5 --output eval/qa_path_compare.json
+```
+
 > **当前边界**：`src/llm/provider.py` 尚不支持原生 function calling，
 > 因此自主循环通过提示词协议（`src/harness/tool_calling.py`）驱动模型返回
 > 结构化 JSON。这条路径的可靠性低于原生 function calling——模型可能不按
 > 协议输出。适配器的解析失败会降级为"当作最终答案"并告警，宁可提前结束
-> 也不在解析错误上空转到预算耗尽。该路径尚未接入默认流水线。
+> 也不在解析错误上空转到预算耗尽。**该路径尚未在真实模型上端到端跑过**，
+> 其正确性由离线假模型测试保证（`tests/test_qa_agent.py`），不等同于
+> 真实链路的成功率——量化对比需先跑上面的脚本。
 
 过程指标见 `eval/metrics/harness_metrics.py`（成功率、预算触顶率、工具调用
 有效率、错误恢复率、checkpoint 续跑正确性）。
@@ -162,9 +187,12 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 │   ├── harness/                  # 执行脚手架（预算配置/自主循环/超时）
 │   │   ├── config.py             # 执行预算的唯一事实源
 │   │   ├── loop.py               # ReAct 自主循环（可选路径）
+│   │   ├── qa_tools.py           # 问答工具门面（知识库/动作库/图谱）
 │   │   ├── tool_calling.py       # 提示词工具调用适配器
 │   │   └── resilience.py         # 墙钟超时
 │   ├── core/                     # Orchestrator 编排引擎
+│   │   ├── qa_agent.py           # 问答自主循环路径（可选）
+│   │   └── qa_safety.py          # 问答安全检测与硬约束（两条路径共用）
 │   ├── mcp/                      # FastMCP 完整协议实现
 │   │   ├── exercise_server.py    # MCP 工具（接 PG 数据库）
 │   │   └── tool_registry.py      # 工具注册门面
