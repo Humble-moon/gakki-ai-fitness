@@ -46,11 +46,28 @@ python scripts/verify_project_facts.py --json
 
 **消融重跑结论（2026-09-03，170 条主评测集）**：MRR A-纯向量 0.4110 / B-AgenticRAG 0.4186 / D-混合RRF 0.3975，P@5/R@5/NDCG@5 三组持平。查询集偏关键词型，纯向量已近最优；混合融合无增益，增益集中在 Agentic 改写环节（+2%）。此结论与 2026-07-17 历史消融一致，作为诚实阴性结果保留。
 
+## 2026-09-22 执行脚手架（Harness）整理（可复核）
+
+| 事实 | 证据路径 | 状态 |
+|---|---|---|
+| 执行预算集中到唯一事实源（重试 3 次 / 退避 2.0 / 重写 3 轮 / 递归 60 步 / 循环 10 步 / 50000 token） | `src/harness/config.py` | 已实现+已测试 |
+| 配置与消费方（provider / graph.state / graph.runtime）取值一致性由测试钉住 | `tests/test_harness_contract.py` | 已实现+已测试 |
+| ReAct 自主循环：预算硬上限、工具错误回喂模型、每步 checkpoint 回调 | `src/harness/loop.py`、`tests/test_harness_loop.py` | 已实现+已测试 |
+| 提示词工具调用适配器（解析失败降级为最终答案而非空成功） | `src/harness/tool_calling.py`、`tests/test_harness_tool_calling.py` | 已实现+已测试 |
+| 循环可直接驱动真实 `ToolRegistry`（9 个工具，离线可调用） | `tests/test_harness_tool_calling.py::TestRealToolRegistryIntegration` | 已实现+已测试 |
+| 过程指标：成功率 / 预算触顶率 / 工具调用有效率 / 错误恢复率 / 续跑正确性 | `eval/metrics/harness_metrics.py`、`tests/test_harness_metrics.py` | 已实现+已测试 |
+| 删除 `src/core/harness.py`（全仓库零引用，且其 `with_retry` 会无条件重试逻辑错误） | 该文件已删除；超时能力迁至 `src/harness/resilience.py` | 已清理 |
+| CI：离线测试 + 事实核验 + 署名守卫（拒绝 AI 联合署名 trailer） | `.github/workflows/ci.yml` | 已实现，**尚未在 GitHub 上跑过** |
+
+**能力边界（重要）**：`src/llm/provider.py` 不支持原生 function calling，自主循环依赖提示词协议驱动模型返回结构化 JSON，其可靠性**低于**原生 function calling；该路径默认关闭（`HARNESS_AGENT_LOOP`），**尚未接入默认流水线**，也未在真实模型上端到端验证——循环与适配器的正确性由离线假模型测试保证，不等同于真实链路的成功率。
+
+**历史修正**：`src/core/harness.py` 曾以文件头注释声称"被各 Agent 类通过 `@with_retry` 装饰其内部方法"，但全仓库零 import，实际重试逻辑在 `src/llm/provider.py` 另行实现。注释与事实不符的情况已随文件删除消除。
+
 ## 未核验与历史结果
 
 **知识块数量**：README 原声明“824 chunks”，该数字无独立复核依据，已于 2026-09-09 改为 **557**——取自 2026-08-30 扩展语料后的实际摄入输出，与评测 manifest 同源。需要说明的是：块数量存在 PostgreSQL 的 `knowledge_chunks` 表里，`scripts/verify_project_facts.py` 这类静态清单**核验不了它**（脚本能核验的是 `data/seed_exercises.json` 的 338 与 `data/knowledge` 的 162 篇，因为那些是磁盘上的文件）。脚本现在会主动报告“README 当前声称多少块、且该数字无法静态核验”，要重新测量就跑一次 `python -m src.rag.knowledge_ingestion`。历史评测报告和 JSON 结果是可追溯的历史产物，不自动等同于当前版本的生产准确率、医疗级安全、整体零漏报或生产 SLA。
 
-**测试数量**：本文档与 README 都不写死测试用例数，一律以 `pytest` 实际收集为准。静态清单统计的是测试**文件数与函数数**（当前 47 文件 / 332 函数），参数化展开后的实际用例数更高（当前 `pytest -q` 为 431 passed）。论文截稿口径 295 用例（281 函数参数化展开）是历史事实，不随后续加固而改变。
+**测试数量**：本文档与 README 都不写死测试用例数，一律以 `pytest` 实际收集为准。静态清单统计的是测试**文件数与函数数**（当前 51 文件 / 334 函数），**该口径只统计模块级 `def test_`，类内测试方法不计入**，因此显著低于实际规模——引用该数字时需说明这一点。参数化展开后的实际用例数更高（当前 `pytest -q` 为 534 passed）。论文截稿口径 295 用例（281 函数参数化展开）是历史事实，不随后续加固而改变。
 
 “设计-only”能力、架构图和历史报告中的指标，只有在对应实现、配置、数据版本和运行命令均可复核时，才可升级为当前事实。不要修改原始面试资料来补足证据。
 
