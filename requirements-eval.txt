@@ -1,0 +1,16 @@
+# 可选的 RAGAS 评测依赖。
+#
+# 仅 `eval/run_eval.py --ragas` / `eval/ragas_eval.py` 需要，默认不装。
+# 主流程与离线测试都不依赖它们——`ragas_eval.py` 的导入是惰性的
+# （`_check_ragas()` 里 try/except），缺失时返回
+# `{"error": "ragas not installed..."}` 而不是让整条链路崩掉。
+#
+#   pip install -r requirements-eval.txt
+#
+# 历史评测结果 `eval/ragas_results.json`（68 条查询）是该环境跑出的产物，
+# 不依赖本文件即可复核。要重跑才需要装。
+
+-r requirements.txt
+
+ragas>=0.2.0
+datasets>=3.0.0

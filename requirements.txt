@@ -1,3 +1,12 @@
+# 运行时依赖。
+#
+# 向量化走 DashScope API（src/rag/embedding.py），不加载本地模型，
+# 因此这里**刻意不含** torch / sentence-transformers / faiss——它们曾是
+# 本地 BGE 方案时期的依赖，改用 API 后已无任何 import，留着只会让每次
+# 安装（尤其是 CI）多下载约 2GB。
+#
+# RAGAS 评测所需的额外依赖见 requirements-eval.txt（可选，默认不装）。
+
 fastapi>=0.115.0
 uvicorn>=0.30.0
 mcp>=1.27.0,<2.0
@@ -9,20 +18,16 @@ pgvector>=0.3.0
 neo4j>=5.20.0
 redis>=5.0.0
 minio>=7.2.0
-faiss-cpu>=1.8.0
-sentence-transformers>=2.7.0
 pydantic>=2.0.0
 sqlalchemy>=2.0.0
 python-dotenv>=1.0.0
 numpy>=1.26.0
 tiktoken>=0.7.0
-ragas>=0.2.0
 langchain-openai>=0.3.0
 langgraph>=1.2,<2.0
 langgraph-checkpoint-sqlite>=3.1,<4.0
 langgraph-checkpoint-postgres>=3.0,<4.0
 psycopg[binary,pool]>=3.1,<4.0
-datasets>=3.0.0
 pandas>=2.0.0
 pdfplumber>=0.10.0
 python-docx>=1.0.0

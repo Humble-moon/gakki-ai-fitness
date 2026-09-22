@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests & fact baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run offline test suite
+        run: python -m pytest -q
+
+      - name: Verify project fact baseline
+        run: python scripts/verify_project_facts.py
+
+  attribution-guard:
+    name: Attribution guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history so the pushed range can be resolved.
+          fetch-depth: 0
+
+      - name: Fail if new commits credit an AI as co-author
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            RANGE="origin/${GITHUB_BASE_REF}..HEAD"
+          elif [ -n "${GITHUB_EVENT_BEFORE:-}" ] && \
+               [ "${GITHUB_EVENT_BEFORE}" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="${GITHUB_EVENT_BEFORE}..${GITHUB_SHA}"
+          else
+            RANGE=""
+          fi
+
+          # Fall back to the tip commit when the range cannot be resolved
+          # (new branch, first push, or a base ref that does not exist locally).
+          if [ -z "${RANGE}" ] || ! git rev-list "${RANGE}" >/dev/null 2>&1; then
+            echo "Commit range unresolved; scanning the tip commit only."
+            RANGE="-1"
+          fi
+
+          echo "Scanning commit range: ${RANGE}"
+          git log ${RANGE} --format='%H%n%B%n---'
+
+          if git log ${RANGE} --format='%B' \
+             | grep -inE '^co-authored-by:.*(claude|anthropic|copilot|openai)'; then
+            echo "::error::An AI co-author trailer was found in a commit message."
+            echo "::error::Commit messages must not credit an AI as a co-author of this repository."
+            exit 1
+          fi
+
+          echo "OK: no AI co-author trailers found."

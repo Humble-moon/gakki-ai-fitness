@@ -6,6 +6,8 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 
 > **开发方式说明**：本项目开发过程中使用了 AI 编码助手（Claude Code）辅助编码与重构；架构设计、技术选型与评测结论由本人决定，并对仓库内容负责。
 
+> **开发时间线**：项目自 **2026-04** 起在本地开发，**2026-07-01 初始化 Git 仓库**并开始产生提交历史——因此 `git log` 的最早提交晚于实际开工时间。详见 [项目事实基线](docs/project-fact-baseline.md) 的「未核验与历史结果」一节（该段为开发者陈述，仓库无法独立复核）。
+
 ## 架构
 
 ```
@@ -27,6 +29,49 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
  PostgreSQL  Neo4j   Redis   MinIO
  (pgvector)         (缓存+记忆)
 ```
+
+## 执行脚手架（Harness）
+
+模型之外的那层执行设施。它不是一个新模块，而是把原本散落在各处的执行能力
+登记到一起，让"脚手架"成为一个可讨论、可评测、可替换的层。
+
+| 能力 | 承载模块 |
+|------|---------|
+| 编排与状态 | `src/graph/`（LangGraph 状态图 + checkpointer） |
+| Agent 自主循环 | `src/harness/loop.py` |
+| 工具注册 | `src/mcp/tool_registry.py` |
+| 上下文管理 | `src/memory/conversation.py`（滑窗 + 异步摘要） |
+| 人工闸门 | `src/hitl/` |
+| 输出约束 | `src/core/goal_contract.py`、`src/agents/output_validation.py` |
+| 失败恢复 | `src/llm/provider.py`（重试）、`src/harness/resilience.py`（墙钟超时） |
+| 预算配置 | `src/harness/config.py`（唯一事实源） |
+
+`src/harness/config.py` 集中所有执行预算（重试次数、重写轮次、循环步数、
+token 上限）。`tests/test_harness_contract.py` 会断言这些取值与各消费模块
+实际使用的常量一致，任何一处改了而另一处没跟上都会让测试失败。
+
+**Agent 自主循环**（`src/harness/loop.py`）是 ReAct 式的可选路径：让模型
+自己决定调哪个工具、调几次。默认**关闭**——现有确定性流水线对训练计划
+生成这类任务是更合适的选择（路径可预测、可评测、延迟低）。自主循环面向
+知识问答这类步骤数事先未知的开放式任务。
+
+```bash
+# 启用自主循环（实验性）
+HARNESS_AGENT_LOOP=1 python app/server.py
+```
+
+循环的三个要点：预算硬上限（`max_steps` + `token_budget`，没有刹车的
+agent loop 等于失控的账单）；工具报错回喂模型而非中断流程，让它自己换策略；
+每步可挂 checkpoint 回调以支持续跑。
+
+> **当前边界**：`src/llm/provider.py` 尚不支持原生 function calling，
+> 因此自主循环通过提示词协议（`src/harness/tool_calling.py`）驱动模型返回
+> 结构化 JSON。这条路径的可靠性低于原生 function calling——模型可能不按
+> 协议输出。适配器的解析失败会降级为"当作最终答案"并告警，宁可提前结束
+> 也不在解析错误上空转到预算耗尽。该路径尚未接入默认流水线。
+
+过程指标见 `eval/metrics/harness_metrics.py`（成功率、预算触顶率、工具调用
+有效率、错误恢复率、checkpoint 续跑正确性）。
 
 ## 技术栈
 
@@ -65,8 +110,11 @@ AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 
 ## 快速开始
 
 ```bash
-# 1. 安装依赖
+# 1. 安装依赖（不加载本地向量模型，装的是 API 版依赖）
 pip install -r requirements.txt
+
+# 1b. 可选：跑 RAGAS 评测才需要
+# pip install -r requirements-eval.txt
 
 # 2. 配置环境变量
 cp .env.example .env
@@ -111,6 +159,11 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 │   └── static/index.html         # IRONMIND 暗黑工业风 UI
 ├── src/
 │   ├── agents/                   # 四 Agent（Planner/Retriever/Writer/FactChecker）
+│   ├── harness/                  # 执行脚手架（预算配置/自主循环/超时）
+│   │   ├── config.py             # 执行预算的唯一事实源
+│   │   ├── loop.py               # ReAct 自主循环（可选路径）
+│   │   ├── tool_calling.py       # 提示词工具调用适配器
+│   │   └── resilience.py         # 墙钟超时
 │   ├── core/                     # Orchestrator 编排引擎
 │   ├── mcp/                      # FastMCP 完整协议实现
 │   │   ├── exercise_server.py    # MCP 工具（接 PG 数据库）
@@ -143,7 +196,8 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 ├── data/knowledge/               # 健身知识库（162 篇文档；chunk 数量以实际摄入输出为准）
 ├── run_mcp_server.py             # MCP 独立服务器（stdio/SSE/HTTP）
 ├── docker-compose.yml
-└── requirements.txt
+├── requirements.txt              # 运行时依赖（API 版向量化，不含 torch）
+└── requirements-eval.txt         # 可选：RAGAS 评测依赖
 ```
 
 ## 阶段三运行入口

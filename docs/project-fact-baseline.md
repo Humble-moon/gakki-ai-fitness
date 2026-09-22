@@ -30,7 +30,7 @@ python scripts/verify_project_facts.py --json
 
 当前运行契约为 `localhost:8503`，SSE 入口包括 `/api/generate-plan`、`/api/analyze-exercise` 和 `/api/ask-question`。默认测试通过 `pytest` 排除 `integration` 与 `live` 标记；需要外部服务或真实模型的评测必须显式 opt-in。
 
-## 2026-06-03 工程加固（可复核）
+## 2026-09-03 工程加固（可复核）
 
 | 事实 | 证据路径 | 状态 |
 |---|---|---|
@@ -44,13 +44,34 @@ python scripts/verify_project_facts.py --json
 | 语义缓存可选 pgvector ANN 扫描（`CACHE_SCAN_BACKEND=ann`，失败回退线性扫描） | `src/rag/semantic_cache.py`、`tests/test_rag/test_semantic_cache_ann.py` | 已实现+已测试+本机 PG 冒烟 |
 | 消融重跑修复：2026-08-30 重跑实际只执行了 A 组（B/C 缺失被报告渲染为 0.0）；2026-09-03 重跑 A/B/D 三组并合并保存（部分组重跑不覆盖历史分区） | `eval/run_eval.py`、`eval/results.json`、manifest `retrieval_ablation_rerun_2026-09-03` | 已修复+已登记 |
 
-**消融重跑结论（2026-06-03，170 条主评测集）**：MRR A-纯向量 0.4110 / B-AgenticRAG 0.4186 / D-混合RRF 0.3975，P@5/R@5/NDCG@5 三组持平。查询集偏关键词型，纯向量已近最优；混合融合无增益，增益集中在 Agentic 改写环节（+2%）。此结论与 2026-07-17 历史消融一致，作为诚实阴性结果保留。
+**消融重跑结论（2026-09-03，170 条主评测集）**：MRR A-纯向量 0.4110 / B-AgenticRAG 0.4186 / D-混合RRF 0.3975，P@5/R@5/NDCG@5 三组持平。查询集偏关键词型，纯向量已近最优；混合融合无增益，增益集中在 Agentic 改写环节（+2%）。此结论与 2026-07-17 历史消融一致，作为诚实阴性结果保留。
+
+## 2026-09-22 执行脚手架（Harness）整理（可复核）
+
+| 事实 | 证据路径 | 状态 |
+|---|---|---|
+| 执行预算集中到唯一事实源（重试 3 次 / 退避 2.0 / 重写 3 轮 / 递归 60 步 / 循环 10 步 / 50000 token） | `src/harness/config.py` | 已实现+已测试 |
+| 配置与消费方（provider / graph.state / graph.runtime）取值一致性由测试钉住 | `tests/test_harness_contract.py` | 已实现+已测试 |
+| ReAct 自主循环：预算硬上限、工具错误回喂模型、每步 checkpoint 回调 | `src/harness/loop.py`、`tests/test_harness_loop.py` | 已实现+已测试 |
+| 提示词工具调用适配器（解析失败降级为最终答案而非空成功） | `src/harness/tool_calling.py`、`tests/test_harness_tool_calling.py` | 已实现+已测试 |
+| 循环可直接驱动真实 `ToolRegistry`（9 个工具，离线可调用） | `tests/test_harness_tool_calling.py::TestRealToolRegistryIntegration` | 已实现+已测试 |
+| 过程指标：成功率 / 预算触顶率 / 工具调用有效率 / 错误恢复率 / 续跑正确性 | `eval/metrics/harness_metrics.py`、`tests/test_harness_metrics.py` | 已实现+已测试 |
+| 删除 `src/core/harness.py`（全仓库零引用，且其 `with_retry` 会无条件重试逻辑错误） | 该文件已删除；超时能力迁至 `src/harness/resilience.py` | 已清理 |
+| CI：离线测试 + 事实核验 + 署名守卫（拒绝 AI 联合署名 trailer） | `.github/workflows/ci.yml` | 已实现+**已在 GitHub 实跑通过**（PR #1 连续 6 次，最近一次 Tests 1m26s / Attribution guard 4s，零 warning） |
+| 裁剪依赖后安装耗时 1m58s → 30s（移除 torch 等约 2GB） | `requirements.txt`、`requirements-eval.txt` | 已实测（CI #5 步骤级计时） |
+| 离线测试不再依赖 `.env`（新增占位凭据 conftest，只补缺失项） | `tests/conftest.py` | 已实现+双场景验证（有无 `.env` 均 534 passed） |
+
+**能力边界（重要）**：`src/llm/provider.py` 不支持原生 function calling，自主循环依赖提示词协议驱动模型返回结构化 JSON，其可靠性**低于**原生 function calling；该路径默认关闭（`HARNESS_AGENT_LOOP`），**尚未接入默认流水线**，也未在真实模型上端到端验证——循环与适配器的正确性由离线假模型测试保证，不等同于真实链路的成功率。
+
+**历史修正**：`src/core/harness.py` 曾以文件头注释声称"被各 Agent 类通过 `@with_retry` 装饰其内部方法"，但全仓库零 import，实际重试逻辑在 `src/llm/provider.py` 另行实现。注释与事实不符的情况已随文件删除消除。
 
 ## 未核验与历史结果
 
+**开发时间线（仓库不可独立复核，主动声明）**：本项目自 **2026-04** 起在本地开发，**2026-07-01 才初始化 Git 仓库**并开始产生提交历史。因此 `git log` 的最早提交（`4960e07`）晚于实际开工时间约三个月；且早期提交是在 07-01 上午批量落地的（最早三个提交相隔 3–4 分钟），不代表"当天才开始写第一行代码"。这一段属于开发者的一手陈述，**无法由仓库文件独立复核**，故按本文档标准不计入强事实，仅作背景说明——被问到时以此为准，不主张为可验证事实。
+
 **知识块数量**：README 原声明“824 chunks”，该数字无独立复核依据，已于 2026-09-09 改为 **557**——取自 2026-08-30 扩展语料后的实际摄入输出，与评测 manifest 同源。需要说明的是：块数量存在 PostgreSQL 的 `knowledge_chunks` 表里，`scripts/verify_project_facts.py` 这类静态清单**核验不了它**（脚本能核验的是 `data/seed_exercises.json` 的 338 与 `data/knowledge` 的 162 篇，因为那些是磁盘上的文件）。脚本现在会主动报告“README 当前声称多少块、且该数字无法静态核验”，要重新测量就跑一次 `python -m src.rag.knowledge_ingestion`。历史评测报告和 JSON 结果是可追溯的历史产物，不自动等同于当前版本的生产准确率、医疗级安全、整体零漏报或生产 SLA。
 
-**测试数量**：本文档与 README 都不写死测试用例数，一律以 `pytest` 实际收集为准。静态清单统计的是测试**文件数与函数数**（当前 47 文件 / 332 函数），参数化展开后的实际用例数更高（当前 `pytest -q` 为 431 passed）。论文截稿口径 295 用例（281 函数参数化展开）是历史事实，不随后续加固而改变。
+**测试数量**：本文档与 README 都不写死测试用例数，一律以 `pytest` 实际收集为准。静态清单统计的是测试**文件数与函数数**（当前 51 文件 / 334 函数），**该口径只统计模块级 `def test_`，类内测试方法不计入**，因此显著低于实际规模——引用该数字时需说明这一点。参数化展开后的实际用例数更高（当前 `pytest -q` 为 534 passed）。论文截稿口径 295 用例（281 函数参数化展开）是历史事实，不随后续加固而改变。
 
 “设计-only”能力、架构图和历史报告中的指标，只有在对应实现、配置、数据版本和运行命令均可复核时，才可升级为当前事实。不要修改原始面试资料来补足证据。
 
