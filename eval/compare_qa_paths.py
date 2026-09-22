@@ -193,7 +193,11 @@ def compare(limit: int, output: Path | None) -> dict:
     summary["harness_metrics"] = evaluate_harness_loop(
         [r["agent"]["_loop"] for r in rows if r.get("agent", {}).get("_loop")]
     )
-    report = {"questions": _strip_private(rows), "summary": summary}
+    report = {
+        "questions": _strip_private(rows),
+        "summary": summary,
+        "environment": _probe_environment(),
+    }
 
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -201,8 +205,38 @@ def compare(limit: int, output: Path | None) -> dict:
         print(f"\n原始结果已写入 {output}")
 
     print("\n" + "=" * 68)
-    print(_render_summary(summary))
+    print(_render_summary(summary, report["environment"]))
     return report
+
+
+def _probe_environment() -> dict:
+    """探测本次对比跑在什么环境上。
+
+    这不是可选的元数据：**同样的脚本在依赖齐全和依赖缺失下会给出完全
+    不同的数字**，而报告格式一模一样。不记录环境，两份 JSON 无法区分，
+    后来的人会把降级结果当成真实对比引用。
+    """
+    import socket
+
+    services = {
+        "postgresql": ("127.0.0.1", 5433),   # docker-compose 映射的端口
+        "redis": ("127.0.0.1", 6380),
+        "neo4j": ("127.0.0.1", 7687),
+    }
+    reachable = {}
+    for name, (host, port) in services.items():
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                reachable[name] = True
+        except OSError:
+            reachable[name] = False
+
+    degraded = [n for n, ok in reachable.items() if not ok]
+    return {
+        "services_reachable": reachable,
+        "degraded_services": degraded,
+        "full_environment": not degraded,
+    }
 
 
 def _strip_private(rows: list[dict]) -> list[dict]:
@@ -261,17 +295,25 @@ def _tool_usage(rows: list[dict]) -> dict:
     return dict(sorted(counts.items(), key=lambda kv: -kv[1]))
 
 
-def _render_summary(summary: dict) -> str:
+def _render_summary(summary: dict, environment: dict | None = None) -> str:
     f, a = summary["fixed"], summary["agent"]
     lines = []
+
+    env = environment or {}
+    if env and not env.get("full_environment", True):
+        lines += [
+            f"⚠️ 依赖服务不可达：{', '.join(env.get('degraded_services', []))}",
+            "   本次结果来自**降级环境**——检索走关键词兜底或直接失败，",
+            "   不代表两条路径在完整环境下的表现。请勿据此下结论。",
+            "   完整环境：docker compose up -d（需装有 Docker）",
+            "",
+        ]
 
     # 依赖缺失时对比不成立——必须显式说明，否则这张表会被误读成
     # "两条路径都测过了，自主循环更慢"。
     if not f.get("calls", {}).get("n"):
         lines += [
             "⚠️ 固定流水线全部失败，本次**不构成有效对比**。",
-            "   常见原因：PostgreSQL / Redis 未启动，知识库检索无法执行。",
-            "   请先 `docker compose up -d` 再重跑。",
             "",
         ]
 
