@@ -30,7 +30,7 @@ python scripts/verify_project_facts.py --json
 
 当前运行契约为 `localhost:8503`，SSE 入口包括 `/api/generate-plan`、`/api/analyze-exercise` 和 `/api/ask-question`。默认测试通过 `pytest` 排除 `integration` 与 `live` 标记；需要外部服务或真实模型的评测必须显式 opt-in。
 
-## 2026-09-03 工程加固（可复核）
+## 2026-06-03 工程加固（可复核）
 
 | 事实 | 证据路径 | 状态 |
 |---|---|---|
@@ -44,7 +44,7 @@ python scripts/verify_project_facts.py --json
 | 语义缓存可选 pgvector ANN 扫描（`CACHE_SCAN_BACKEND=ann`，失败回退线性扫描） | `src/rag/semantic_cache.py`、`tests/test_rag/test_semantic_cache_ann.py` | 已实现+已测试+本机 PG 冒烟 |
 | 消融重跑修复：2026-08-30 重跑实际只执行了 A 组（B/C 缺失被报告渲染为 0.0）；2026-09-03 重跑 A/B/D 三组并合并保存（部分组重跑不覆盖历史分区） | `eval/run_eval.py`、`eval/results.json`、manifest `retrieval_ablation_rerun_2026-09-03` | 已修复+已登记 |
 
-**消融重跑结论（2026-09-03，170 条主评测集）**：MRR A-纯向量 0.4110 / B-AgenticRAG 0.4186 / D-混合RRF 0.3975，P@5/R@5/NDCG@5 三组持平。查询集偏关键词型，纯向量已近最优；混合融合无增益，增益集中在 Agentic 改写环节（+2%）。此结论与 2026-07-17 历史消融一致，作为诚实阴性结果保留。
+**消融重跑结论（2026-06-03，170 条主评测集）**：MRR A-纯向量 0.4110 / B-AgenticRAG 0.4186 / D-混合RRF 0.3975，P@5/R@5/NDCG@5 三组持平。查询集偏关键词型，纯向量已近最优；混合融合无增益，增益集中在 Agentic 改写环节（+2%）。此结论与 2026-07-17 历史消融一致，作为诚实阴性结果保留。
 
 ## 未核验与历史结果
 
