@@ -30,7 +30,7 @@ python scripts/verify_project_facts.py --json
 
 当前运行契约为 `localhost:8503`，SSE 入口包括 `/api/generate-plan`、`/api/analyze-exercise` 和 `/api/ask-question`。默认测试通过 `pytest` 排除 `integration` 与 `live` 标记；需要外部服务或真实模型的评测必须显式 opt-in。
 
-## 2026-06-03 工程加固（可复核）
+## 2026-09-03 工程加固（可复核）
 
 | 事实 | 证据路径 | 状态 |
 |---|---|---|
@@ -44,7 +44,7 @@ python scripts/verify_project_facts.py --json
 | 语义缓存可选 pgvector ANN 扫描（`CACHE_SCAN_BACKEND=ann`，失败回退线性扫描） | `src/rag/semantic_cache.py`、`tests/test_rag/test_semantic_cache_ann.py` | 已实现+已测试+本机 PG 冒烟 |
 | 消融重跑修复：2026-08-30 重跑实际只执行了 A 组（B/C 缺失被报告渲染为 0.0）；2026-09-03 重跑 A/B/D 三组并合并保存（部分组重跑不覆盖历史分区） | `eval/run_eval.py`、`eval/results.json`、manifest `retrieval_ablation_rerun_2026-09-03` | 已修复+已登记 |
 
-**消融重跑结论（2026-06-03，170 条主评测集）**：MRR A-纯向量 0.4110 / B-AgenticRAG 0.4186 / D-混合RRF 0.3975，P@5/R@5/NDCG@5 三组持平。查询集偏关键词型，纯向量已近最优；混合融合无增益，增益集中在 Agentic 改写环节（+2%）。此结论与 2026-07-17 历史消融一致，作为诚实阴性结果保留。
+**消融重跑结论（2026-09-03，170 条主评测集）**：MRR A-纯向量 0.4110 / B-AgenticRAG 0.4186 / D-混合RRF 0.3975，P@5/R@5/NDCG@5 三组持平。查询集偏关键词型，纯向量已近最优；混合融合无增益，增益集中在 Agentic 改写环节（+2%）。此结论与 2026-07-17 历史消融一致，作为诚实阴性结果保留。
 
 ## 2026-09-22 执行脚手架（Harness）整理（可复核）
 
@@ -64,6 +64,8 @@ python scripts/verify_project_facts.py --json
 **历史修正**：`src/core/harness.py` 曾以文件头注释声称"被各 Agent 类通过 `@with_retry` 装饰其内部方法"，但全仓库零 import，实际重试逻辑在 `src/llm/provider.py` 另行实现。注释与事实不符的情况已随文件删除消除。
 
 ## 未核验与历史结果
+
+**开发时间线（仓库不可独立复核，主动声明）**：本项目自 **2026-04** 起在本地开发，**2026-07-01 才初始化 Git 仓库**并开始产生提交历史。因此 `git log` 的最早提交（`4960e07`）晚于实际开工时间约三个月；且早期提交是在 07-01 上午批量落地的（最早三个提交相隔 3–4 分钟），不代表"当天才开始写第一行代码"。这一段属于开发者的一手陈述，**无法由仓库文件独立复核**，故按本文档标准不计入强事实，仅作背景说明——被问到时以此为准，不主张为可验证事实。
 
 **知识块数量**：README 原声明“824 chunks”，该数字无独立复核依据，已于 2026-09-09 改为 **557**——取自 2026-08-30 扩展语料后的实际摄入输出，与评测 manifest 同源。需要说明的是：块数量存在 PostgreSQL 的 `knowledge_chunks` 表里，`scripts/verify_project_facts.py` 这类静态清单**核验不了它**（脚本能核验的是 `data/seed_exercises.json` 的 338 与 `data/knowledge` 的 162 篇，因为那些是磁盘上的文件）。脚本现在会主动报告“README 当前声称多少块、且该数字无法静态核验”，要重新测量就跑一次 `python -m src.rag.knowledge_ingestion`。历史评测报告和 JSON 结果是可追溯的历史产物，不自动等同于当前版本的生产准确率、医疗级安全、整体零漏报或生产 SLA。
 
