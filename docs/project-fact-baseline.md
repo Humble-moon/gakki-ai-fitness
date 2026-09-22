@@ -57,7 +57,9 @@ python scripts/verify_project_facts.py --json
 | 循环可直接驱动真实 `ToolRegistry`（9 个工具，离线可调用） | `tests/test_harness_tool_calling.py::TestRealToolRegistryIntegration` | 已实现+已测试 |
 | 过程指标：成功率 / 预算触顶率 / 工具调用有效率 / 错误恢复率 / 续跑正确性 | `eval/metrics/harness_metrics.py`、`tests/test_harness_metrics.py` | 已实现+已测试 |
 | 删除 `src/core/harness.py`（全仓库零引用，且其 `with_retry` 会无条件重试逻辑错误） | 该文件已删除；超时能力迁至 `src/harness/resilience.py` | 已清理 |
-| CI：离线测试 + 事实核验 + 署名守卫（拒绝 AI 联合署名 trailer） | `.github/workflows/ci.yml` | 已实现+**已在 GitHub 实跑通过**（PR #1：Tests 2m11s / Attribution guard 4s，零 warning） |
+| CI：离线测试 + 事实核验 + 署名守卫（拒绝 AI 联合署名 trailer） | `.github/workflows/ci.yml` | 已实现+**已在 GitHub 实跑通过**（PR #1 连续 6 次，最近一次 Tests 1m26s / Attribution guard 4s，零 warning） |
+| 裁剪依赖后安装耗时 1m58s → 30s（移除 torch 等约 2GB） | `requirements.txt`、`requirements-eval.txt` | 已实测（CI #5 步骤级计时） |
+| 离线测试不再依赖 `.env`（新增占位凭据 conftest，只补缺失项） | `tests/conftest.py` | 已实现+双场景验证（有无 `.env` 均 534 passed） |
 
 **能力边界（重要）**：`src/llm/provider.py` 不支持原生 function calling，自主循环依赖提示词协议驱动模型返回结构化 JSON，其可靠性**低于**原生 function calling；该路径默认关闭（`HARNESS_AGENT_LOOP`），**尚未接入默认流水线**，也未在真实模型上端到端验证——循环与适配器的正确性由离线假模型测试保证，不等同于真实链路的成功率。
 
