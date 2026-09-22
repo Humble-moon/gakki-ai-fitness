@@ -1,5 +1,7 @@
 # Gakki AI Fitness
 
+[![CI](https://github.com/Humble-moon/gakki-ai-fitness/actions/workflows/ci.yml/badge.svg)](https://github.com/Humble-moon/gakki-ai-fitness/actions/workflows/ci.yml)
+
 AI 健身私教 —— Multi-Agent 协作生成个性化训练计划，GraphRAG 伤病推理，RAG 五层演进的知识问答系统。
 
 > 当前版本定位为 **localhost 单用户演示**，不承诺公网多用户、完整人工审核闭环或生产服务等级。可复核数字、证据路径和未核验口径见 [项目事实基线](docs/project-fact-baseline.md)。
