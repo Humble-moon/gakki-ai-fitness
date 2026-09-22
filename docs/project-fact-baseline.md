@@ -71,9 +71,12 @@ python scripts/verify_project_facts.py --json
 | 问答自主循环路径（提示词协议驱动，默认关闭） | `src/core/qa_agent.py`、`tests/test_qa_agent.py` | 已实现+已测试 |
 | 统一入口按开关分发；**自主循环失败自动回退固定流水线**并告知用户 | `src/core/orchestrator.py::answer_question_stream`、`tests/test_qa_dispatch.py` | 已实现+已测试 |
 | 安全检测与硬约束抽为**两条路径共用**（此前内联在固定流水线里，直测缺失） | `src/core/qa_safety.py`、`tests/test_qa_safety.py` | 已实现+已测试（含与原内联实现的逐字对照测试） |
-| 两条路径过程开销对比脚本 | `eval/compare_qa_paths.py` | 已实现，**尚未运行**（需真实 LLM 凭据，不进 CI） |
+| 两条路径过程开销对比脚本 | `eval/compare_qa_paths.py` | 已实现+**已实跑**（见下方边界） |
+| 自主循环**已在真实模型（deepseek-chat）上端到端跑通**：2/2 完成，均 3 步，耗时 4.6/4.8s，模型自行选择 `search_knowledge` | `eval/qa_path_compare.json` | 已实测 |
 
-**能力边界**：自主循环路径**未在真实模型上端到端跑过**——正确性由离线假模型与假工具保证。真实链路的成功率、步数分布、工具选择偏好均需先跑 `python -m eval.compare_qa_paths` 量化，此前不得引用任何对比数字。
+**实跑发现的缺陷（已修）**：提示词协议下发出的 `role="tool"` 消息被 OpenAI 兼容服务端拒绝——`400 Messages with role 'tool' must be a response to a preceding message with 'tool_calls'`。原生 function calling 才有 `tool_calls` 配对，提示词协议没有。**假模型不校验消息结构，37 个离线用例全绿也没发现**，只有真实调用才暴露。修法：工具结果的消息格式改由适配器决定（`ToolCallingModel.format_tool_result` 钩子），提示词协议下改用 `role="user"` 并复述调用内容。回归保护见 `tests/test_harness_tool_calling.py::TestToolResultMessageShape`。
+
+**对比结论的边界（重要）**：本次实跑时 PostgreSQL/Redis 未启动，**固定流水线 4/4 全部失败**（`psycopg2.OperationalError`），自主循环的工具调用也全部失败（4 次，`tool_call_efficiency=0.0`）——**因此本轮不构成有效的路径对比**，不得引用任何"自主循环比固定流水线快/慢"的结论。可确认的只有：①循环机制在真实模型上跑得通；②工具报错回喂模型后仍能产出连贯答案（`recovery_rate=1.0`），但该答案来自模型自身知识而非检索材料。完整对比需先 `docker compose up -d`。
 
 **重构说明**：问答安全逻辑（关键词归一化 / 检测 / 安全提示词）原内联于 `answer_question_stream` 约 40 行中，现抽至 `src/core/qa_safety.py`。抽取后行为经逐字对照测试验证不变（`tests/test_qa_safety.py::TestExtractionParity`）。抽取动因：两条问答路径若各存一份安全实现会各自漂移，而用户看不出自己走的是哪条。
 

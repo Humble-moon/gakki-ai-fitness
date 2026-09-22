@@ -213,12 +213,16 @@ def run_agent_loop(
 
             # 关键：无论成败都把结果交回模型。失败时给的是错误信息而非异常，
             # 模型由此得知"这条路不通"，可以换工具或换参数。
-            messages.append({
-                "role": "tool",
-                "tool_call_id": call.call_id or f"call_{step}_{call.name}",
-                "name": call.name,
-                "content": str(payload)[:_RESULT_PREVIEW_CHARS],
-            })
+            #
+            # 消息**格式**由模型适配器决定：原生 function calling 需要
+            # role="tool" + tool_call_id 与前置的 tool_calls 严格配对，而
+            # 提示词协议下没有 tool_calls，发 role="tool" 会被服务端拒绝
+            # （OpenAI 兼容接口报 400: Messages with role 'tool' must be a
+            # response to a preceding message with 'tool_calls'）。见
+            # `_tool_result_messages`。
+            messages.extend(
+                _tool_result_messages(model, call, payload, step)
+            )
 
             if on_step is not None:
                 on_step(record)
@@ -228,6 +232,31 @@ def run_agent_loop(
         content="", steps=max_steps, tokens_used=tokens_used,
         transcript=transcript, exited_reason="max_steps", tool_errors=tool_errors,
     )
+
+
+def _tool_result_messages(
+    model: ToolCallingModel, call: ToolCall, payload: Any, step: int
+) -> list[dict]:
+    """构造"把工具结果交回模型"的消息。
+
+    默认走原生 function calling 的格式（``role="tool"`` + ``tool_call_id``）。
+    若适配器实现了 ``format_tool_result``，则由它决定格式——提示词协议下
+    必须换成不含 ``role="tool"`` 的写法，否则 OpenAI 兼容服务端会拒绝整条
+    对话（工具消息缺少前置的 ``tool_calls`` 配对）。
+
+    这个扩展点是实跑真实模型时才暴露出必要的：用假模型测试时没人校验
+    消息结构，37 个用例全绿也发现不了。
+    """
+    builder = getattr(model, "format_tool_result", None)
+    if callable(builder):
+        return builder(call, payload)
+
+    return [{
+        "role": "tool",
+        "tool_call_id": call.call_id or f"call_{step}_{call.name}",
+        "name": call.name,
+        "content": str(payload)[:_RESULT_PREVIEW_CHARS],
+    }]
 
 
 def _invoke_tool(

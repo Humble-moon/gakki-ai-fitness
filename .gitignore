@@ -27,3 +27,6 @@ data/knowledge_fetched/
 *.db-shm
 *.db-wal
 output/
+
+# 对比脚本的临时产物（含模型原始输出，不作为仓库事实）
+eval/qa_path_compare.json
