@@ -110,8 +110,11 @@ agent loop 等于失控的账单）；工具报错回喂模型而非中断流程
 ## 快速开始
 
 ```bash
-# 1. 安装依赖
+# 1. 安装依赖（不加载本地向量模型，装的是 API 版依赖）
 pip install -r requirements.txt
+
+# 1b. 可选：跑 RAGAS 评测才需要
+# pip install -r requirements-eval.txt
 
 # 2. 配置环境变量
 cp .env.example .env
@@ -193,7 +196,8 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 ├── data/knowledge/               # 健身知识库（162 篇文档；chunk 数量以实际摄入输出为准）
 ├── run_mcp_server.py             # MCP 独立服务器（stdio/SSE/HTTP）
 ├── docker-compose.yml
-└── requirements.txt
+├── requirements.txt              # 运行时依赖（API 版向量化，不含 torch）
+└── requirements-eval.txt         # 可选：RAGAS 评测依赖
 ```
 
 ## 阶段三运行入口
