@@ -144,6 +144,53 @@ def test_review_pending_result_marks_safe_delivered():
     assert "review" not in delivered
 
 
+def test_safe_plan_with_advisory_notes_is_still_delivered():
+    """最终轮通过但带建议性提示的计划必须交付。
+
+    这曾是另一个真实缺陷：交付闸门误用了 _persistence_allowed，而它额外要求
+    issues 清空。LLM 检查器几乎总会给出若干条建议（实测四轮检查为 4/4/3/3 条），
+    issues_empty 永远为假，于是没有 delivery_status，前端判 `!== 'safe_delivered'`
+    直接 return——用户什么都看不到。交付与缓存必须分开判定。
+    """
+    store = InMemoryReviewArtifactStore()
+    check = safe_check(issues=[{"issue": "建议在软质地面进行", "severity": "warning"}])
+    result = pf.finalize_result(valid_plan(), [check], 0)
+
+    # 不可缓存，但应当交付
+    assert result["_persistence_allowed"] is False
+    assert result["requires_review"] is False
+
+    delivered = pf.review_pending_result(store, {"goal": "增肌"}, "q", result)
+    assert delivered["delivery_status"] == "safe_delivered"
+    assert delivered["days"] == valid_plan()["days"]
+    # 建议性提示随计划一并展示，不静默丢弃
+    assert delivered["warnings"]
+
+
+def test_review_required_plan_is_held_not_delivered():
+    """需要审核时依然扣下——交付闸门放宽没有削弱拦截。"""
+    store = InMemoryReviewArtifactStore()
+    check = safe_check(is_safe=False, requires_human_review=True,
+                       issues=[{"issue": "伤病冲突", "severity": "danger"}])
+    result = pf.finalize_result(valid_plan(), [check], 0)
+
+    delivered = pf.review_pending_result(store, {"goal": "增肌"}, "q", result)
+    assert delivered["delivery_status"] == "review_pending"
+    assert "days" not in delivered
+
+
+def test_review_takes_priority_over_persistence_eligibility():
+    """既可缓存又需审核时，审核优先——不能因为能缓存就放行。"""
+    store = InMemoryReviewArtifactStore()
+    check = safe_check(requires_human_review=True, issues=[{"issue": "x"}],
+                       confidence=0.9)
+    result = pf.finalize_result(valid_plan(), [check], 0)
+    assert result["requires_review"] is True
+
+    delivered = pf.review_pending_result(store, {"goal": "增肌"}, "q", result)
+    assert delivered["delivery_status"] == "review_pending"
+
+
 def test_degraded_provider_result_cannot_persist():
     result = pf.finalize_result(valid_plan(), [safe_check()], 0, provider_degraded=True)
     assert result["_persistence_allowed"] is False
@@ -206,3 +253,58 @@ def test_summarize_plan_for_context():
     plan = {"days": [{"day": 1, "focus": "胸", "exercises": [{"name": "卧推"}, {"name": "飞鸟"}]}]}
     assert pf.summarize_plan_for_context(plan) == "第1天(胸): 卧推/飞鸟"
     assert pf.summarize_plan_for_context({"days": []}) == ""
+
+
+# ----------------------------------------------------------------------
+# 送审判定只看最终轮（历史轮次不得污染结论）
+# ----------------------------------------------------------------------
+
+def test_earlier_review_flag_does_not_poison_a_resolved_plan():
+    """首轮被判送审、重写后通过的计划必须能交付。
+
+    历史实现用 any(... for c in checks) 扫描全部检查，导致首轮的问题永久留档，
+    把最终安全的计划也扣成人工审核——而首轮草稿几乎总会被找出问题，
+    正常交付路径因此走不到。
+    """
+    checks = [
+        safe_check(is_safe=False, requires_human_review=True,
+                   issues=[{"issue": "深蹲与膝盖伤病冲突", "severity": "warning"}],
+                   confidence=0.5),
+        safe_check(),
+    ]
+    result = pf.finalize_result(valid_plan(), checks, 1)
+
+    assert result["requires_review"] is False
+    assert result["_persistence_allowed"] is True
+    # 被修掉的问题仍需留痕，供解释面板展示
+    assert result["resolved_issues"]
+
+
+def test_final_round_review_flag_still_blocks():
+    """反面守卫：最终轮判定送审时依然拦截，修复没有削弱安全闸门。"""
+    checks = [
+        safe_check(),
+        safe_check(is_safe=False, requires_human_review=True,
+                   issues=[{"issue": "仍未解决", "severity": "warning"}]),
+    ]
+    result = pf.finalize_result(valid_plan(), checks, 1)
+
+    assert result["requires_review"] is True
+    assert result["_persistence_allowed"] is False
+
+
+def test_unsafe_final_round_blocks_even_without_review_flag():
+    """最终轮 is_safe=False 时必须拦截，不依赖 requires_human_review 标记。"""
+    checks = [safe_check(), safe_check(is_safe=False, requires_human_review=False)]
+    result = pf.finalize_result(valid_plan(), checks, 1)
+
+    assert result["requires_review"] is True
+    assert result["_persistence_allowed"] is False
+
+
+def test_missing_checks_still_fail_closed():
+    """没有任何有效检查时保持失败关闭——不能因为放宽历史扫描就变得宽松。"""
+    result = pf.finalize_result(valid_plan(), [{}], 0)
+
+    assert result["requires_review"] is True
+    assert result["_persistence_allowed"] is False
