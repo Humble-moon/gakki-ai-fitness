@@ -480,3 +480,37 @@ def test_chart_containers_have_depth():
     end = HTML.index("}", start)
     assert "radial-gradient" in HTML[start:end]
     assert "inset" in HTML[start:end]
+
+
+# ---------- 界面声明必须与实际行为一致 ----------
+
+
+def test_welcome_copy_does_not_claim_knowledge_retrieval():
+    """欢迎页不得声称计划生成会做「知识检索」。
+
+    计划生成只检索 exercises 表（VectorSearch + KeywordSearch），
+    knowledge_chunks 从未参与；SkillRegistry.get_knowledge_refs() 只有定义、
+    零调用点。声称"知识检索"属于说了没做到——与名字不符比没有更伤。
+    若将来真的把知识库接进生成链路，再连同这条断一起改回。
+    """
+    assert "知识检索" not in HTML
+    assert "动作检索" in HTML
+
+
+def test_welcome_library_counts_match_actual_data():
+    """欢迎页的库规模数字必须与仓库里的真实数据一致。
+
+    这两个数字曾停在早期版本（39 / 21），与实际相差 5~8 倍。与其为它建接口，
+    不如让测试盯着：数据一变，这条立刻失败并指出界面要同步更新。
+    """
+    import json
+
+    root = Path(__file__).resolve().parent.parent
+    exercises = len(json.loads(
+        (root / "data/seed_exercises.json").read_text(encoding="utf-8")))
+    docs = len(list((root / "data/knowledge").glob("*.md")))
+
+    assert f'<span class="ss-val">{exercises}</span> 个标准动作' in HTML, (
+        f"动作库实际有 {exercises} 个，欢迎页上的数字需要同步")
+    assert f'<span class="ss-val">{docs}</span> 篇专业文献' in HTML, (
+        f"知识库实际有 {docs} 篇，欢迎页上的数字需要同步")
