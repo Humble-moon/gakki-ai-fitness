@@ -10,7 +10,8 @@ db_models.py - 数据库表结构定义（ORM 模型层）
     - main.py 中的 seed() 函数（初始化表结构和种子数据）
 调用者：SQLAlchemy + pgvector 扩展。
 """
-from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Text, create_engine
+from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Text, create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from pgvector.sqlalchemy import Vector
 from src.config import DATABASE_URL, EMBEDDING_DIM
@@ -140,7 +141,7 @@ class KnowledgeChunk(Base):
     # 灵活扩展，可存储任意结构化元信息
 
     embedding = Column(Vector(EMBEDDING_DIM))
-    # 向量嵌入（512 维），与用户查询做相似度匹配实现语义检索
+    # 向量嵌入（维度由 EMBEDDING_DIM 配置，当前 1024 维），与用户查询做相似度匹配实现语义检索
 
 
 # ============================================================
@@ -227,10 +228,11 @@ def init_db():
     初始化数据库：根据所有 ORM 模型定义创建表结构
 
     核心逻辑：
-        调用 Base.metadata.create_all(engine)
-        -> 检查所有继承 Base 的类
-        -> 对比数据库现状
-        -> 执行 CREATE TABLE IF NOT EXISTS 等 DDL
+        1. 确保必需扩展存在（pgvector: embedding 列；pg_trgm: 关键词检索的 similarity/% 操作符）
+        2. 调用 Base.metadata.create_all(engine)
+           -> 检查所有继承 Base 的类
+           -> 对比数据库现状
+           -> 执行 CREATE TABLE IF NOT EXISTS 等 DDL
 
     调用时机：
         - 应用首次启动时
@@ -240,4 +242,22 @@ def init_db():
     注意：此函数只会"创建不存在的表"，不会修改已有表结构。
           如需变更表结构，需手动执行 ALTER TABLE 或使用 Alembic 迁移。
     """
+    # 第 1 步：确保必需扩展已启用
+    #   - pgvector: exercises / knowledge_chunks 的 embedding 列使用 vector 类型，
+    #     缺失时报 type "vector" does not exist，create_all 会直接失败
+    #   - pg_trgm:  knowledge_search.keyword_search 用 similarity() 与 % 操作符做关键词检索，
+    #     缺失时报 function similarity(text, unknown) does not exist
+    # 两者都必须先于建表/查询存在。全新数据库（例如刚起的 docker compose 数据卷）
+    # 正是这种情况，而 scripts/create_hnsw_indexes.sql 要在建表"之后"才能跑，
+    # 兜不住这个先后顺序，所以在这里幂等补齐。
+    if engine.dialect.name == "postgresql":
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        except SQLAlchemyError:
+            # 权限不足等场景不阻塞建表；若确实缺扩展，create_all 会报出明确错误
+            pass
+
+    # 第 2 步：创建所有表结构
     Base.metadata.create_all(engine)
