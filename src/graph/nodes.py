@@ -26,6 +26,7 @@ from src.core.plan_finalization import (
     safe_cached_result,
     summarize_plan_for_context,
 )
+from src.core.plan_explanation import build_explanation
 from src.hitl.review_resolution import APPROVED, REJECTED, VALID_DECISIONS
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ def _emit(event: str, data) -> None:
 def ingest_node(deps, state: dict) -> dict:
     """Validate the goal, default the query, and hydrate conversation context."""
     from src.core.goal_contract import validate_requested_goal
+    from src.core.training_history import build_training_context
 
     profile = state.get("profile") or {}
     session_id = state.get("session_id")
@@ -67,11 +69,15 @@ def ingest_node(deps, state: dict) -> dict:
         conv_context = deps.conversation.build_context_for_prompt(session_id, query or "")
         plan_context = deps.conversation.get_plan_state(session_id) or ""
 
+    # 训练历史与手写编排器共用 build_training_context()，两后端因此不会漂移
+    training_context = build_training_context(state.get("athlete_key"))
+
     return {
         "query": query,
         "expected_goal": expected_goal,
         "conv_context": conv_context,
         "plan_context": plan_context,
+        "training_context": training_context,
         "rewrite_count": 0,
         "checks": [],
         "provider_degraded": False,
@@ -101,6 +107,7 @@ def plan_node(deps, state: dict) -> dict:
         state.get("query", ""), state.get("profile") or {},
         conv_context=state.get("conv_context", ""),
         plan_context=state.get("plan_context", ""),
+        training_context=state.get("training_context", ""),
     )
     return {"plan": plan}
 
@@ -120,6 +127,7 @@ def write_node(deps, state: dict) -> dict:
     for event, data in deps.writer.write_plan_stream(
         state.get("retrieved") or {}, profile, plan_config,
         plan_context=state.get("plan_context", ""), user_query=state.get("query", ""),
+        training_context=state.get("training_context", ""),
     ):
         if event == "chunk":
             _emit("writer_chunk", data)
@@ -165,6 +173,9 @@ def finalize_node(deps, state: dict) -> dict:
         expected_goal=state.get("expected_goal"))
     if not plan_goal_matches(result, state.get("expected_goal")):
         raise GoalConsistencyError("训练计划目标与用户目标不一致")
+    # 与手写编排器共用同一个构建函数，两后端的解释块因此不会漂移
+    result["explain"] = build_explanation(
+        state.get("plan") or {}, state.get("retrieved") or {}, result)
     return {"result": result}
 
 

@@ -35,7 +35,7 @@ async def run() -> dict[str, object]:
     from app import server
 
     class OfflineOrchestrator:
-        def generate_plan_stream(self, *args):
+        def generate_plan_stream(self, *args, **kwargs):
             yield "stage", "offline"
             yield "done", {"success": True}
 

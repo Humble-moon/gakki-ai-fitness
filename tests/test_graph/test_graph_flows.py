@@ -88,13 +88,15 @@ def make_runtime(*, plan=None, checks=None, rewrite_out=None, cache_return=None,
             raise LLMUnavailableError("all models down",
                                       attempted_models=["m"], errors=["down"])
     else:
-        def plan_fn(user_input, prof, conv_context="", plan_context=""):
+        def plan_fn(user_input, prof, conv_context="", plan_context="",
+                    training_context=""):
             return planner_out
 
     planner = SimpleNamespace(plan=plan_fn)
     retriever = SimpleNamespace(retrieve=lambda p, route=None: retrieved)
 
-    def write_plan_stream(retr, prof, plan_config, plan_context="", user_query=""):
+    def write_plan_stream(retr, prof, plan_config, plan_context="", user_query="",
+                          training_context=""):
         yield ("chunk", "生成中")
         yield ("done", copy.deepcopy(plan))
 

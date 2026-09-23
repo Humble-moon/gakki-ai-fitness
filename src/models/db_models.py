@@ -10,7 +10,7 @@ db_models.py - 数据库表结构定义（ORM 模型层）
     - main.py 中的 seed() 函数（初始化表结构和种子数据）
 调用者：SQLAlchemy + pgvector 扩展。
 """
-from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Text, create_engine, text
+from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Date, Text, Index, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from pgvector.sqlalchemy import Vector
@@ -210,6 +210,96 @@ class DocumentChunk(Base):
     page_number = Column(Integer, default=1)
     embedding = Column(Vector(EMBEDDING_DIM))
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============================================================
+# 训练日志主表 (training_logs)
+# 一次训练一条记录，动作明细见 training_log_entries
+# 主从结构同 user_documents / document_chunks
+# ============================================================
+class TrainingLog(Base):
+    """
+    训练日志主表：记录一次完整训练的执行情况
+
+    职责：记录"某天练了什么、练得怎么样"，作为自适应调整建议的数据来源。
+    与 training_plans 的区别：计划是 AI 生成的处方，日志是用户执行的事实。
+    """
+
+    __tablename__ = "training_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    athlete_key = Column(String(64), nullable=False, index=True)
+    # 稳定运动员标识：前端首次访问时生成并存入 localStorage，此后永不轮换。
+    # 注意不要用 make_user_key(profile) —— 它由身高/体重/目标/伤病哈希而成，
+    # 而增肌减脂期体重必然持续变化，等于每周换一个用户，训练史会断裂。
+    # make_user_key 的语义是"同一份 profile 命中同一份缓存"，作为缓存键是对的，
+    # 误用为持久身份才是错的，因此这里用独立的身份维度。
+    log_date = Column(Date, nullable=False, index=True)
+    # 训练日期（本地日历日，不含时刻）；与 created_at 的 UTC 写入时刻解耦，
+    # 避免东八区晚间训练被记到次日
+    day_index = Column(Integer, default=0)
+    # 对应训练计划的第几个训练日（1-based）；0 表示自由训练、不关联计划
+    focus = Column(String(64), default="")
+    # 当日训练重点，如 "胸+三头"
+    plan_id = Column(String(32), default="")
+    # 该次训练依据的 plan_id，用于溯源到具体计划
+    session_rpe = Column(Float)
+    # 整节课主观疲劳度 1~10，可空
+    duration_min = Column(Integer, default=0)
+    # 训练时长（分钟）
+    body_weight = Column(Float)
+    # 当日体重（kg），可空。与 athlete_key 解耦后仍可单独追踪体重曲线
+    notes = Column(String(512), default="")
+    # 自由备注
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_training_logs_athlete_date", "athlete_key", "log_date"),
+    )
+    # 复合索引：历史列表与统计的固定查询形态是
+    # WHERE athlete_key = :k AND log_date >= :since ORDER BY log_date
+
+
+# ============================================================
+# 训练日志明细表 (training_log_entries)
+# 一次训练里的一个动作一行，是统计聚合与调整建议的最小数据单元
+# ============================================================
+class TrainingLogEntry(Base):
+    """
+    训练日志明细表：记录一个动作的实际执行参数
+
+    职责：存储"某个动作做了多少组、每组多重、多少次"，供力量进步曲线与
+    训练容量趋势聚合使用。reps 存整数而非计划里的 "8-12" 区间 —— 计划是
+    处方（范围），日志是事实（点值），这样 1RM 估算与容量计算可直接算出，
+    不需要解析字符串。
+    """
+
+    __tablename__ = "training_log_entries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    log_id = Column(Integer, nullable=False, index=True)
+    # 关联 training_logs.id（逻辑关联，无外键约束，同 training_plans.user_id 的既有约定）
+    athlete_key = Column(String(64), nullable=False, index=True)
+    # 冗余主体标识，避免按动作跨会话聚合时回表 JOIN（同 document_chunks.session_id 的做法）
+    exercise_name = Column(String(100), nullable=False, index=True)
+    # 动作中文名，与 exercises.name 及计划中的 name 对齐
+    sets = Column(Integer, default=0)
+    # 实际完成组数
+    reps = Column(Integer, default=0)
+    # 每组实际次数（代表值）
+    weight = Column(Float, default=0.0)
+    # 使用重量（kg）；自重动作记 0
+    rpe = Column(Float)
+    # 该动作主观疲劳度 1~10，可空
+    completed = Column(Integer, default=1)
+    # 1=按计划完成, 0=跳过/未完成；完成率 = AVG(completed)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_training_log_entries_athlete_exercise", "athlete_key", "exercise_name"),
+    )
+    # 复合索引：单动作进步曲线的查询形态是
+    # WHERE athlete_key = :k AND exercise_name = :n ORDER BY created_at
 
 
 # ============================================================

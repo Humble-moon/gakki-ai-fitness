@@ -75,7 +75,8 @@ WRITER_SYSTEM = """你是训练计划编写专家。根据检索到的动作库�
 """
 
 
-def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str) -> list:
+def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str,
+                          training_context: str = "") -> list:
     """
     构造发送给 Writer Agent 的消息列表。
 
@@ -86,6 +87,9 @@ def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str) -
         profile: dict              - 用户画像字典，包含身高/体重/训练水平/伤病史/
                                     可用器械等信息，Writer 据此调整训练参数。
         goal: str                  - 训练目标："增肌" / "减脂"，决定使用哪套训练参数。
+        training_context: str      - 训练执行历史与已确认调整（可选）。仅作为生成
+                                    输入，不影响后续安全检查——若与伤病冲突，
+                                    FactChecker 依然会拦下并触发人工审核。
 
     返回值：
         list                       - OpenAI 格式的 messages 列表
@@ -109,6 +113,12 @@ def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str) -
         "输出 JSON 的 goal 必须严格等于 canonical goal，不得输出其他 goal。",
     ])
     user_msg = "\n".join(constraints) + f"\n\n目标：{goal}\n用户画像：{profile}\n可用动作：{retrieved_exercises}"
+    if training_context:
+        user_msg += (
+            f"\n\n【该用户的实际训练执行情况（生成计划时必须参考）】\n{training_context}\n"
+            "请据此承接实际进展：有余力的动作保持或适度加重，出现力量下滑的安排减载，"
+            "长期没练完的降低容量。以上调整仅作为生成输入，仍需符合伤病与器械约束。"
+        )
 
     return [
         {"role": "system", "content": WRITER_SYSTEM + f"\n\ncanonical goal：{canonical_goal}；输出的 goal 必须严格等于该值，不得输出其他 goal。"},

@@ -47,11 +47,15 @@ class LongTermMemory:
         self.redis = RedisClient()
         self.prefix = "memory:user:"
 
-    def save_preference(self, user_id: int, key: str, value):
+    def save_preference(self, user_id: int | str, key: str, value):
         """保存用户偏好项，自动附加时间戳。
 
         存储格式: {"v": <value>, "ts": "2026-07-29T10:30:00Z"}
         时间戳用于检索时判断新鲜度：超过 90 天的记录权重降低。
+
+        user_id 同时接受 str：训练闭环用稳定的 athlete_key（UUID 字符串）作为
+        身份，而非 make_user_key() 生成的整数伪 ID——后者由体重哈希而成，
+        体重一变 ID 就变，无法承载跨月的训练记录。
         """
         record = {
             "v": value,
@@ -59,12 +63,12 @@ class LongTermMemory:
         }
         self.redis.set(f"{self.prefix}{user_id}:pref:{key}", json.dumps(record))
 
-    def get_preferences(self, user_id: int) -> dict:
+    def get_preferences(self, user_id: int | str) -> dict:
         """
         读取用户的所有偏好项，组装为字典。
 
         参数：
-            user_id: int  - 用户唯一 ID
+            user_id: int | str  - 用户唯一 ID（整数伪 ID 或 athlete_key 字符串）
 
         返回值：
             dict           - 所有偏好键值对，如 {"goal": "增肌", "level": "初级"}
