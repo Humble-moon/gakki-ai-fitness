@@ -329,3 +329,154 @@ def test_qa_only_clears_draft_after_done_terminal():
     clear = body.index("input.value = ''")
     assert terminal < clear
     assert "if (event !== 'done') return;" in body
+
+
+# ---------- 训练闭环（训练日志 + 训练分析）----------
+
+
+def test_training_tabs_are_wired_into_the_tablist():
+    """两个新 tab 的按钮与面板必须通过 aria-controls 正确配对。
+
+    activateTab 靠 aria-controls 自动发现面板，配对错了会静默切不过去。
+    """
+    for name in ("log", "progress"):
+        assert f'id="tab-{name}"' in HTML
+        assert f'aria-controls="panel-{name}"' in HTML
+        assert f'id="panel-{name}"' in HTML
+        assert f'aria-labelledby="tab-{name}"' in HTML
+
+
+def test_training_panels_are_feature_panels():
+    """必须复用 feature-panel，否则会被 tab 切换逻辑漏掉。"""
+    for name in ("log", "progress"):
+        idx = HTML.index(f'id="panel-{name}"')
+        assert "feature-panel" in HTML[idx - 200:idx + 100]
+
+
+def test_training_tabs_do_not_add_a_new_sse_consumer():
+    """新功能全部走 JSON 接口——流式消费点数量是不变量。"""
+    assert HTML.count("consumeSse(") == 4
+
+
+def test_athlete_key_is_separate_from_session_id():
+    """运动员标识必须独立于会话标识：session 会随「新对话」轮换，
+    训练历史需要跨月稳定归属，复用会导致点一次新对话就丢失全部记录。
+    """
+    assert "ironmind_athlete_key" in HTML
+    # 新会话重置逻辑不得触碰运动员标识
+    start = HTML.index("function newQaSession")
+    end = HTML.find("function ", start + 10)
+    body = HTML[start:end if end != -1 else None]
+    assert "athleteKey" not in body
+    assert "ATHLETE_KEY_STORAGE" not in body
+
+
+def test_echarts_loader_has_cdn_fallback_and_timeout():
+    """图表加载必须具备降级链：双 CDN + 超时，否则离线演示会白屏。"""
+    assert "function loadEcharts(" in HTML
+    assert "ECHARTS_CDNS" in HTML
+    assert "onerror" in HTML
+    assert "setTimeout" in HTML
+
+
+def test_progress_has_dom_fallback_renderer():
+    """CDN 不可用时必须有纯 DOM 降级，保证功能闭环不依赖外部资源。"""
+    assert "function renderProgressFallback(" in HTML
+    start = HTML.index("function renderProgressFallback(")
+    end = HTML.index("function ", start + 10)
+    body = HTML[start:end]
+    assert "fallback-table" in body
+
+
+def test_training_renderers_avoid_raw_html():
+    """新渲染函数一律用 DOM API，与既有契约保持一致。"""
+    for fn in ("renderProgressFallback", "renderProgressStats", "renderAdvice",
+               "loadLogHistory"):
+        start = HTML.index(f"function {fn}(")
+        end = HTML.index("\nfunction ", start + 10)
+        body = HTML[start:end]
+        assert ".innerHTML" not in body, f"{fn} 不得使用 innerHTML"
+
+
+# ---------- 计划可解释性 ----------
+
+
+def test_plan_explanation_is_rendered_from_render_plan_result():
+    start = HTML.index("function renderPlanResult")
+    end = HTML.index("function renderAnalysisResult", start)
+    body = HTML[start:end]
+    assert "renderPlanExplanation(container, plan.explain)" in body
+
+
+def test_plan_explanation_renderer_uses_safe_dom():
+    start = HTML.index("function renderPlanExplanation")
+    end = HTML.index("function renderPlanResult", start)
+    body = HTML[start:end]
+    assert ".innerHTML" not in body
+    assert "el(" in body
+
+
+def test_plan_explanation_does_not_duplicate_warnings():
+    """warnings 与 active_issues 同源，面板里不能再罗列一遍同样的文字，
+    否则用户会看到同一个问题出现两次。"""
+    start = HTML.index("function renderPlanExplanation")
+    end = HTML.index("function renderPlanResult", start)
+    body = HTML[start:end]
+    assert "已列在计划上方" in body
+    assert "safety.active.forEach" not in body
+
+
+def test_plan_explanation_hides_itself_when_data_absent():
+    """旧缓存里的计划没有 explain 字段，面板必须静默隐藏而不是显示出错。"""
+    start = HTML.index("function renderPlanExplanation")
+    end = HTML.index("function renderPlanResult", start)
+    body = HTML[start:end]
+    assert "if (!container || !explain) return;" in body
+
+
+def test_explain_toggle_exposes_expanded_state_to_assistive_tech():
+    start = HTML.index("function renderPlanExplanation")
+    end = HTML.index("function renderPlanResult", start)
+    body = HTML[start:end]
+    assert "aria-expanded" in body
+
+
+# ---------- 视觉规范（容易被后续改动无意破坏，锁住）----------
+
+
+def test_numeric_displays_use_tabular_figures():
+    """数据类数字必须等宽对齐，否则纵向比对时逐位跳动。"""
+    assert "font-variant-numeric: tabular-nums" in HTML
+
+
+def test_composed_empty_state_exists_and_avoids_raw_html():
+    """空状态要给出下一步动作，而不是一句「还没有记录」。"""
+    assert ".empty-composed" in HTML
+    assert "function composedEmpty(" in HTML
+    start = HTML.index("function composedEmpty(")
+    end = HTML.index("\n}", start)
+    assert ".innerHTML" not in HTML[start:end]
+
+
+def test_advisory_items_use_severity_bar_not_generic_border():
+    """建议条目用内嵌严重度色条区分，避免「边框+底色」的通用卡片观感。"""
+    start = HTML.index(".advice-item {")
+    end = HTML.index(".advice-item .ai-reason", start)
+    body = HTML[start:end]
+    assert "inset 3px 0 0 0" in body
+    assert "border: 1px solid" not in body
+
+
+def test_interactive_rows_have_focus_and_press_feedback():
+    """一排相同的输入框里，用户需要知道焦点在哪；按钮需要按压反馈。"""
+    assert ".log-entry-row:focus-within" in HTML
+    assert ".log-entry-remove:active" in HTML
+    assert ".explain-toggle:active" in HTML
+
+
+def test_chart_containers_have_depth():
+    """大块图表区域不能是纯平坦色块。"""
+    start = HTML.index(".chart-box {")
+    end = HTML.index("}", start)
+    assert "radial-gradient" in HTML[start:end]
+    assert "inset" in HTML[start:end]

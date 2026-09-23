@@ -1636,6 +1636,352 @@ body::after {
     animation: none !important;
   }
 }
+
+/* ============================================================
+   训练闭环：训练日志 + 训练分析
+   沿用 IRON MIND 既有 token，不引入新色值
+   ============================================================ */
+.section-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  line-height: 1.6;
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+/* 数据类数字统一等宽对齐：纵向比对时不会左右跳动 */
+.log-history-item .lh-body,
+.explain-line,
+.advice-item .ai-change,
+.fallback-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.log-meta-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.log-entries-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-heading);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.log-entry-row {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+  margin-bottom: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: border-color .22s var(--ease-out), background .22s var(--ease-out), box-shadow .22s var(--ease-out);
+}
+.log-entry-row:hover { border-color: var(--border); }
+/* 聚焦某一行时整行提亮——一排相同输入框里，用户需要知道自己在哪 */
+.log-entry-row:focus-within {
+  border-color: var(--forge-amber);
+  background: var(--bg-card-hover);
+  box-shadow: 0 0 0 3px var(--forge-amber-dim), 0 12px 26px -16px rgba(242,118,74,.45);
+}
+
+.log-entry-row .field { margin: 0; min-width: 0; }
+.log-entry-row input { width: 100%; font-variant-numeric: tabular-nums; }
+
+.log-entry-remove {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .2s var(--ease-out), border-color .2s var(--ease-out), transform .12s var(--ease-out);
+}
+.log-entry-remove:hover { color: var(--danger); border-color: var(--danger); }
+.log-entry-remove:active { transform: scale(.94); }
+
+.log-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 18px;
+}
+
+/* 列表项不用通边框，靠底色与悬停浮起区分层次 */
+.log-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 13px 15px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  margin-bottom: 8px;
+  transition: background .2s var(--ease-out), transform .2s var(--ease-out), box-shadow .2s var(--ease-out);
+}
+.log-history-item:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -14px rgba(2,6,12,.9);
+}
+.log-history-item .lh-date {
+  font-family: var(--font-mono);
+  color: var(--accent-orange);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.log-history-item .lh-body {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: right;
+}
+
+.progress-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
+  gap: 12px;
+  margin: 18px 0 6px;
+}
+
+/* 图表容器：顶部微光 + 内阴影，避免 300px 的大块平坦区域 */
+.chart-box {
+  height: 300px;
+  margin: 20px 0;
+  padding: 10px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(242,118,74,.045), transparent 60%),
+    var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025), inset 0 -18px 34px -26px rgba(0,0,0,.9);
+}
+
+.chart-note {
+  font-size: 12px;
+  color: var(--warn);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.advice-summary {
+  margin: 16px 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+  max-width: 70ch;
+  text-wrap: pretty;
+}
+
+/* 建议条目：用左侧内嵌严重度色条替代通边框，减少「通用卡片」感 */
+.advice-item {
+  display: flex;
+  gap: 13px;
+  padding: 15px 16px;
+  margin-bottom: 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: inset 3px 0 0 0 var(--accent-orange);
+  transition: background .2s var(--ease-out), box-shadow .2s var(--ease-out), transform .2s var(--ease-out);
+}
+.advice-item:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
+  box-shadow: inset 3px 0 0 0 var(--accent-orange), 0 12px 26px -18px rgba(2,6,12,.95);
+}
+.advice-item.sev-warn { box-shadow: inset 3px 0 0 0 var(--warn); }
+.advice-item.sev-warn:hover { box-shadow: inset 3px 0 0 0 var(--warn), 0 12px 26px -18px rgba(2,6,12,.95); }
+.advice-item.sev-notice { box-shadow: inset 3px 0 0 0 var(--cool-blue); }
+.advice-item.sev-notice:hover { box-shadow: inset 3px 0 0 0 var(--cool-blue), 0 12px 26px -18px rgba(2,6,12,.95); }
+
+.advice-item input[type="checkbox"] {
+  margin-top: 3px;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-orange);
+  cursor: pointer;
+}
+.advice-item .ai-body { flex: 1; min-width: 0; }
+.advice-item .ai-title {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  letter-spacing: .05em;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+.advice-item .ai-change {
+  font-family: var(--font-mono);
+  color: var(--accent-orange);
+  font-size: 13px;
+  letter-spacing: .02em;
+  margin-bottom: 7px;
+}
+.advice-item .ai-reason {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+/* 降级数据表：斑马纹 + 表头下边线，密集数字横向扫读更稳 */
+.fallback-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 12px;
+}
+.fallback-table th,
+.fallback-table td {
+  padding: 9px 12px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.fallback-table th {
+  color: var(--text-muted);
+  font-family: var(--font-heading);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  border-bottom: 1px solid var(--steel-light);
+}
+.fallback-table td {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(38,51,64,.5);
+}
+.fallback-table tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+
+/* 空状态：给出下一步动作，而不是丢一句「还没有记录」 */
+.empty-composed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 36px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,.012);
+}
+.empty-composed .ec-mark {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--steel-light);
+}
+.empty-composed .ec-title {
+  font-family: var(--font-heading);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.empty-composed .ec-hint {
+  font-size: 13px;
+  line-height: 1.65;
+  max-width: 42ch;
+  text-wrap: pretty;
+}
+
+@media (max-width: 767px) {
+  .log-entry-row { grid-template-columns: 1fr 1fr; }
+  .log-entry-row .field:first-child { grid-column: 1 / -1; }
+  .chart-box { height: 240px; }
+  /* 窄屏下日期与内容并排会挤成两行，改为纵向堆叠 */
+  .log-history-item { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .log-history-item .lh-body { text-align: left; }
+}
+
+/* ============================================================
+   计划可解释性面板
+   ============================================================ */
+.explain-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 16px 0 0;
+  padding: 11px 15px;
+  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  letter-spacing: .06em;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s var(--ease-out), color .2s var(--ease-out),
+              background .2s var(--ease-out), transform .12s var(--ease-out);
+}
+.explain-toggle:hover {
+  border-color: var(--accent-orange);
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+.explain-toggle:active { transform: translateY(1px); }
+.explain-toggle[aria-expanded="true"] {
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.explain-panel {
+  margin-top: 10px;
+  padding: 18px 20px;
+  background:
+    radial-gradient(100% 60% at 0% 0%, rgba(111,168,139,.05), transparent 55%),
+    var(--bg-panel);
+  border-radius: var(--radius-md);
+  box-shadow: inset 3px 0 0 0 var(--cool-blue), inset 0 1px 0 rgba(255,255,255,.025);
+  animation: tabEnter .25s var(--ease-out);
+}
+
+.explain-section + .explain-section {
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.explain-section h4 {
+  margin: 0 0 9px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent-orange);
+}
+
+.explain-line {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+.explain-fixed { color: var(--status-safe); }
+.explain-warn { color: var(--warn); }
 </style>
 </head>
 <body>
@@ -1745,6 +2091,8 @@ body::after {
       <button id="tab-plan" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-plan" tabindex="0" type="button">训练计划</button>
       <button id="tab-analysis" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-analysis" tabindex="-1" type="button">动作分析</button>
       <button id="tab-qa" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-qa" tabindex="-1" type="button">知识问答</button>
+      <button id="tab-log" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-log" tabindex="-1" type="button">训练日志</button>
+      <button id="tab-progress" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-progress" tabindex="-1" type="button">训练分析</button>
     </div>
 
     <!-- Plan Tab -->
@@ -1911,6 +2259,85 @@ body::after {
         <div class="qa-sources" id="qa-sources" hidden><div id="qa-source-list"></div></div>
         <div id="qa-error" role="alert" hidden></div>
         <button class="btn-secondary qa-retry" id="qa-retry" type="button" hidden onclick="retryQaQuestion()">重试本轮问题</button>
+      </div>
+    </section>
+
+    <!-- Training Log Tab -->
+    <section class="tab-content feature-panel" id="panel-log" role="tabpanel" aria-labelledby="tab-log">
+      <div class="feature-card log-composer">
+        <div class="result-header">
+          <h3>记录本次训练</h3>
+          <p class="section-hint">记录实际完成的重量与次数，系统会据此调整后续计划</p>
+        </div>
+        <div class="row log-meta-row">
+          <div class="field">
+            <label for="log-date">训练日期</label>
+            <input type="date" id="log-date" />
+          </div>
+          <div class="field">
+            <label for="log-focus">训练重点</label>
+            <input type="text" id="log-focus" placeholder="如 胸+三头" />
+          </div>
+          <div class="field">
+            <label for="log-session-rpe">整体疲劳度 RPE</label>
+            <input type="number" id="log-session-rpe" min="1" max="10" step="0.5" placeholder="1-10" />
+          </div>
+          <div class="field">
+            <label for="log-duration">时长（分钟）</label>
+            <input type="number" id="log-duration" min="0" step="5" placeholder="60" />
+          </div>
+        </div>
+        <div class="log-entries-head">
+          <span>动作明细</span>
+          <button class="btn-secondary" id="btn-add-entry" type="button">＋ 添加动作</button>
+        </div>
+        <div id="log-entries"></div>
+        <div class="log-actions">
+          <button class="btn-generate" id="btn-save-log" type="button">▸ 保存本次训练</button>
+          <button class="btn-secondary" id="btn-fill-from-plan" type="button" hidden>用上次计划填充</button>
+          <button class="btn-secondary" id="btn-load-demo" type="button">载入演示数据</button>
+        </div>
+        <div id="log-status" class="status-panel" role="status" aria-live="polite"></div>
+        <div id="log-error" class="error-panel" role="alert" hidden></div>
+      </div>
+      <div class="feature-card">
+        <div class="result-header"><h3>历史记录</h3></div>
+        <div id="log-history"></div>
+      </div>
+    </section>
+
+    <!-- Training Progress Tab -->
+    <section class="tab-content feature-panel" id="panel-progress" role="tabpanel" aria-labelledby="tab-progress">
+      <div class="feature-card">
+        <div class="result-header">
+          <h3>训练分析</h3>
+          <button class="btn-secondary" id="btn-refresh-stats" type="button">刷新</button>
+        </div>
+        <div id="progress-stats" class="progress-stats"></div>
+        <div id="progress-empty" class="empty-composed" hidden>
+          <div class="ec-mark">—</div>
+          <div class="ec-title">暂无训练数据</div>
+          <div class="ec-hint">先去「训练日志」记录几次训练，这里会生成容量趋势、力量进步曲线和完成率图表。</div>
+        </div>
+        <div id="chart-volume" class="chart-box" hidden></div>
+        <div id="chart-exercise" class="chart-box" hidden></div>
+        <div id="chart-completion" class="chart-box" hidden></div>
+        <div id="progress-fallback" hidden></div>
+        <div id="chart-note" class="chart-note" hidden></div>
+      </div>
+      <div class="feature-card" id="advice-panel">
+        <div class="result-header">
+          <h3>调整建议</h3>
+          <p class="section-hint">建议仅供参考，勾选确认后才会写入，并在下次生成计划时生效</p>
+        </div>
+        <button class="btn-generate" id="btn-generate-advice" type="button">▸ 生成调整建议</button>
+        <div id="advice-summary" class="advice-summary"></div>
+        <div id="advice-list"></div>
+        <div class="log-actions">
+          <button class="btn-secondary" id="btn-apply-advice" type="button" hidden>✓ 确认应用所选调整</button>
+        </div>
+        <div id="advice-status" role="status" aria-live="polite"></div>
+        <div id="advice-error" role="alert" hidden></div>
       </div>
     </section>
   </main>
@@ -2097,6 +2524,22 @@ const APP_SESSION_KEY = 'ironmind_session_id';
 let globalSessionId = localStorage.getItem(APP_SESSION_KEY) ||
   'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 localStorage.setItem(APP_SESSION_KEY, globalSessionId);
+
+// ── 稳定运动员标识（训练闭环专用，与上面的 session 严格区分）──
+// 为什么不能复用 globalSessionId：它在「新对话」时会被重新生成，而训练历史
+// 需要跨月稳定归属，点一次新对话就丢失全部记录是不可接受的。
+// 为什么后端也不能复用 make_user_key：那个 ID 由身高/体重/目标/伤病哈希而成，
+// 而增肌减脂期体重必然持续变化，等于每周换一个用户。
+// 因此这里生成一次、永不轮换，并由它承载训练日志与已确认的调整。
+const ATHLETE_KEY_STORAGE = 'ironmind_athlete_key';
+let athleteKey = localStorage.getItem(ATHLETE_KEY_STORAGE) ||
+  ((window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'athlete_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10));
+localStorage.setItem(ATHLETE_KEY_STORAGE, athleteKey);
+
+// 演示数据绑定的运动员标识（seed 脚本写入的固定值）
+const DEMO_ATHLETE_KEY = 'demo-athlete';
 
 // ── Multi-turn QA session (legacy, kept for qa-specific UI) ──
 let qaSessionId = globalSessionId;  // Q&A shares the global session
@@ -2523,6 +2966,95 @@ function renderReviewPending(container, review) {
   container.appendChild(panel);
 }
 
+/* 计划可解释性：把生成过程中算出来但原本被丢掉的依据摊开给用户看。
+   用户看到计划的第一反应是「我凭什么信它」，这个面板就是答案。 */
+function renderPlanExplanation(container, explain) {
+  if (!container || !explain) return;
+  const skill = explain.skill || {};
+  const retrieval = explain.retrieval || {};
+  const safety = explain.safety || {};
+
+  const hasAny = Object.keys(skill).length || Object.keys(retrieval).length
+    || safety.resolved?.length || safety.active?.length;
+  if (!hasAny) return;
+
+  const toggle = el('button', 'explain-toggle', '▸ 这份计划是怎么来的？');
+  toggle.type = 'button';
+  const panel = el('div', 'explain-panel');
+  panel.hidden = true;
+
+  // ── 规划依据 ──
+  if (Object.keys(skill).length) {
+    const sec = el('div', 'explain-section');
+    sec.appendChild(el('h4', null, '规划依据'));
+    if (skill.label) sec.appendChild(el('div', 'explain-line', `匹配模板：${skill.label}`));
+    if (skill.subtasks?.length) {
+      sec.appendChild(el('div', 'explain-line', `任务拆解：${skill.subtasks.join(' · ')}`));
+    }
+    panel.appendChild(sec);
+  }
+
+  // ── 动作筛选 ──
+  if (Object.keys(retrieval).length) {
+    const sec = el('div', 'explain-section');
+    sec.appendChild(el('h4', null, '动作筛选'));
+    sec.appendChild(el('div', 'explain-line',
+      `从动作库中检索到 ${retrieval.total} 个候选动作`));
+    const paths = [];
+    if (retrieval.semantic) paths.push(`语义检索 ${retrieval.semantic}`);
+    if (retrieval.structured) paths.push(`肌群精确匹配 ${retrieval.structured}`);
+    if (paths.length) sec.appendChild(el('div', 'explain-line', paths.join(' · ')));
+    if (retrieval.muscles?.length) {
+      const more = retrieval.muscle_total > retrieval.muscles.length
+        ? ` 等 ${retrieval.muscle_total} 个肌群` : '';
+      sec.appendChild(el('div', 'explain-line',
+        `覆盖肌群：${retrieval.muscles.join('、')}${more}`));
+    }
+    panel.appendChild(sec);
+  }
+
+  // ── 安全检查 ──
+  const sec = el('div', 'explain-section');
+  sec.appendChild(el('h4', null, '安全检查'));
+  const bits = [`共检查 ${safety.rounds || 1} 轮`];
+  if (typeof safety.confidence === 'number') {
+    bits.push(`置信度 ${Math.round(safety.confidence * 100)}%`);
+  }
+  sec.appendChild(el('div', 'explain-line', bits.join(' · ')));
+
+  // 「已修正」是这里最有价值的信息——用户看到系统主动发现并改掉了问题，
+  // 才会相信那些没被报出来的部分确实是检查过的。
+  if (safety.resolved?.length) {
+    safety.resolved.forEach(text => {
+      sec.appendChild(el('div', 'explain-line explain-fixed', `✓ 已修正：${text}`));
+    });
+  }
+  // active 与计划上方的 warnings 同源（warnings 就是它派生出来的），
+  // 这里只给出条数指引，不重复罗列同样的文字。
+  if (safety.active?.length) {
+    sec.appendChild(el('div', 'explain-line explain-warn',
+      `⚠ 另有 ${safety.active.length} 条提示，已列在计划上方`));
+  }
+  if (safety.degraded) {
+    sec.appendChild(el('div', 'explain-line explain-warn',
+      '⚠ 本次生成期间模型服务不稳定，建议核对后再执行'));
+  }
+  if (!safety.resolved?.length && !safety.active?.length) {
+    sec.appendChild(el('div', 'explain-line', '未发现伤病冲突或强度问题'));
+  }
+  panel.appendChild(sec);
+
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    toggle.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+    toggle.textContent = panel.hidden ? '▸ 这份计划是怎么来的？' : '▾ 这份计划是怎么来的？';
+  });
+
+  container.appendChild(toggle);
+  container.appendChild(panel);
+}
+
 function renderPlanResult(container, data) {
   if (!container) return;
   const plan = data || {};
@@ -2545,6 +3077,8 @@ function renderPlanResult(container, data) {
     plan.warnings.forEach(warning => { appendText(warnings, `· ${warning}`); warnings.appendChild(document.createElement('br')); });
     container.appendChild(warnings);
   }
+  // 放在计划卡片之前：用户正是读到这里时会产生「我凭什么信它」的疑问
+  renderPlanExplanation(container, plan.explain);
   const days = Array.isArray(plan.days) ? plan.days : [];
   if (days.length) {
     const grid = el('div', 'plan-result-grid', '');
@@ -2856,6 +3390,602 @@ async function askQuestion() {
       activeRequests.qa = null;
     };
   }
+}
+
+/* ============================================================
+   训练闭环：训练日志 + 训练分析 + 调整建议
+
+   注意：本组功能全部用普通 JSON 接口，刻意不使用 SSE。
+   契约测试锁定了共享 SSE 消费函数的引用次数必须与流式动作数一致
+   （纯字符串计数，连注释里的同名标识符都会算进去），
+   而这里的交互形态（提交表单、看图表、勾选确认）也不需要逐字输出。
+   ============================================================ */
+
+// ── 小工具 ──
+function setBusy(buttonId, busy, busyLabel) {
+  const btn = document.getElementById(buttonId);
+  if (!btn) return;
+  if (busy) {
+    if (!btn.dataset.idleLabel) btn.dataset.idleLabel = btn.textContent;
+    btn.textContent = busyLabel || '处理中...';
+    btn.disabled = true;
+  } else {
+    if (btn.dataset.idleLabel) btn.textContent = btn.dataset.idleLabel;
+    btn.disabled = false;
+  }
+}
+
+function showStatus(id, message) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  node.textContent = message || '';
+  node.hidden = !message;
+}
+
+function showError(id, message) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  node.textContent = message || '';
+  node.hidden = !message;
+}
+
+// 本地日历日：不能用 toISOString()，那是 UTC，东八区晚间会算成次日
+function todayLocalIso() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+// 空状态给下一步动作，而不是丢一句「还没有记录」让用户停在那里
+function composedEmpty(mark, title, hint) {
+  const box = el('div', 'empty-composed');
+  box.appendChild(el('div', 'ec-mark', mark));
+  box.appendChild(el('div', 'ec-title', title));
+  box.appendChild(el('div', 'ec-hint', hint));
+  return box;
+}
+
+function themeColor(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+  return (v && v.trim()) || fallback;
+}
+
+// ── 训练日志 ──
+function addLogEntryRow(entry) {
+  const container = document.getElementById('log-entries');
+  if (!container) return;
+  const row = el('div', 'log-entry-row');
+  if (entry && entry.exercise_name) row.dataset.name = entry.exercise_name;
+
+  const fields = [
+    ['动作名称', 'name', 'text', entry ? entry.exercise_name : '', '如 杠铃卧推'],
+    ['组数', 'sets', 'number', entry && entry.sets ? entry.sets : '', '4'],
+    ['次数', 'reps', 'number', entry && entry.reps ? entry.reps : '', '8'],
+    ['重量 kg', 'weight', 'number', entry && entry.weight ? entry.weight : '', '60'],
+    ['RPE', 'rpe', 'number', entry && entry.rpe ? entry.rpe : '', '7.5'],
+  ];
+  fields.forEach(([label, key, type, value, placeholder]) => {
+    const f = el('div', 'field');
+    const lb = el('label', null, label);
+    const input = document.createElement('input');
+    input.type = type;
+    input.dataset.key = key;
+    if (type === 'number') { input.step = key === 'weight' ? '0.5' : '1'; input.min = '0'; }
+    if (value !== '' && value !== null && value !== undefined) input.value = value;
+    if (placeholder) input.placeholder = placeholder;
+    f.appendChild(lb);
+    f.appendChild(input);
+    row.appendChild(f);
+  });
+
+  const remove = el('button', 'log-entry-remove', '×');
+  remove.type = 'button';
+  remove.setAttribute('aria-label', '删除这个动作');
+  remove.addEventListener('click', () => row.remove());
+  row.appendChild(remove);
+
+  container.appendChild(row);
+}
+
+function collectLogEntries() {
+  const rows = document.querySelectorAll('#log-entries .log-entry-row');
+  const entries = [];
+  rows.forEach(row => {
+    const pick = key => {
+      const input = row.querySelector(`input[data-key="${key}"]`);
+      return input ? input.value.trim() : '';
+    };
+    const name = pick('name');
+    if (!name) return;                       // 跳过没填动作名的空行
+    entries.push({
+      exercise_name: name,
+      sets: parseInt(pick('sets'), 10) || 0,
+      reps: parseInt(pick('reps'), 10) || 0,
+      weight: parseFloat(pick('weight')) || 0,
+      rpe: pick('rpe') ? parseFloat(pick('rpe')) : null,
+      completed: true,
+    });
+  });
+  return entries;
+}
+
+async function saveTrainingLog() {
+  const entries = collectLogEntries();
+  if (!entries.length) {
+    showError('log-error', '至少填一个动作名称再保存。');
+    return;
+  }
+  showError('log-error', '');
+  setBusy('btn-save-log', true, '保存中...');
+  try {
+    const payload = {
+      athlete_key: athleteKey,
+      log_date: document.getElementById('log-date').value || todayLocalIso(),
+      focus: document.getElementById('log-focus').value.trim(),
+      session_rpe: parseFloat(document.getElementById('log-session-rpe').value) || null,
+      duration_min: parseInt(document.getElementById('log-duration').value, 10) || 0,
+      entries: entries,
+    };
+    const resp = await fetch('/api/training-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '保存失败');
+    showStatus('log-status', `已保存，共记录 ${data.entries_saved} 个动作。`);
+    document.getElementById('log-entries').replaceChildren();
+    addLogEntryRow();
+    loadLogHistory();
+  } catch (e) {
+    showError('log-error', `保存失败：${e.message}`);
+  } finally {
+    setBusy('btn-save-log', false);
+  }
+}
+
+async function loadLogHistory() {
+  const box = document.getElementById('log-history');
+  if (!box) return;
+  try {
+    const resp = await fetch(`/api/training-logs?athlete_key=${encodeURIComponent(athleteKey)}&limit=10`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '读取失败');
+    box.replaceChildren();
+    if (!data.logs.length) {
+      box.appendChild(composedEmpty('—', '暂无训练记录',
+        '在上面填好动作明细并保存，这里会按时间倒序列出每一次训练。'));
+      return;
+    }
+    data.logs.forEach(log => {
+      const item = el('div', 'log-history-item');
+      item.appendChild(el('span', 'lh-date', log.log_date));
+      const names = log.entries.map(e => e.exercise_name).join('、');
+      item.appendChild(el('span', 'lh-body',
+        `${log.focus || '训练'} · ${names || '无动作'}`));
+      box.appendChild(item);
+    });
+  } catch (e) {
+    box.replaceChildren();
+    box.appendChild(el('p', 'section-hint', `读取失败：${e.message}`));
+  }
+}
+
+// ── 演示数据绑定 ──
+// seed 脚本按固定的 demo-athlete 写入，而浏览器里的 athlete_key 是随机 UUID，
+// 两者不匹配图表就是空的。这个按钮消除演示前唯一需要人工干预的环节。
+function loadDemoData() {
+  athleteKey = DEMO_ATHLETE_KEY;
+  localStorage.setItem(ATHLETE_KEY_STORAGE, athleteKey);
+  showStatus('log-status', '已切换到演示数据，正在刷新…');
+  loadLogHistory();
+  loadTrainingStats();
+}
+
+// ── ECharts 动态加载（双 CDN + 超时 + 降级）──
+// 不写静态 <script src>：离线时会在首屏就卡住加载；而图表只在进入本 tab 时才需要。
+const ECHARTS_CDNS = [
+  'https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js',
+  'https://unpkg.com/echarts@5.5.1/dist/echarts.min.js',
+];
+let echartsPromise = null;
+
+function loadEcharts(timeoutMs) {
+  if (window.echarts) return Promise.resolve(true);
+  if (echartsPromise) return echartsPromise;
+  echartsPromise = new Promise(resolve => {
+    let i = 0;
+    const tryNext = () => {
+      if (i >= ECHARTS_CDNS.length) { resolve(false); return; }
+      const s = document.createElement('script');
+      s.src = ECHARTS_CDNS[i++];
+      s.async = true;
+      s.onload = () => resolve(Boolean(window.echarts));
+      s.onerror = tryNext;
+      document.head.appendChild(s);
+    };
+    setTimeout(() => resolve(Boolean(window.echarts)), timeoutMs || 5000);
+    tryNext();
+  });
+  return echartsPromise;
+}
+
+// ── 训练分析 ──
+async function loadTrainingStats() {
+  const emptyNode = document.getElementById('progress-empty');
+  const statsBox = document.getElementById('progress-stats');
+  try {
+    const resp = await fetch(`/api/training-stats?athlete_key=${encodeURIComponent(athleteKey)}&weeks=12`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '读取失败');
+    const hasData = data.totals && data.totals.sessions > 0;
+    if (emptyNode) emptyNode.hidden = hasData;
+    if (statsBox) statsBox.hidden = !hasData;
+    if (!hasData) {
+      clearCharts();
+      return;
+    }
+    renderProgressStats(data);
+    await renderCharts(data);
+  } catch (e) {
+    if (emptyNode) {
+      emptyNode.hidden = false;
+      emptyNode.replaceChildren();
+      emptyNode.appendChild(el('div', 'ec-mark', '!'));
+      emptyNode.appendChild(el('div', 'ec-title', '读取失败'));
+      emptyNode.appendChild(el('div', 'ec-hint', e.message || '请稍后重试。'));
+    }
+  }
+}
+
+function renderProgressStats(stats) {
+  const box = document.getElementById('progress-stats');
+  if (!box) return;
+  box.replaceChildren();
+  const t = stats.totals || {};
+  const cells = [
+    ['训练次数', String(t.sessions || 0)],
+    ['总容量 kg', Math.round(t.volume || 0).toLocaleString()],
+    ['平均完成率', `${Math.round((t.avg_completion || 0) * 100)}%`],
+    ['平均 RPE', t.avg_rpe === null || t.avg_rpe === undefined ? '—' : String(t.avg_rpe)],
+  ];
+  cells.forEach(([label, value]) => {
+    const pill = el('div', 'stat-pill');
+    pill.appendChild(el('span', 'dot green'));
+    pill.appendChild(el('strong', null, value));
+    pill.appendChild(el('span', null, label));
+    box.appendChild(pill);
+  });
+}
+
+function clearCharts() {
+  ['chart-volume', 'chart-exercise', 'chart-completion'].forEach(id => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    if (window.echarts) {
+      const inst = echarts.getInstanceByDom(node);
+      if (inst) inst.dispose();
+    }
+    node.replaceChildren();
+    node.hidden = true;
+  });
+  const fb = document.getElementById('progress-fallback');
+  if (fb) { fb.replaceChildren(); fb.hidden = true; }
+  const note = document.getElementById('chart-note');
+  if (note) { note.textContent = ''; note.hidden = true; }
+}
+
+async function renderCharts(stats) {
+  const ok = await loadEcharts();
+  if (!ok) { renderProgressFallback(stats); return; }
+  try {
+    drawVolumeChart(stats);
+    drawExerciseChart(stats);
+    drawCompletionChart(stats);
+    const fb = document.getElementById('progress-fallback');
+    if (fb) { fb.replaceChildren(); fb.hidden = true; }
+    const note = document.getElementById('chart-note');
+    if (note) { note.hidden = true; note.textContent = ''; }
+  } catch (e) {
+    renderProgressFallback(stats);
+  }
+}
+
+function initChart(id) {
+  const node = document.getElementById(id);
+  if (!node) return null;
+  const existing = echarts.getInstanceByDom(node);
+  if (existing) existing.dispose();
+  node.replaceChildren();
+  node.hidden = false;
+  return echarts.init(node, null, { renderer: 'canvas' });
+}
+
+const AXIS_STYLE = () => ({
+  axisLine: { lineStyle: { color: themeColor('--border', '#263340') } },
+  axisLabel: { color: themeColor('--text-muted', '#68727b'), fontSize: 11 },
+  splitLine: { lineStyle: { color: themeColor('--border', '#263340'), type: 'dashed' } },
+});
+
+function drawVolumeChart(stats) {
+  const chart = initChart('chart-volume');
+  if (!chart) return;
+  const weeks = stats.weekly || [];
+  chart.setOption({
+    title: { text: '周训练容量趋势', textStyle: { color: themeColor('--text-primary', '#e9e6df'), fontSize: 13 } },
+    tooltip: { trigger: 'axis' },
+    grid: { left: 50, right: 20, top: 50, bottom: 30 },
+    xAxis: Object.assign({ type: 'category', data: weeks.map(w => w.week_start.slice(5)) }, AXIS_STYLE()),
+    yAxis: Object.assign({ type: 'value' }, AXIS_STYLE()),
+    series: [{
+      type: 'line', smooth: true, data: weeks.map(w => Math.round(w.volume)),
+      itemStyle: { color: themeColor('--accent-orange', '#f2764a') },
+      areaStyle: { opacity: 0.12 },
+    }],
+  });
+}
+
+function drawExerciseChart(stats) {
+  const chart = initChart('chart-exercise');
+  if (!chart) return;
+  const exercises = (stats.exercises || []).filter(e => e.series.some(s => s.est_1rm > 0)).slice(0, 5);
+  chart.setOption({
+    title: { text: '各动作估算 1RM 进步曲线', textStyle: { color: themeColor('--text-primary', '#e9e6df'), fontSize: 13 } },
+    tooltip: { trigger: 'axis' },
+    legend: { textStyle: { color: themeColor('--text-secondary', '#9ba7b2') }, top: 24 },
+    grid: { left: 50, right: 20, top: 70, bottom: 30 },
+    xAxis: Object.assign({ type: 'category' }, AXIS_STYLE()),
+    yAxis: Object.assign({ type: 'value' }, AXIS_STYLE()),
+    series: exercises.map(e => ({
+      name: e.name, type: 'line', smooth: true,
+      data: e.series.map(s => s.est_1rm || null),
+    })),
+  });
+  // 各动作的训练日期不同，用最长的那条作为横轴标签
+  const longest = exercises.reduce((a, b) => (b.series.length > (a ? a.series.length : 0) ? b : a), null);
+  if (longest) {
+    chart.setOption({ xAxis: { data: longest.series.map(s => s.date.slice(5)) } });
+  }
+}
+
+function drawCompletionChart(stats) {
+  const chart = initChart('chart-completion');
+  if (!chart) return;
+  const weeks = stats.weekly || [];
+  chart.setOption({
+    title: { text: '每周完成率', textStyle: { color: themeColor('--text-primary', '#e9e6df'), fontSize: 13 } },
+    tooltip: { trigger: 'axis', valueFormatter: v => `${v}%` },
+    grid: { left: 50, right: 20, top: 50, bottom: 30 },
+    xAxis: Object.assign({ type: 'category', data: weeks.map(w => w.week_start.slice(5)) }, AXIS_STYLE()),
+    yAxis: Object.assign({ type: 'value', max: 100 }, AXIS_STYLE()),
+    series: [{
+      type: 'bar', data: weeks.map(w => Math.round(w.completion * 100)),
+      itemStyle: { color: themeColor('--cool-blue', '#6fa88b') },
+    }],
+  });
+}
+
+// CDN 不可用或渲染异常时的降级：用同样的数据渲染成纯 DOM 表格。
+// 面试现场的 WiFi 不可控，而这是压轴演示——表格保证完全离线时
+// 趋势数据依然可见，功能闭环不依赖任何 CDN。
+function renderProgressFallback(stats) {
+  clearCharts();
+  const box = document.getElementById('progress-fallback');
+  if (!box) return;
+  box.replaceChildren();
+  box.hidden = false;
+
+  const note = document.getElementById('chart-note');
+  if (note) {
+    note.textContent = '图表资源不可用，已切换为数据表。';
+    note.hidden = false;
+  }
+
+  const weeks = stats.weekly || [];
+  if (weeks.length) {
+    box.appendChild(el('h4', null, '周训练趋势'));
+    const table = el('table', 'fallback-table');
+    const head = document.createElement('tr');
+    ['周起始', '次数', '容量 kg', '完成率'].forEach(h => head.appendChild(el('th', null, h)));
+    table.appendChild(head);
+    weeks.forEach(w => {
+      const tr = document.createElement('tr');
+      [w.week_start, String(w.sessions), Math.round(w.volume).toLocaleString(),
+       `${Math.round(w.completion * 100)}%`].forEach(v => tr.appendChild(el('td', null, v)));
+      table.appendChild(tr);
+    });
+    box.appendChild(table);
+  }
+
+  const exercises = (stats.exercises || []).filter(e => e.trend_pct !== null);
+  if (exercises.length) {
+    box.appendChild(el('h4', null, '动作进步'));
+    const table = el('table', 'fallback-table');
+    const head = document.createElement('tr');
+    ['动作', '首次', '最近', '趋势', '平均 RPE'].forEach(h => head.appendChild(el('th', null, h)));
+    table.appendChild(head);
+    exercises.forEach(e => {
+      const tr = document.createElement('tr');
+      [e.name, `${e.first_weight}kg`, `${e.last_weight}kg`,
+       `${e.trend_pct > 0 ? '+' : ''}${e.trend_pct}%`,
+       e.avg_rpe === null ? '—' : String(e.avg_rpe)].forEach(v => tr.appendChild(el('td', null, v)));
+      table.appendChild(tr);
+    });
+    box.appendChild(table);
+  }
+}
+
+// ── 调整建议 ──
+let currentAdviceId = null;
+
+async function generateAdvice() {
+  showError('advice-error', '');
+  setBusy('btn-generate-advice', true, '分析中...');
+  try {
+    const resp = await fetch('/api/training-advice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athlete_key: athleteKey, weeks: 12 }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '生成失败');
+    currentAdviceId = data.advice_id;
+    renderAdvice(data);
+  } catch (e) {
+    showError('advice-error', `生成失败：${e.message}`);
+  } finally {
+    setBusy('btn-generate-advice', false);
+  }
+}
+
+function renderAdvice(data) {
+  const summary = document.getElementById('advice-summary');
+  const list = document.getElementById('advice-list');
+  const applyBtn = document.getElementById('btn-apply-advice');
+  if (summary) summary.textContent = data.summary || '';
+  if (!list) return;
+  list.replaceChildren();
+
+  const items = data.items || [];
+  if (!items.length) {
+    list.appendChild(composedEmpty('✓', '暂时没有需要调整的',
+      '继续记录训练。等数据积累到能看出趋势，这里会给出加重、减载或换动作的建议。'));
+  }
+  items.forEach(item => {
+    const row = el('div', `advice-item sev-${item.severity || 'info'}`);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.dataset.itemId = item.item_id;
+    row.appendChild(cb);
+
+    const body = el('div', 'ai-body');
+    body.appendChild(el('div', 'ai-title', `${item.exercise_name} · ${adviceTypeLabel(item.type)}`));
+    body.appendChild(el('div', 'ai-change', describeSuggestion(item)));
+    body.appendChild(el('div', 'ai-reason', item.reason || ''));
+    row.appendChild(body);
+    list.appendChild(row);
+  });
+
+  if (applyBtn) applyBtn.hidden = !items.length;
+}
+
+function adviceTypeLabel(type) {
+  return { progress: '可以加重', deload: '建议减载', volume_cut: '建议减量', swap: '建议替换' }[type] || type;
+}
+
+function describeSuggestion(item) {
+  const s = item.suggested || {};
+  const cur = item.current || {};
+  if (s.weight && cur.weight) return `${cur.weight}kg → ${s.weight}kg`;
+  if (s.weight) return `目标 ${s.weight}kg`;
+  if (s.sets_delta) return `组数 ${s.sets_delta > 0 ? '+' : ''}${s.sets_delta} 组`;
+  if (s.action === 'replace') return '换一个同肌群动作';
+  return '';
+}
+
+async function applyAdvice() {
+  if (!currentAdviceId) return;
+  const checked = Array.from(
+    document.querySelectorAll('#advice-list input[type="checkbox"]:checked')
+  ).map(cb => cb.dataset.itemId);
+
+  showError('advice-error', '');
+  setBusy('btn-apply-advice', true, '应用中...');
+  try {
+    const resp = await fetch('/api/training-advice/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ advice_id: currentAdviceId, accepted_item_ids: checked }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '应用失败');
+    showStatus('advice-status', data.note || '已应用。');
+    const applyBtn = document.getElementById('btn-apply-advice');
+    if (applyBtn) applyBtn.hidden = true;
+  } catch (e) {
+    showError('advice-error', `应用失败：${e.message}`);
+  } finally {
+    setBusy('btn-apply-advice', false);
+  }
+}
+
+// ── 用上次生成的计划预填动作行 ──
+// 计划的 reps 是 "8-12" 这样的区间，日志要的是实际点值，取下界作为起点。
+function fillFromLastPlan() {
+  try {
+    const raw = localStorage.getItem('ironmind_last_plan');
+    if (!raw) return false;
+    const plan = JSON.parse(raw);
+    const firstDay = (plan.days || [])[0];
+    if (!firstDay) return false;
+    const box = document.getElementById('log-entries');
+    box.replaceChildren();
+    (firstDay.exercises || []).forEach(ex => {
+      const lower = String(ex.reps || '').split('-')[0].replace(/[^\d]/g, '');
+      addLogEntryRow({
+        exercise_name: ex.name,
+        sets: ex.sets,
+        reps: parseInt(lower, 10) || 0,
+        weight: '',
+        rpe: '',
+      });
+    });
+    const focusInput = document.getElementById('log-focus');
+    if (focusInput && !focusInput.value) focusInput.value = firstDay.focus || '';
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ── 初始化与 tab 钩子 ──
+let progressLoaded = false;
+
+function initTrainingTabs() {
+  const dateInput = document.getElementById('log-date');
+  if (dateInput && !dateInput.value) dateInput.value = todayLocalIso();
+  if (!document.querySelector('#log-entries .log-entry-row')) addLogEntryRow();
+
+  const bind = (id, fn) => {
+    const node = document.getElementById(id);
+    if (node) node.addEventListener('click', fn);
+  };
+  bind('btn-add-entry', () => addLogEntryRow());
+  bind('btn-save-log', saveTrainingLog);
+  bind('btn-load-demo', loadDemoData);
+  bind('btn-refresh-stats', loadTrainingStats);
+  bind('btn-generate-advice', generateAdvice);
+  bind('btn-apply-advice', applyAdvice);
+  bind('btn-fill-from-plan', () => {
+    if (!fillFromLastPlan()) {
+      showError('log-error', '还没有可用的计划，先在「训练计划」里生成一份。');
+    } else {
+      showError('log-error', '');
+    }
+  });
+
+  const fillBtn = document.getElementById('btn-fill-from-plan');
+  if (fillBtn) fillBtn.hidden = !localStorage.getItem('ironmind_last_plan');
+
+  loadLogHistory();
+}
+
+// 切到新 tab 时按需加载数据（图表只在可见时才渲染，否则尺寸算不对）
+document.addEventListener('click', event => {
+  const btn = event.target.closest('#tab-log, #tab-progress');
+  if (!btn) return;
+  if (btn.id === 'tab-log') loadLogHistory();
+  if (btn.id === 'tab-progress') {
+    if (!progressLoaded) progressLoaded = true;
+    loadTrainingStats();
+  }
+});
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initTrainingTabs);
+} else {
+  initTrainingTabs();
 }
 
 </script>
