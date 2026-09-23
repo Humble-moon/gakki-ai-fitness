@@ -128,7 +128,17 @@ def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
         schema_valid = False
     is_safe = final.get("is_safe") is True
     issues_empty = final.get("issues") == []
-    requires_review = any(isinstance(c, dict) and c.get("requires_human_review") is True for c in checks)
+    # 只由**最终那一轮**检查决定是否送审。
+    #
+    # 这里曾用 any(... for c in checks) 扫描全部历史，后果是：重写回路修好的问题
+    # 会永远留在历史里，导致最终检查明明返回 safe=True / issues=[] 的计划依然被扣下。
+    # 而首轮草稿几乎总会被找出若干问题（LLM 被要求挑毛病），于是正常交付路径基本
+    # 走不到——这与 resolved_issues 单独追踪「已修正问题」的设计意图也自相矛盾。
+    #
+    # 只看最终轮是安全的：计划层面的问题（某动作与伤病冲突）被重写改掉后，最后一轮
+    # 自然不再报；查询层面的问题（用户问的就是危险动作）不随重写改变，最后一轮依然
+    # 会报。两种情况的拦截能力都不受影响。
+    requires_review = final.get("requires_human_review") is True
     confidence = final.get("confidence")
     confidence_valid = isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
     result.update({"warnings": warnings, "active_issues": active_issues,
@@ -199,19 +209,32 @@ def build_review_pending_payload(result: dict, artifact, thread_id: str | None =
     }
     if thread_id is not None:
         payload["thread_id"] = thread_id
+    # 解释块只含检索统计与检查计数，不含被扣下的计划内容，
+    # 因此可以安全地一并交给审核方——让审核者知道系统此前检查了几轮、依据是什么。
+    if isinstance(result.get("explain"), dict):
+        payload["explain"] = result["explain"]
     return payload
 
 
 def review_pending_result(review_store, profile: dict, query: str, result: dict) -> dict:
-    """Deliver only a review summary when the final gate requires human review."""
-    if result.get("_persistence_allowed") is True:
-        delivered = dict(result)
-        delivered["delivery_status"] = "safe_delivered"
-        return delivered
-    if not result.get("requires_review"):
-        return result
-    artifact = create_review_artifact(review_store, profile, query, result)
-    return build_review_pending_payload(result, artifact)
+    """交付判定：需要人工审核就扣下，否则交付。
+
+    这里曾用 _persistence_allowed 作为交付闸门，但它是「能否缓存」的判据，额外要求
+    issues_empty。而 LLM 检查器几乎总会给出若干条建议性提示（实测 4 轮检查分别为
+    4/4/3/3 条），issues_empty 实际上永远为假——后果是没有 delivery_status，
+    前端 `!== 'safe_delivered'` 直接 return，用户什么都看不到。
+
+    交付与缓存是两件事，必须分开：
+        requires_review → 交付闸门（已内含 is_safe 与「至少有一轮有效检查」）
+        _persistence_allowed → 缓存闸门（继续要求 issues 清空，宁可少缓存）
+    计划上带着的建议性提示会以 warnings 形式一并展示，不会静默丢掉。
+    """
+    if result.get("requires_review"):
+        artifact = create_review_artifact(review_store, profile, query, result)
+        return build_review_pending_payload(result, artifact)
+    delivered = dict(result)
+    delivered["delivery_status"] = "safe_delivered"
+    return delivered
 
 
 def make_user_key(profile: dict) -> int:
