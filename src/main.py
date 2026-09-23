@@ -43,8 +43,8 @@ def seed():
         2. 读取种子 JSON 文件
         3. 遍历每个动作：
            a. 拼接动作名+肌肉群+描述为一段文本
-           b. 调用 embedding 服务生成 512 维向量
-           c. 将向量转为 pgvector 可接受的字符串格式 "[x1,x2,...,x512]"
+           b. 调用 embedding 服务生成 1024 维向量
+           c. 将向量转为 pgvector 可接受的字符串格式 "[x1,x2,...,x1024]"
            d. INSERT 到 exercises 表（ON CONFLICT DO NOTHING 防止重复导入）
         4. 调用 GraphBuilder 将动作数据导入 Neo4j 构建知识图谱
         5. 输出导入日志
@@ -65,7 +65,7 @@ def seed():
     for ex in exercises:
         # 拼接文本用于生成向量嵌入
         text = f"{ex['name']} {' '.join(ex['target_muscles'])} {ex.get('description', '')}"
-        vec = emb.embed(text)  # 调用 embedding 模型生成 512 维向量
+        vec = emb.embed(text)  # 调用 embedding 模型生成 1024 维向量
         vec_str = f"[{','.join(str(v) for v in vec)}]"  # 转为 pgvector 格式
 
         try:
