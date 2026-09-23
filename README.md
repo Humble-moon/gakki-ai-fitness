@@ -6,11 +6,13 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-SSE-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-1C3C3C)
 
-Multi-Agent 协作生成个性化训练计划，GraphRAG 做伤病推理，混合检索的知识问答带来源引用。本地运行，浏览器打开就能用。
+Multi-Agent 协作生成个性化训练计划，GraphRAG 做伤病推理，混合检索的知识问答带来源引用。训练日志记录执行结果，分析给出调整建议并回写到下一次计划。本地运行，浏览器打开就能用。
 
 ![IRON MIND 训练工作台](docs/screenshots/overview.png)
 
 ## 核心功能
+
+共六个功能：前四个负责生成与答疑，后两个把训练执行记录下来、再反馈回计划。
 
 ### 智能计划生成
 
@@ -38,6 +40,32 @@ Multi-Agent 协作生成个性化训练计划，GraphRAG 做伤病推理，混�
 
 安全关键内容不走生成路径，且安全判定不依赖知识库——FactChecker 的规则引擎是独立的伤病冲突表（47 关键词 → 200 禁止对）+ 15 份语义档案，删掉整个知识库它仍能拦截高危组合。块数 **557 chunks** 取自 2026-08-30 摄入输出、与评测 manifest 同源，但静态清单无法核验（数据在 PostgreSQL，需重跑摄入才能复测）。
 
+### 上传资料问答
+
+体检报告、既往伤病史这类私有文件可以直接拖进知识问答窗口（PDF / Word / MD / TXT，单个不超过 20MB）。解析用 pdfplumber 与 python-docx，表格转 Markdown，按字号与样式还原标题层级；切块时把文档名、章节路径、页码一并注入，检索到的片段自己能说清出自哪一页。提问时双路检索——公共知识库与本次会话文档各查一遍 → RRF 融合。
+
+PDF 另有一个可选的 MinerU 后端（`DOC_PARSER_BACKEND=mineru`，默认关闭）。体检报告恰好踩中 pdfplumber 的三个盲区——扫描件没有文本层、表格没有框线、表格还跨页——MinerU 靠版面分析加 OCR 把内容重建出来。它走 CLI 子进程而不是装进项目环境，用完即释放，不把 torch 这类重依赖拖进主环境；未安装、超时或解析失败一律回落 pdfplumber，不影响上传本身。全程本地，不接官方云端 SDK——体检报告属于敏感个人信息。
+
+文件只属于当前会话，不进公共知识库，关掉页面就不可回溯。已知局限：Word 内嵌图片不处理；扫描件在默认后端下会如实返回「无可提取文字」，不假装解析成功。
+
+### 训练日志
+
+记录每次训练的真实完成情况：日期、训练重点、整体 RPE、时长，以及逐动作的组数、次数、重量与完成与否。主表与动作明细在同一事务里写入——明细写一半失败会留下一条没有动作的空日志，统计时把完成率的分母撑大、稀释掉真实完成度，这个代价比写入失败本身更隐蔽。
+
+![训练日志](docs/screenshots/training-log.png)
+
+训练记录挂在运动员标识上而不是会话上，换浏览器、重开页面，历史都还在。
+
+### 训练分析
+
+把日志变成三张图：周容量趋势、力量进步曲线、计划完成率。
+
+![训练分析](docs/screenshots/training-analysis.png)
+
+调整建议由确定性规则引擎推导——纯函数、无 IO、不经过 LLM，模型全线不可用时照样产出。四类规则按优先级命中，同一动作只取第一条，避免自相矛盾：估算 1RM 连续下滑且 RPE 偏高 → 减载（两个条件都成立才触发，只看 RPE 会把「今天心情差」误判成该减载）；完成率过低 → 减组；完成率和 RPE 都有余力 → 按步进加重；近期几乎不出现的动作 → 换同肌群替代。
+
+建议**只生成、不生效**。用户勾选确认后才写入长期记忆，在下次生成计划时注入上下文。确认不等于安全审核通过——若调整与伤病冲突，FactChecker 仍会拦下并触发人工审核。
+
 ## 架构
 
 ```
@@ -59,6 +87,8 @@ Multi-Agent 协作生成个性化训练计划，GraphRAG 做伤病推理，混�
  PostgreSQL  Neo4j   Redis   MinIO
  (pgvector)         (缓存+记忆)
 ```
+
+上图是计划生成的主干链路。训练闭环（日志 → 统计 → 规则引擎 → 人工确认 → 写回长期记忆）复用同一套 FactChecker 与记忆模块，不另起一套编排。
 
 ## 技术栈
 
@@ -202,10 +232,14 @@ python scripts/verify_project_facts.py --json
 │   │   └── resilience.py         # 墙钟超时
 │   ├── core/                     # Orchestrator 编排引擎
 │   │   ├── qa_agent.py           # 问答自主循环路径（可选）
-│   │   └── qa_safety.py          # 问答安全检测与硬约束（两条路径共用）
+│   │   ├── qa_safety.py          # 问答安全检测与硬约束（两条路径共用）
+│   │   ├── training_analytics.py # 训练统计 + 调整规则引擎（纯函数、无 LLM）
+│   │   ├── training_advice.py    # 调整建议工件与采纳落库
+│   │   └── training_history.py   # 训练历史 → 生成 Prompt（输入侧单点真相）
 │   ├── mcp/                      # FastMCP 完整协议实现
 │   │   ├── exercise_server.py    # MCP 工具（接 PG 数据库）
 │   │   └── tool_registry.py      # 工具注册门面
+│   ├── parsers/                  # 上传文档解析（PDF/Word/MD/TXT；PDF 另有可选 MinerU 后端）
 │   ├── rag/                      # RAG 五层检索体系
 │   │   ├── agentic_rag.py        # 自评改写迭代检索
 │   │   ├── knowledge_search.py   # RRF 融合 + LLM Re-rank
@@ -215,9 +249,12 @@ python scripts/verify_project_facts.py --json
 │   │   └── provider.py           # chat + chat_stream + JSON mode
 │   ├── memory/                   # 多轮对话 + 长期记忆（带时间戳）
 │   ├── storage/                  # PG/Neo4j/Redis/MinIO 客户端
+│   │   ├── training_log_store.py # 训练日志存储（主表 + 明细同事务写入）
+│   │   └── document_store.py     # 会话级文档库（上传资料）
 │   ├── skills/                   # Skill 系统（SkillLoader 自动发现）
 │   ├── a2a/                      # A2A 消息总线（Task/Artifact）
 │   ├── hitl/                     # HITL 人在回路（关键词 + embedding 语义）
+│   ├── security/                 # API 守卫 + 出网文本标识符剥离
 │   └── models/                   # Pydantic 数据模型
 ├── skills/                       # Skill 插件目录（SKILL.md + references + scripts）
 │   ├── muscle_building/
