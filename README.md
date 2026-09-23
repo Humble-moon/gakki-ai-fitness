@@ -297,7 +297,7 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge --incremental
 
 当前版本定位为 **localhost 单用户演示**，不承诺公网多用户、完整人工审核闭环或生产服务等级。可复核数字、证据路径、未核验口径与推荐边界话术，见 [项目事实基线](docs/project-fact-baseline.md)。
 
-项目自 **2026-04** 起在本地开发，**2026-07-01 初始化 Git 仓库**并开始产生提交历史，因此 `git log` 的最早提交晚于实际开工时间。详见 [项目事实基线](docs/project-fact-baseline.md) 的「未核验与历史结果」一节（该段为开发者陈述，仓库无法独立复核）。
+项目自 **2026-04** 起在本地开发，**2026-07-01 初始化 Git 仓库**并开始产生提交历史，因此 `git log` 的最早提交晚于实际开工时间。详见 [项目事实基线](docs/project-fact-baseline.md) 的「未核验与历史结果」一节。
 
 ---
 
