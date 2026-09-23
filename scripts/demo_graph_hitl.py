@@ -48,7 +48,7 @@ def _build_fake_deps():
                     "confidence": .9, "review_reason": "伤病冲突需要人工确认",
                     "review_severity": "warning"}
 
-    def write_plan_stream(retrieved, profile, plan_config, plan_context="", user_query=""):
+    def write_plan_stream(retrieved, profile, plan_config, plan_context="", user_query="", **kwargs):
         yield ("chunk", "生成中")
         yield ("done", json.loads(json.dumps(plan)))
 

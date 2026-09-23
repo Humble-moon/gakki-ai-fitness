@@ -115,6 +115,10 @@ class PlanRequest(BaseModel):
     # 自然语言查询，为空时使用默认模板
     session_id: Optional[str] = None
     # 会话 ID，用于多轮对话（修改计划时说"把第二天改成哑铃动作"）
+    athlete_key: Optional[str] = None
+    # 稳定运动员标识（前端 localStorage 生成的 UUID）。提供时会读取该运动员的
+    # 训练历史与已确认调整注入生成上下文，让新计划承接实际执行情况。
+    # 注意不要塞进 UserProfileInput——那会改变 SemanticCache 的指纹、破坏缓存命中。
 
 
 class AnalysisRequest(BaseModel):
@@ -163,6 +167,71 @@ class QuestionRequest(BaseModel):
     session_id: Optional[str] = None
     # 会话 ID，用于多轮对话上下文追踪
     # None 时系统自动创建新会话
+
+
+class TrainingLogEntryInput(BaseModel):
+    """
+    训练日志里的单个动作明细。
+
+    说明：reps 用整数而非计划里的 "8-12" 区间——计划是处方（范围），
+         日志是事实（点值），这样才能直接算容量与估算 1RM。
+    """
+    exercise_name: str = ""
+    # 动作名称，需与动作库/计划中的名称对齐
+    sets: int = 0
+    # 实际完成组数
+    reps: int = 0
+    # 每组实际次数（代表值）
+    weight: float = 0.0
+    # 使用重量（kg）；自重动作填 0
+    rpe: Optional[float] = None
+    # 该动作主观疲劳度 1~10
+    completed: bool = True
+    # 是否按计划完成
+
+
+class TrainingLogRequest(BaseModel):
+    """
+    训练日志提交请求体。
+
+    说明：一次训练提交一条，entries 为该次训练包含的所有动作。
+    """
+    athlete_key: str = ""
+    # 稳定运动员标识（前端 localStorage）
+    log_date: Optional[str] = None
+    # 训练日期 "YYYY-MM-DD"；缺省为今天（本地日历日）
+    day_index: int = 0
+    # 对应训练计划第几个训练日；0 表示自由训练
+    focus: str = ""
+    # 当日训练重点，如 "胸+三头"
+    plan_id: str = ""
+    # 该次训练依据的计划 ID
+    session_rpe: Optional[float] = None
+    # 整节课主观疲劳度 1~10
+    duration_min: int = 0
+    # 训练时长（分钟）
+    body_weight: Optional[float] = None
+    # 当日体重（kg）
+    notes: str = ""
+    # 自由备注
+    entries: list[TrainingLogEntryInput] = []
+    # 动作明细列表
+
+
+class TrainingAdviceRequest(BaseModel):
+    """调整建议生成请求体。"""
+    athlete_key: str = ""
+    # 稳定运动员标识
+    weeks: int = 8
+    # 参与分析的回溯周数
+
+
+class TrainingAdviceApplyRequest(BaseModel):
+    """调整建议确认请求体——用户勾选采纳哪些条目。"""
+    advice_id: str = ""
+    # 待确认的建议工件 ID
+    accepted_item_ids: list[str] = []
+    # 用户勾选采纳的条目 ID；空列表表示全部不采纳
 
 
 # ============================================================
@@ -253,7 +322,8 @@ def generate_plan(req: PlanRequest):
         days_per_week=req.days_per_week, injuries=req.injuries
     )
     return StreamingResponse(
-        _stream_events(orch.generate_plan_stream(profile, req.query, req.session_id)),
+        _stream_events(orch.generate_plan_stream(profile, req.query, req.session_id,
+                                                 athlete_key=req.athlete_key)),
         media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
@@ -388,6 +458,180 @@ async def upload_document(
         "has_text": parsed.has_text,
         "error": parsed.error,
     }
+
+
+# ============================================================
+# 训练执行闭环（训练日志 / 统计 / 调整建议）
+# ============================================================
+# 说明：本组端点全部返回普通 JSON，不使用 SSE。前端有契约测试约束
+#      consumeSse( 的出现次数必须与流式动作数严格一致，新增流式端点
+#      会破坏该不变量。且这几个端点的交互形态（提交表单、看图表、
+#      勾选确认）本就不需要逐字输出。
+
+_training_log_store = None
+
+
+def _get_training_log_store():
+    """惰性构造训练日志存储——避免模块导入时就建立数据库连接。"""
+    global _training_log_store
+    if _training_log_store is None:
+        from src.storage.training_log_store import TrainingLogStore
+        _training_log_store = TrainingLogStore()
+    return _training_log_store
+
+
+def _storage_unavailable():
+    """训练日志存储不可用时的统一响应。"""
+    return JSONResponse(
+        status_code=503,
+        content={"error": {"code": "STORAGE_UNAVAILABLE",
+                           "message": "训练日志存储暂不可用，请确认数据库已启动"}},
+    )
+
+
+@app.post("/api/training-logs")
+async def create_training_log(req: TrainingLogRequest):
+    """
+    POST /api/training-logs - 记录一次训练
+
+    请求体：TrainingLogRequest（含动作明细 entries）
+    返回：JSON {"log_id", "entries_saved", "log_date"}
+
+    说明：主表与明细在同一事务写入——明细写一半失败会留下一条没有动作的
+          空日志，统计时会把完成率的分母撑大、稀释真实完成度。
+    """
+    if not req.athlete_key:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
+
+    store = _get_training_log_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _storage_unavailable()
+
+    entries = [e.model_dump() for e in req.entries]
+    log_id = store.save_log(
+        athlete_key=req.athlete_key, entries=entries, log_date=req.log_date,
+        day_index=req.day_index, focus=req.focus, plan_id=req.plan_id,
+        session_rpe=req.session_rpe, duration_min=req.duration_min,
+        body_weight=req.body_weight, notes=req.notes,
+    )
+    if log_id is None:
+        return _storage_unavailable()
+
+    return {
+        "log_id": log_id,
+        "entries_saved": len([e for e in entries if (e.get("exercise_name") or "").strip()]),
+        "log_date": req.log_date or "",
+    }
+
+
+@app.get("/api/training-logs")
+async def list_training_logs(athlete_key: str = "", weeks: int = 12,
+                             limit: int = 50, exercise: Optional[str] = None):
+    """
+    GET /api/training-logs - 查询历史训练日志（含动作明细）
+
+    查询参数：
+        athlete_key: 运动员标识（必填）
+        weeks: 回溯周数，默认 12
+        limit: 返回条数上限，默认 50、最大 100
+        exercise: 只返回包含该动作的日志
+
+    返回：JSON {"logs": [...], "count"}
+    """
+    if not athlete_key:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
+
+    store = _get_training_log_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _storage_unavailable()
+
+    logs = store.get_logs(athlete_key, weeks=max(1, min(weeks, 52)),
+                          limit=max(1, min(limit, 100)), exercise=exercise)
+    return {"logs": logs, "count": len(logs)}
+
+
+@app.get("/api/training-stats")
+async def training_stats(athlete_key: str = "", weeks: int = 12):
+    """
+    GET /api/training-stats - 训练统计（图表数据源）
+
+    查询参数：
+        athlete_key: 运动员标识（必填）
+        weeks: 回溯周数，默认 12
+
+    返回：JSON {totals, weekly, exercises}，结构直接对应前端图表的 series。
+        无数据时返回结构完整的空壳，前端不必判空。
+    """
+    if not athlete_key:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
+
+    from src.core.training_analytics import compute_stats
+
+    store = _get_training_log_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _storage_unavailable()
+
+    logs = store.get_logs(athlete_key, weeks=max(1, min(weeks, 52)))
+    stats = compute_stats(logs)
+    stats["athlete_key"] = athlete_key
+    stats["weeks"] = weeks
+    return stats
+
+
+@app.post("/api/training-advice")
+async def create_training_advice(req: TrainingAdviceRequest):
+    """
+    POST /api/training-advice - 生成调整建议（**只生成，不生效**）
+
+    请求体：TrainingAdviceRequest
+    返回：JSON {advice_id, status, summary, items, stats}
+
+    说明：建议由确定性规则引擎推导（见 training_analytics.rule_engine），
+          不依赖 LLM，模型不可用时依然可用。用户必须在 apply 接口确认勾选
+          后才会写入长期记忆。
+    """
+    if not req.athlete_key:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
+
+    from src.core.training_advice import build_advice
+
+    store = _get_training_log_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _storage_unavailable()
+
+    return build_advice(req.athlete_key, store,
+                        weeks=max(1, min(req.weeks, 52)))
+
+
+@app.post("/api/training-advice/apply")
+async def apply_training_advice(req: TrainingAdviceApplyRequest):
+    """
+    POST /api/training-advice/apply - 确认采纳所选调整
+
+    请求体：TrainingAdviceApplyRequest（advice_id + 勾选的 item_id 列表）
+    返回：JSON {"advice_id", "status", "applied", "persisted", "note"}
+
+    说明：只接受该工件中确实存在的 item_id，防止伪造或过期 id 写入。
+          确认后写入长期记忆，在下一次生成计划时注入上下文。
+          **用户确认不等于安全审核通过**——若调整与伤病冲突，
+          FactChecker 仍会拦下并触发人工审核。
+    """
+    from src.core.training_advice import resolve_advice
+
+    result = resolve_advice(req.advice_id, req.accepted_item_ids)
+    if result is None:
+        return JSONResponse(status_code=409, content={
+            "error": {"code": "ADVICE_EXPIRED",
+                      "message": "该调整建议已失效，请重新生成"}})
+    return result
 
 
 @app.get("/")
@@ -553,7 +797,7 @@ def generate_plan_v2(req: PlanRequest):
     thread_id = graph_runtime.new_thread_id()
     config = graph_runtime.config_for(thread_id)
     inputs = build_inputs(profile, query=req.query, session_id=req.session_id,
-                          thread_id=thread_id)
+                          thread_id=thread_id, athlete_key=req.athlete_key)
     try:
         state = graph_runtime.graph.invoke(inputs, config)
     except GoalConsistencyError as exc:
@@ -576,7 +820,7 @@ def generate_plan_v2_stream(req: PlanRequest):
     thread_id = graph_runtime.new_thread_id()
     config = graph_runtime.config_for(thread_id)
     inputs = build_inputs(profile, query=req.query, session_id=req.session_id,
-                          thread_id=thread_id)
+                          thread_id=thread_id, athlete_key=req.athlete_key)
     return StreamingResponse(
         _stream_events(graph_stream_events(graph_runtime, inputs, config)),
         media_type="text/event-stream", headers=STREAM_HEADERS,

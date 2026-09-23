@@ -12,7 +12,7 @@ async def client(monkeypatch):
     from app import server
 
     class FakeOrchestrator:
-        def generate_plan_stream(self, *args):
+        def generate_plan_stream(self, *args, **kwargs):
             yield "stage", "offline"
             yield "done", {"success": True}
 

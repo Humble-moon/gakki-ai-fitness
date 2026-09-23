@@ -11,7 +11,8 @@ from src.core.goal_contract import GoalConsistencyError
 from src.llm.provider import LLMUnavailableError
 
 
-def build_inputs(profile, query: str = "", session_id=None, thread_id: str = "") -> dict:
+def build_inputs(profile, query: str = "", session_id=None, thread_id: str = "",
+                 athlete_key: str | None = None) -> dict:
     """Build the initial state dict handed to ``graph.invoke``/``graph.stream``."""
     profile_dict = profile.model_dump() if hasattr(profile, "model_dump") else dict(profile)
     return {
@@ -19,6 +20,7 @@ def build_inputs(profile, query: str = "", session_id=None, thread_id: str = "")
         "query": query or "",
         "session_id": session_id,
         "thread_id": thread_id,
+        "athlete_key": athlete_key,
     }
 
 

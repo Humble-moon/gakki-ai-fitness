@@ -26,10 +26,12 @@ class CoachState(TypedDict, total=False):
     expected_goal: str            # canonical goal from validate_requested_goal
     session_id: str | None        # enables multi-turn context when present
     thread_id: str                # LangGraph thread id, echoed into review payloads
+    athlete_key: str | None       # stable athlete id; drives training-history lookup
 
     # ---- Context (populated by ``ingest`` when a session is active) ----
     conv_context: str             # sliding-window + summarized conversation context
     plan_context: str             # summary of a previously delivered plan
+    training_context: str         # training execution history + confirmed adjustments
 
     # ---- Pipeline artifacts ----
     cache_hit: dict | None        # safe cached plan, or None on miss

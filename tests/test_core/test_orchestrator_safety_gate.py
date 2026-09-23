@@ -220,8 +220,8 @@ def test_sync_generation_raises_after_goal_mismatch_rewrite_budget():
     orch.retriever = SimpleNamespace(retrieve=lambda plan: {"exercises": []})
     orch.bus = SimpleNamespace(send=lambda task: None)
     mismatched = valid_plan() | {"goal": "增肌"}
-    orch.writer = SimpleNamespace(write_plan=lambda *args: mismatched,
-                                  rewrite_plan=lambda *args: mismatched)
+    orch.writer = SimpleNamespace(write_plan=lambda *args, **kwargs: mismatched,
+                                  rewrite_plan=lambda *args, **kwargs: mismatched)
     orch.fact_checker = SimpleNamespace(check=lambda *args: safe_check())
     profile = SimpleNamespace(model_dump=lambda: {"goal": "减脂"}, goal="减脂")
 
@@ -243,7 +243,7 @@ def test_stream_generation_emits_only_goal_error_after_rewrite_budget():
     orch.writer = SimpleNamespace(
         llm=SimpleNamespace(chat_stream=lambda *args, **kwargs: iter(["建议"])),
         write_plan_stream=lambda *args, **kwargs: iter([("done", mismatched)]),
-        rewrite_plan=lambda *args: mismatched,
+        rewrite_plan=lambda *args, **kwargs: mismatched,
     )
     orch.fact_checker = SimpleNamespace(check=lambda *args: safe_check())
     persisted = []
@@ -263,8 +263,8 @@ def test_degraded_fact_check_including_rewrite_cannot_authorize_persistence():
     orch.retriever = SimpleNamespace(retrieve=lambda plan: {"exercises": []})
     orch.bus = SimpleNamespace(send=lambda task: None)
     orch.writer = SimpleNamespace(
-        write_plan=lambda *args: valid_plan(),
-        rewrite_plan=lambda *args: valid_plan(),
+        write_plan=lambda *args, **kwargs: valid_plan(),
+        rewrite_plan=lambda *args, **kwargs: valid_plan(),
     )
     checks = iter([
         safe_check(is_safe=False, issues=[{"issue": "rewrite"}], _degraded=True),

@@ -43,7 +43,8 @@ class PlannerAgent:
         self.skills = SkillRegistry()
 
     def plan(self, user_input: str, profile: dict,
-             conv_context: str = "", plan_context: str = "") -> dict:
+             conv_context: str = "", plan_context: str = "",
+             training_context: str = "") -> dict:
         """LLM 驱动的规划 + 安全闸门校验。
 
         流程:
@@ -51,6 +52,11 @@ class PlannerAgent:
             2. 关键词层始终运行 → 安全词命中则覆盖 LLM 结果
             3. LLM 返回无效 skill → 关键词匹配兜底
             4. 从 SkillRegistry 加载 skill 配置
+
+        参数：
+            training_context: str — 训练执行历史与已确认调整。提供给 Planner 是
+                为了让拆解任务时就考虑到实际执行情况（例如某部位长期没练完，
+                不该继续按原量拆解）。
         """
         skill_descriptions = self.skills.describe_all()
         messages = build_planner_messages(
@@ -58,6 +64,7 @@ class PlannerAgent:
             skill_descriptions=skill_descriptions,
             conv_context=conv_context,
             plan_context=plan_context,
+            training_context=training_context,
         )
         plan = self.llm.chat_with_json_mode(messages)
 

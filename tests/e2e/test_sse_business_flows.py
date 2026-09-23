@@ -16,7 +16,7 @@ async def client(monkeypatch):
     from app import server
 
     class FakeOrchestrator:
-        def generate_plan_stream(self, *args):
+        def generate_plan_stream(self, *args, **kwargs):
             yield "stage", "plan"
             yield "done", {"success": True}
 
@@ -54,7 +54,7 @@ async def test_eof_without_terminal_is_not_success(client, monkeypatch):
     from app import server
 
     class Incomplete:
-        def generate_plan_stream(self, *args):
+        def generate_plan_stream(self, *args, **kwargs):
             yield "stage", "started"
 
         analyze_exercise_stream = generate_plan_stream

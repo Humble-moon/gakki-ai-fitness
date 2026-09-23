@@ -37,6 +37,7 @@ from src.storage.document_store import DocumentStore
 from src.agents.output_validation import validate_training_plan, OutputValidationError
 from src.core import plan_finalization
 from src.core.goal_contract import GoalConsistencyError, plan_goal_issue, plan_goal_matches, validate_requested_goal
+from src.core.plan_explanation import build_explanation
 from src.core.qa_agent import answer_with_agent_loop
 from src.core.qa_safety import (
     SAFETY_NOTE,
@@ -110,7 +111,8 @@ class Orchestrator:
             self.cache, self.conversation, self.long_term,
             profile, query, result, session_id)
 
-    def generate_plan(self, profile: UserProfileInput, query: str = "") -> dict:
+    def generate_plan(self, profile: UserProfileInput, query: str = "",
+                      athlete_key: str | None = None) -> dict:
         """Generate and finalize a training plan synchronously."""
         profile_dict = profile.model_dump()
         expected_goal = validate_requested_goal(profile_dict.get("goal"))
@@ -119,8 +121,12 @@ class Orchestrator:
             logger.info("Cache hit for plan generation")
             return cached
 
+        # 训练历史上下文：放在缓存判断之后计算，命中缓存时不必白查一次数据库
+        training_context = self._training_context(athlete_key)
+
         # 2. 规划器 —— 如果没有 query，用用户目标构造默认查询
-        plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict)
+        plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict,
+                                 training_context=training_context)
         provider_degraded = False
 
         # 3. 检索器 —— 根据 Planner 产出的子任务逐条检索动作数据
@@ -137,7 +143,8 @@ class Orchestrator:
         )
         self.bus.send(task)
         result = self.writer.write_plan(
-            retrieved, profile_dict, plan.get("skill_config", {})
+            retrieved, profile_dict, plan.get("skill_config", {}),
+            training_context=training_context,
         )
         result = self._normalize_plan(
             result, profile=profile_dict, plan_config=plan.get("skill_config", {})
@@ -182,12 +189,13 @@ class Orchestrator:
                                        expected_goal=expected_goal)
         if not plan_goal_matches(result, expected_goal):
             raise GoalConsistencyError("训练计划目标与用户目标不一致")
+        result["explain"] = build_explanation(plan, retrieved, result)
         self._persist_if_safe(profile_dict, query, result)
         task.complete()
         return self._review_pending_result(profile_dict, query, result)
 
     def generate_plan_stream(self, profile: UserProfileInput, query: str = "",
-                             session_id: str = None):
+                             session_id: str = None, athlete_key: str | None = None):
         """Stream a plan and persist only after final validation."""
 
         profile_dict = profile.model_dump()
@@ -208,6 +216,9 @@ class Orchestrator:
                 yield ("cache_hit", cached)
                 yield ("done", cached)
                 return
+
+        # 训练历史上下文：与同步版走同一条注入路径（planner + writer）
+        training_context = self._training_context(athlete_key)
 
         yield ("stage", "[分析] 正在分析你的情况...")
         advice_context = ""
@@ -231,7 +242,8 @@ class Orchestrator:
 
         yield ("stage", "[规划] Planner 正在拆解任务...")
         plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict,
-                                 conv_context=conv_context, plan_context=plan_context)
+                                 conv_context=conv_context, plan_context=plan_context,
+                                 training_context=training_context)
         yield ("planner_done", {"skill": plan.get("skill", "unknown"), "subtasks": plan.get("subtasks", [])})
         yield ("stage", "[检索] Retriever 正在检索动作库...")
         retrieved = self.retriever.retrieve(plan)
@@ -243,6 +255,7 @@ class Orchestrator:
         for event, data in self.writer.write_plan_stream(
             retrieved, profile_dict, plan.get("skill_config", {}),
             plan_context=plan_context, user_query=query,
+            training_context=training_context,
         ):
             if event == "chunk":
                 full_text += data
@@ -284,6 +297,7 @@ class Orchestrator:
         if not plan_goal_matches(result, expected_goal):
             yield ("error", {"code": GoalConsistencyError.code, "message": "训练计划目标校验失败，请重试"})
             return
+        result["explain"] = build_explanation(plan, retrieved, result)
         self._persist_if_safe(profile_dict, query, result, session_id=session_id)
         yield ("done", self._review_pending_result(profile_dict, query, result))
 
@@ -687,6 +701,19 @@ class Orchestrator:
     def _make_user_key(profile: dict) -> int:
         """用身体数据组合生成伪用户 ID，无认证场景下的跨会话标识。"""
         return plan_finalization.make_user_key(profile)
+
+    @staticmethod
+    def _training_context(athlete_key: str | None) -> str:
+        """取该运动员的训练历史上下文，用于注入生成 Prompt。
+
+        与 _make_user_key 一样是薄包装：真正的组装（读日志 → 聚合 → 渲染）
+        在 training_history.build_training_context()，手写编排与 LangGraph 编排
+        调用的是同一个函数，两个后端因此不可能漂移。
+
+        任何异常或无数据都返回空串——训练历史是生成质量的增强项，不是必需项。
+        """
+        from src.core.training_history import build_training_context
+        return build_training_context(athlete_key)
 
     def _summarize_plan_for_context(self, plan: dict) -> str:
         """【私有方法】从训练计划提取摘要，供多轮对话的 plan_state 存储。"""

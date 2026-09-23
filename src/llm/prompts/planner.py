@@ -53,7 +53,8 @@ PLANNER_SYSTEM = """你是健身训练计划编排专家。根据用户的身体
 
 def build_planner_messages(user_input: str, profile: dict,
                           skill_descriptions: str = "",
-                          conv_context: str = "", plan_context: str = "") -> list:
+                          conv_context: str = "", plan_context: str = "",
+                          training_context: str = "") -> list:
     """
     构造发送给 Planner Agent 的消息列表。
 
@@ -63,6 +64,7 @@ def build_planner_messages(user_input: str, profile: dict,
         skill_descriptions: str - 可用技能描述文本（来自 SkillRegistry.describe_all()）
         conv_context: str      - 多轮对话历史上下文（可选）
         plan_context: str      - 上一轮训练计划摘要（可选）
+        training_context: str  - 训练执行历史与已确认调整（可选）
 
     返回值：
         list - OpenAI 格式的 messages 列表
@@ -73,6 +75,8 @@ def build_planner_messages(user_input: str, profile: dict,
         user_msg = f"{conv_context}\n\n{user_msg}"
     if plan_context:
         user_msg += f"\n\n【当前训练计划（用户可能要修改它）】\n{plan_context}"
+    if training_context:
+        user_msg += f"\n\n【该用户的训练执行情况】\n{training_context}"
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": user_msg}
