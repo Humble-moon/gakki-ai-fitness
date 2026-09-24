@@ -165,12 +165,29 @@ def rewrite_node(deps, state: dict) -> dict:
             "provider_degraded": provider_degraded}
 
 
+def _known_library_names(deps) -> set | None:
+    """动作库名单，供 finalize_result 校验库外动作名。
+
+    取不到时返回 None——``collect_unknown_exercises`` 对 None 返回空列表即跳过
+    该校验。动作库不可用不应让整条生成流程失败（校验是增强而非必需），
+    测试用的 SimpleNamespace 伪造 deps 也不带这个能力。
+    """
+    getter = getattr(deps, "library_exercise_names_fn", None)
+    if not callable(getter):
+        return None
+    try:
+        return getter()
+    except Exception:  # noqa: BLE001 - 增强校验失败不应中断生成
+        return None
+
+
 def finalize_node(deps, state: dict) -> dict:
     result = finalize_result(
         state.get("result") or {}, state.get("checks") or [],
         state.get("rewrite_count", 0),
         provider_degraded=state.get("provider_degraded", False),
-        expected_goal=state.get("expected_goal"))
+        expected_goal=state.get("expected_goal"),
+        known_exercise_names=_known_library_names(deps))
     if not plan_goal_matches(result, state.get("expected_goal")):
         raise GoalConsistencyError("训练计划目标与用户目标不一致")
     # 与手写编排器共用同一个构建函数，两后端的解释块因此不会漂移

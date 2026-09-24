@@ -136,12 +136,27 @@ class _ExerciseQuery:
         conditions = ["1=1"]
         params = {"limit": limit}
 
+        # target_muscles 是 json 列（内容形如 ["胸大肌","三角肌前束"]），
+        # 不能直接 ILIKE：PostgreSQL 没有 json ~~* unknown 这个操作符，
+        # 一写 ILIKE 整条 SQL 就报错，然后**静默降级到只有 3 条演示数据的
+        # FALLBACK_EXERCISES**——实测 search_by_muscle("胸") 只返回 1 条、
+        # "臀" 只匹配到演示数据里的那一条。而且因为 query 分支把
+        # name 与 target_muscles 写在同一个 OR 里，整条查询失效会连带
+        # 把按名称搜索也一起打坏。
+        #
+        # 正确做法是先 ::jsonb 再展开数组元素逐个比较，这样既避开了类型
+        # 错误，也能正确处理列里存的是 JSON 转义形式（"胸大肌"）
+        # 而不是字面中文的情况——展开后会被还原成真正的"胸大肌"。
+        _MUSCLE_MATCH = (
+            "EXISTS (SELECT 1 FROM jsonb_array_elements_text(target_muscles::jsonb) AS m "
+            "WHERE m ILIKE :{param})"
+        )
         if query:
-            conditions.append("(name ILIKE :q1 OR target_muscles ILIKE :q2)")
+            conditions.append(f"(name ILIKE :q1 OR {_MUSCLE_MATCH.format(param='q2')})")
             params["q1"] = f"%{query}%"
             params["q2"] = f"%{query}%"
         if muscle:
-            conditions.append("target_muscles ILIKE :muscle")
+            conditions.append(_MUSCLE_MATCH.format(param="muscle"))
             params["muscle"] = f"%{muscle}%"
         if equipment:
             conditions.append("equipment ILIKE :equipment")

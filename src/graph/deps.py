@@ -26,6 +26,10 @@ class CoachGraphDeps:
     review_store: object
     resolutions: InMemoryReviewResolutionStore
     thread_index: ReviewThreadIndex
+    #: 可调用对象，返回动作库全部动作名（懒求值——首次调用时才查库）。
+    #: 传 None 表示该能力不可用，此时 finalize_node 跳过动作库校验，
+    #: 而不是把图跑挂。测试用 SimpleNamespace 伪造 deps 时通常不带该字段。
+    library_exercise_names_fn: object = None
 
 
 def deps_from_orchestrator(orch, resolutions: InMemoryReviewResolutionStore,
@@ -47,4 +51,7 @@ def deps_from_orchestrator(orch, resolutions: InMemoryReviewResolutionStore,
         review_store=orch.review_store,
         resolutions=resolutions,
         thread_index=thread_index,
+        # 绑定方法而非预求值：动作库查询推迟到首次真正用到时，
+        # 避免启动期数据库未就绪就把空集合缓存住。
+        library_exercise_names_fn=getattr(orch, "_library_exercise_names", None),
     )

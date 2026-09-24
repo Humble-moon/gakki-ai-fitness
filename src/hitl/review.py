@@ -377,10 +377,24 @@ class HITLReview:
                 suggestions=[i["issue"] for i in issues]
             )
 
+        # === 警告级提示：不阻断交付 ===
+        #
+        # 这里曾经是 needs_review=True，后果是**所有计划都被扣下**：LLM 检查器
+        # 几乎总给出若干条建议性提示（"新手注意恢复""下肢训练量接近上限"），
+        # 极少返回空 issues，于是连无伤病、无冲突的健康用户也一律进审核队列。
+        # 而本项目的 HITL 只实现了机制、没有定义"审核人"这个角色，
+        # 于是形成死锁——用户永远拿不到计划，也没人来审核。
+        #
+        # 这与交付闸门在 finalize_result 里的判据也是对齐的：那里决定
+        # requires_review 的是 is_safe，issues 只作为 warnings 展示。
+        #
+        # 拦截能力没有变薄——上面三层（规则引擎冲突、语义伤病匹配、
+        # 低置信度或 danger）全部保持阻断，warning 只是"可以更好"，
+        # 不是"可能有害"。
         if has_warning:
             return ReviewDecision(
-                needs_review=True,
-                reason="存在需要确认的警告项",
+                needs_review=False,
+                reason="",
                 severity="warning",
                 suggestions=[i["issue"] for i in issues]
             )

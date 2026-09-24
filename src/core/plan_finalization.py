@@ -12,6 +12,8 @@ they can be unit-tested with simple stand-ins and reused without constructing a
 full ``Orchestrator``.
 """
 
+import re
+
 from src.agents.output_validation import OutputValidationError, validate_training_plan
 from src.core.goal_contract import (
     plan_goal_issue,
@@ -92,21 +94,66 @@ def normalize_plan(result: dict, *, profile: dict | None = None,
     return result
 
 
+#: 括号补充说明，如「保加利亚分腿蹲（扶支撑）」「上斜哑铃弯举（肱肌专注）」。
+#: 中英文括号都算——库里两种写法都有。
+_PAREN_NOTE = re.compile(r"[(（][^)）]*[)）]")
+
+#: 常见的姿势/支撑类修饰词。它们加在动作名前只改变执行细节，
+#: 不构成一个新动作——库里的基线名通常不带这些前缀。
+_MODIFIER_PREFIXES = (
+    "站姿", "坐姿", "跪姿", "俯卧", "仰卧", "平躺", "靠墙", "地面", "地板",
+    "单臂", "双臂", "单手", "双手", "单腿", "双腿", "负重", "自重", "徒手",
+    "上斜", "下斜", "坐姿", "扶墙",
+)
+
+
+def normalize_exercise_name(name: str) -> str:
+    """把动作名归一化到"基线名"，用于与动作库比较。
+
+    只做两件保守的事：去掉括号补充说明、剥掉姿势类修饰前缀。
+    目的不是模糊匹配，而是把「同一个动作的说法差异」与「根本不存在的
+    动作」分开——前者不该阻断交付，后者才该。
+
+    实测依据：`保加利亚分腿蹲（扶支撑）`／`站姿哑铃弯举`／`地面哑铃飞鸟`
+    这类名字精确匹配库时为 0，但它们显然指向库里真实存在的
+    `保加利亚分腿蹲`／`哑铃弯举`／`哑铃飞鸟`。若一律当作编造动作送审，
+    会把正常计划全部扣下。
+
+    而归一化对真正的词素拼接无效：`慢离心哑铃地板卧推`（`慢离心卧推` +
+    `哑铃地板卧推` 拼接而成）剥掉修饰前缀后不变，仍然落在库外——
+    要抓的正是这种。
+    """
+    if not name:
+        return ""
+    normalized = _PAREN_NOTE.sub("", name).strip()
+    # 只剥一层前缀：库里的基线名本身可能以这些词开头（如"单臂哑铃卧推"），
+    # 多剥会把真实名字剥坏。循环一次即可覆盖"站姿哑铃弯举"这类单层修饰。
+    for prefix in _MODIFIER_PREFIXES:
+        if normalized.startswith(prefix) and len(normalized) > len(prefix):
+            normalized = normalized[len(prefix):]
+            break
+    return normalized
+
+
 def collect_unknown_exercises(result: dict, known_names) -> list[str]:
     """找出计划中不在动作库里的动作名（保持出现顺序，去重）。
 
     为什么需要这道校验：重写回路只做键名归一，**不校验动作名是否存在**。
     实测中首轮计划的动作名都是真的（哑铃卧推等），
-    但重写 3 轮后出现了「俯卧地板单臂哑铃划船」这类库里查不到的名字——
-    它们不是凭空编造，而是由真实动作名词素重组而成
-    （哑铃单臂划船 + 俯卧地板），因此比纯幻觉更难被人工发现。
+    但重写 3 轮后出现了「慢离心哑铃地板卧推」这类库里查不到的名字——
+    它们不是凭空编造，而是由真实动作名词素拼接而成，比纯幻觉更难发现。
+
+    **比较前先做名称归一化**（见 :func:`normalize_exercise_name`）：
+    否则「保加利亚分腿蹲（扶支撑）」这种"同一动作的另一种写法"会被误判为
+    编造动作，把正常计划全扣下。库内名同样归一化后建索引，保证两侧口径一致。
 
     依赖显式传入 ``known_names`` 而非在此查库：本模块是纯函数模块，
     不做 IO（见模块 docstring）。
     """
     if not known_names:
         return []
-    known = known_names if isinstance(known_names, (set, frozenset)) else set(known_names)
+    raw = known_names if isinstance(known_names, (set, frozenset)) else set(known_names)
+    known = {normalize_exercise_name(n) for n in raw} | set(raw)
     unknown: list[str] = []
     seen: set[str] = set()
     for day in result.get("days") or []:
@@ -119,7 +166,7 @@ def collect_unknown_exercises(result: dict, known_names) -> list[str]:
             if not name or name in seen:
                 continue
             seen.add(name)
-            if name not in known:
+            if name not in known and normalize_exercise_name(name) not in known:
                 unknown.append(name)
     return unknown
 
@@ -176,32 +223,41 @@ def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
     # 只看最终轮是安全的：计划层面的问题（某动作与伤病冲突）被重写改掉后，最后一轮
     # 自然不再报；查询层面的问题（用户问的就是危险动作）不随重写改变，最后一轮依然
     # 会报。两种情况的拦截能力都不受影响。
-    # 动作库校验：库外动作名是**确定性证据**，不依赖 LLM 检查器的主观判断。
-    # 命中即送审——一个含库里不存在动作的计划，无论 LLM 怎么说"安全"都不能直接交付。
+    # 动作库校验：库外动作名——**只提示，不阻断交付**。
+    #
+    # 曾经这里是强制送审（requires_review=True），实测证明那是错的：
+    # 无伤病健康用户的正常计划被扣下两次，理由分别是"5 个动作库中不存在"
+    # 与"6 个动作库中不存在"，而被点名的都是 「保加利亚分腿蹲（扶支撑）」
+    # 「地面哑铃飞鸟」这类**同一动作的另一种写法**，以及 「帕洛夫推」这类
+    # **真实存在、只是本库未收录**的动作。
+    #
+    # 更根本的原因是：LLM 生成的计划本来就不会严格只用库内动作名，
+    # 强制送审等于 100% 的计划都交付不出去（而本项目的 HITL 又没有
+    # 定义"审核人"角色，形成死锁）。
+    #
+    # 定位修正：库外动作是"值得让用户知道"，不是"可能有害"。真正的安全
+    # 拦截保持不变——伤病冲突、danger 级建议、低置信度仍然阻断。
     unknown_exercises = collect_unknown_exercises(result, known_exercise_names)
     if unknown_exercises:
-        warnings = warnings + [f"动作「{name}」不在动作库中" for name in unknown_exercises]
+        warnings = warnings + [
+            f"动作「{name}」不在动作库中，请确认动作名称是否正确" for name in unknown_exercises
+        ]
 
     requires_review = final.get("requires_human_review") is True
     confidence = final.get("confidence")
     confidence_valid = isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
-    has_unknown = bool(unknown_exercises)
     result.update({"warnings": warnings, "active_issues": active_issues,
                    "resolved_issues": resolved_issues,
                    "unknown_exercises": unknown_exercises,
-                   "requires_review": requires_review or not checks or not is_safe or has_unknown,
-                   "review_reason": final.get("review_reason", "") or (
-                       f"计划包含 {len(unknown_exercises)} 个动作库中不存在的动作，需人工确认"
-                       if has_unknown else ""
-                   ),
-                   "review_severity": final.get("review_severity", "") or ("danger" if has_unknown else ""),
+                   "requires_review": requires_review or not checks or not is_safe,
+                   "review_reason": final.get("review_reason", ""),
+                   "review_severity": final.get("review_severity", ""),
                    "review_suggestions": list(final.get("review_suggestions") or []),
                    "confidence": confidence if confidence_valid else 0,
                    "rewrite_count": rewrite_count})
     goal_matches = expected_goal is None or plan_goal_matches(result, expected_goal)
     result["_persistence_allowed"] = bool(schema_valid and is_safe and issues_empty and not requires_review
-        and confidence_valid and goal_matches and not provider_degraded and not result.get("_degraded", False)
-        and not has_unknown)
+        and confidence_valid and goal_matches and not provider_degraded and not result.get("_degraded", False))
     return result
 
 

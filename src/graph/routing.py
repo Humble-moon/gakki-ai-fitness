@@ -14,15 +14,19 @@ def route_after_cache(state: dict) -> str:
 
 
 def route_after_check(state: dict) -> str:
-    """Drive the rewrite loop; verbatim equivalent to the legacy while-condition.
+    """Drive the rewrite loop; equivalent to the legacy while-condition.
 
-    Legacy: ``while (not check.is_safe or check.issues) and rewrite_count < 3``.
-    Here we finalize when the plan is clean OR the rewrite budget is exhausted;
-    otherwise we loop back through ``rewrite``.
+    Legacy (current): ``while not check.is_safe and rewrite_count < 3``.
+    An earlier version also looped on non-empty ``issues``; that was dropped
+    because the LLM checker essentially never returns an empty issue list
+    (advisory notes only), so the loop ran to the budget every time while
+    changing nothing about delivery — see the comment in
+    ``Orchestrator.generate_plan_stream``. Keep this condition in sync with the
+    legacy orchestrator: the two backends are meant to behave equivalently so
+    the paper's line-count comparison stays fair.
     """
     check = state.get("latest_check") or {}
-    clean = check.get("is_safe", True) and not check.get("issues")
-    if clean or state.get("rewrite_count", 0) >= MAX_REWRITES:
+    if check.get("is_safe", True) or state.get("rewrite_count", 0) >= MAX_REWRITES:
         return "finalize"
     return "rewrite"
 

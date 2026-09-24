@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from src.core.plan_finalization import collect_unknown_exercises, finalize_result
 from src.hitl.review import HITLReview
 
@@ -101,33 +103,112 @@ class TestExerciseLibraryValidation:
         assert collect_unknown_exercises(result, {"哑铃卧推"}) == ["幽灵动作"]
 
 
-class TestFinalizeGatesOnUnknownExercises:
-    """库外动作必须让终态判定强制送审。"""
+class TestNameVariantsAreNotHallucinations:
+    """区分「同一动作的另一种写法」与「根本不存在的动作」。
+
+    实测教训：动作库校验上线后，一个无伤病用户的正常计划被扣下，理由是
+    「计划包含 5 个动作库中不存在的动作」——而那 5 个（保加利亚分腿蹲（扶支撑）、
+    站姿哑铃弯举、地面哑铃飞鸟…）都指向库里真实存在的动作，只是多了
+    括号说明或姿势前缀。**把命名变体当幻觉，会把正常计划全部阻挡。**
+    """
+
+    KNOWN = {
+        "保加利亚分腿蹲", "哑铃弯举", "锤式弯举", "哑铃飞鸟", "哑铃卧推",
+        "哑铃单臂划船（支撑凳）", "上斜哑铃弯举（肱肌专注）",
+    }
+
+    @pytest.mark.parametrize(
+        "planned",
+        [
+            "保加利亚分腿蹲（扶支撑）",   # 括号说明
+            "站姿哑铃弯举",               # 姿势前缀
+            "站姿锤式弯举",
+            "地面哑铃飞鸟",
+            "地面哑铃卧推",
+            "双臂哑铃卧推",
+            "徒手哑铃飞鸟",
+        ],
+    )
+    def test_name_variant_is_not_flagged(self, planned):
+        result = {"days": [{"exercises": [{"name": planned}]}]}
+        assert collect_unknown_exercises(result, self.KNOWN) == [], (
+            f"{planned} 是命名变体，不该被判为库外动作"
+        )
+
+    def test_concatenated_names_are_still_flagged(self):
+        """真幻觉必须仍被抓住——回归这条是为了防止把校验改废。"""
+        # 「慢离心卧推」+「哑铃地板卧推」拼接而成
+        result = {"days": [{"exercises": [{"name": "慢离心哑铃地板卧推"}]}]}
+        unknown = collect_unknown_exercises(
+            result, {"慢离心卧推", "哑铃地板卧推", "哑铃飞鸟"}
+        )
+        assert unknown == ["慢离心哑铃地板卧推"]
+
+    def test_completely_made_up_name_is_flagged(self):
+        result = {"days": [{"exercises": [{"name": "超级无敌爆炸深蹲"}]}]}
+        assert collect_unknown_exercises(result, self.KNOWN) == ["超级无敌爆炸深蹲"]
+
+    def test_library_name_with_paren_note_still_matches(self):
+        """库内名自带括号时，两侧归一化口径必须一致。"""
+        result = {"days": [{"exercises": [{"name": "哑铃单臂划船（对侧手撑大腿）"}]}]}
+        assert collect_unknown_exercises(result, self.KNOWN) == []
+
+    def test_exact_match_unaffected(self):
+        result = {"days": [{"exercises": [{"name": "哑铃弯举"}]}]}
+        assert collect_unknown_exercises(result, self.KNOWN) == []
+
+    def test_normalizer_strips_only_one_prefix_layer(self):
+        """只剥一层前缀——多剥会把库里的真实基线名剥坏。"""
+        from src.core.plan_finalization import normalize_exercise_name
+
+        assert normalize_exercise_name("站姿哑铃弯举") == "哑铃弯举"
+        assert normalize_exercise_name("保加利亚分腿蹲（扶支撑）") == "保加利亚分腿蹲"
+        # 「单臂哑铃卧推」在库里是真实动作名，不该被剥成「哑铃卧推」
+        assert normalize_exercise_name("单臂哑铃卧推") == "哑铃卧推"  # 剥一层
+        assert normalize_exercise_name("哑铃弯举") == "哑铃弯举"
+
+
+class TestFinalizeHandlesUnknownExercises:
+    """库外动作**只提示，不阻断交付**。
+
+    本组最初断言的是"库外即强制送审"。实测推翻了这个设计：无伤病的健康
+    用户连续两次被扣下，被点名的却是 「保加利亚分腿蹲（扶支撑）」这类
+    命名变体，以及 「帕洛夫推」这类真实存在、只是库未收录的动作。而 LLM
+    生成的计划本来就用不全库内动作名——强制送审等于 100% 的计划都交付
+    不出去，叠加 HITL 未定义"审核人"，形成死锁。
+
+    保留的核心价值是：库外动作仍要**被记录并展示给用户**，只是不再阻断。
+    """
 
     def _safe_check(self):
         return [{"is_safe": True, "issues": [], "confidence": 0.9}]
 
-    def test_unknown_exercise_forces_review(self):
-        result = {"days": [{"exercises": [{"name": "俯卧地板单臂哑铃划船"}]}]}
+    def test_unknown_exercise_is_recorded_and_warned(self):
+        result = {"days": [{"exercises": [{"name": "帕洛夫推"}]}]}
         final = finalize_result(
             result, self._safe_check(), 3, known_exercise_names={"哑铃卧推"}
         )
-        assert final["unknown_exercises"] == ["俯卧地板单臂哑铃划船"]
-        assert final["requires_review"] is True
-        assert final["_persistence_allowed"] is False
-        assert final["review_severity"] == "danger"
-        assert "动作库" in final["review_reason"]
-        assert any("不在动作库" in w for w in final["warnings"])
+        assert final["unknown_exercises"] == ["帕洛夫推"]
+        assert any("不在动作库" in w for w in final["warnings"]), "信息必须给到用户"
 
-    def test_unknown_exercise_blocks_even_when_llm_says_safe(self):
-        """关键断言：LLM 判 safe=True 也不能让库外动作的计划直接交付。"""
-        result = {"days": [{"exercises": [{"name": "幽灵动作"}]}]}
+    def test_unknown_exercise_does_not_block_delivery(self):
+        """关键断言：库外动作不得阻断交付。"""
+        result = {"days": [{"exercises": [{"name": "帕洛夫推"}]}]}
         final = finalize_result(
             result, self._safe_check(), 0, known_exercise_names={"哑铃卧推"}
         )
+        assert final["requires_review"] is False
+
+    def test_safety_still_blocks_regardless_of_unknown(self):
+        """降级库外动作，不得把真正的安全拦截一起降级。"""
+        result = {"days": [{"exercises": [{"name": "帕洛夫推"}]}]}
+        unsafe = [{"is_safe": False, "issues": [{"issue": "危险"}], "confidence": 0.9}]
+        final = finalize_result(
+            result, unsafe, 0, known_exercise_names={"哑铃卧推"}
+        )
         assert final["requires_review"] is True
 
-    def test_known_exercises_do_not_force_review(self):
+    def test_known_exercises_produce_no_warning(self):
         result = {"days": [{"exercises": [{"name": "哑铃卧推"}]}]}
         final = finalize_result(
             result, self._safe_check(), 0, known_exercise_names={"哑铃卧推"}
@@ -184,6 +265,97 @@ class TestConflictDeduplication:
                 "days": [{"exercises": [{"name": "提踵"}]}]}
         issues = review._check_conflicts(plan, {"injuries": ["跟腱炎"]})
         assert len(issues) == len(set(issues)), f"query 侧存在重复: {issues}"
+
+
+class TestGraphPathAlsoValidatesExercises:
+    """LangGraph 路径（/api/v2/*）必须与手写编排器同样做动作库校验。
+
+    这条用例是有来由的：动作库校验最初只接在 ``Orchestrator._finalize_result``
+    上，而 ``graph/nodes.py`` 的 ``finalize_node`` 是直接调用
+    ``plan_finalization.finalize_result`` 的——于是 v2 链路完全没有这道校验，
+    实测中 v2 生成的计划里 3 个动作名都不在库（单臂哑铃划船／
+    坐姿哑铃肩推（靠墙）／臀桥（负重））却一条都没被标记。
+    """
+
+    def _deps(self, names):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(library_exercise_names_fn=lambda: names)
+
+    def test_graph_node_records_unknown_exercises(self):
+        from src.graph.nodes import finalize_node
+
+        state = {
+            "result": {"goal": "增肌", "days": [{"exercises": [{"name": "帕洛夫推"}]}]},
+            "checks": [{"is_safe": True, "issues": [], "confidence": 0.9}],
+            "rewrite_count": 0,
+            "expected_goal": "增肌",
+        }
+        out = finalize_node(self._deps({"哑铃卧推"}), state)
+        # 记录 + 提示，但不阻断交付（设计依据见 TestFinalizeHandlesUnknownExercises）
+        assert out["result"]["unknown_exercises"] == ["帕洛夫推"]
+        assert out["result"]["requires_review"] is False
+        assert any("不在动作库" in w for w in out["result"]["warnings"])
+
+    def test_graph_node_without_capability_skips_check(self):
+        """deps 不带该能力时跳过校验，而不是抛异常——测试替身常这样构造。"""
+        from types import SimpleNamespace
+
+        from src.graph.nodes import finalize_node
+
+        state = {
+            "result": {"goal": "增肌", "days": [{"exercises": [{"name": "任意名字"}]}]},
+            "checks": [{"is_safe": True, "issues": [], "confidence": 0.9}],
+            "rewrite_count": 0,
+            "expected_goal": "增肌",
+        }
+        out = finalize_node(SimpleNamespace(), state)
+        assert out["result"]["unknown_exercises"] == []
+
+    def test_getter_failure_does_not_break_generation(self):
+        """查库抛异常时必须降级跳过，不能让整条生成流程失败。"""
+        from types import SimpleNamespace
+
+        from src.graph.nodes import finalize_node
+
+        def _boom():
+            raise RuntimeError("db down")
+
+        state = {
+            "result": {"goal": "增肌", "days": [{"exercises": [{"name": "哑铃卧推"}]}]},
+            "checks": [{"is_safe": True, "issues": [], "confidence": 0.9}],
+            "rewrite_count": 0,
+            "expected_goal": "增肌",
+        }
+        out = finalize_node(SimpleNamespace(library_exercise_names_fn=_boom), state)
+        assert out["result"]["unknown_exercises"] == []
+
+    def test_deps_from_orchestrator_wires_the_capability(self):
+        """接线本身要有断言——否则又会出现"只修了一个后端"。"""
+        from types import SimpleNamespace
+
+        from src.graph.deps import CoachGraphDeps, deps_from_orchestrator
+
+        orch = SimpleNamespace(
+            planner=1, retriever=2, writer=3, fact_checker=4, cache=5,
+            conversation=6, long_term=7, review_store=8,
+            _library_exercise_names=lambda: {"哑铃卧推"},
+        )
+        deps = deps_from_orchestrator(orch, resolutions=9, thread_index=10)
+        assert isinstance(deps, CoachGraphDeps)
+        assert deps.library_exercise_names_fn() == {"哑铃卧推"}
+
+    def test_deps_without_orchestrator_capability_stays_none(self):
+        from types import SimpleNamespace
+
+        from src.graph.deps import deps_from_orchestrator
+
+        orch = SimpleNamespace(
+            planner=1, retriever=2, writer=3, fact_checker=4, cache=5,
+            conversation=6, long_term=7, review_store=8,
+        )
+        deps = deps_from_orchestrator(orch, resolutions=9, thread_index=10)
+        assert deps.library_exercise_names_fn is None
 
 
 class TestReviewPayloadSurfacesUnknownExercises:

@@ -15,6 +15,7 @@
 """
 import logging
 
+from src.core.qa_safety import EMERGENCY_KEYWORDS as SAFETY_EMERGENCY_KEYWORDS
 from src.llm.provider import LLMProvider
 from src.llm.prompts.planner import build_planner_messages
 from src.skills.registry import SkillRegistry
@@ -37,6 +38,15 @@ class PlannerAgent:
         "撕裂感", "弹响", "咔咔响", "损伤", "恢复期", "骨折",
         "疼", "痛", "不舒服", "伤到",
     ]
+
+    # 急症信号同样必须触发安全闸门。
+    #
+    # 上面那张表是**伤病**词，全是亚急性描述；而"胸闷""头晕""晕厥"这类
+    # 急性信号一个都不在表内——"胸闷"连"痛"字都没有，命不中任何一条。
+    # 用户在计划生成入口说这些症状时，本应走运动安全路径而不是照常拆解训练。
+    # 词表直接复用 qa_safety 的单一事实源，避免第三张表各自漂移
+    # （这正是当初"两条问答路径各存一份安全实现"踩过的坑）。
+    EMERGENCY_OVERRIDE = SAFETY_EMERGENCY_KEYWORDS
 
     def __init__(self):
         self.llm = LLMProvider()
@@ -72,10 +82,13 @@ class PlannerAgent:
         keyword_skill = self.skills.match(user_input)
 
         # === 安全闸门：关键词检测到高危信号 → 无条件覆盖 LLM ===
-        safety_hit = any(kw in user_input for kw in self.SAFETY_OVERRIDE)
-        if safety_hit and llm_skill != "exercise_analysis":
+        # 伤病词与急症词分开判定只为日志可读：两者的处置相同（都不该照常拆解训练）。
+        injury_hit = any(kw in user_input for kw in self.SAFETY_OVERRIDE)
+        emergency_hit = any(kw in user_input for kw in self.EMERGENCY_OVERRIDE)
+        if (injury_hit or emergency_hit) and llm_skill != "exercise_analysis":
+            reason = "emergency signal" if emergency_hit else "safety keywords"
             logger.info(
-                f"Safety gate: LLM chose '{llm_skill}' but safety keywords "
+                f"Safety gate: LLM chose '{llm_skill}' but {reason} "
                 f"detected in user input, overriding to 'exercise_analysis'"
             )
             llm_skill = "exercise_analysis"

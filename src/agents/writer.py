@@ -20,6 +20,7 @@
 import uuid
 import json
 from typing import Generator
+from src.config import REWRITE_MODEL
 from src.llm.provider import LLMProvider
 from src.llm.prompts.writer import build_writer_messages
 
@@ -181,7 +182,16 @@ class WriterAgent:
             {"role": "system", "content": "你是训练计划修正专家。根据安全检查的反馈，修正计划中的问题。"},
             {"role": "user", "content": fix_prompt}
         ]
-        result = self.llm.chat_with_json_mode(messages, model="reasoner")
+        # 用 REWRITE_MODEL 而不是写死 reasoner。
+        #
+        # 重写是"按明确指令改几处"的任务，不是需要长链推理的任务——实测
+        # 用 reasoner 单次重写要 42~58s，是整个计划生成里最慢的一段
+        #（三次重写合计约 120s，占 226s 总时长的一半以上）。
+        #
+        # 换快模型是安全的：**每次重写之后紧跟一次 FactChecker 检查**，
+        # 改得不好会在下一轮被抓出来继续改，安全网没有变薄。
+        # 需要复现旧行为时设 REWRITE_MODEL=deepseek-reasoner 即可。
+        result = self.llm.chat_with_json_mode(messages, model=REWRITE_MODEL)
         result["plan_id"] = original_plan.get("plan_id", str(uuid.uuid4())[:8])
         result["user_id"] = profile.get("id", 0)
         result.setdefault("weeks", original_plan.get("weeks"))

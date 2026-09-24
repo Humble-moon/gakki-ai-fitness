@@ -147,3 +147,36 @@ class TestMessageExclusivity:
         for msg in (build_emergency_messages(), build_safety_messages()):
             assert len(msg) == 1
             assert msg[0]["role"] == "system"
+
+
+class TestPlannerSafetyGate:
+    """Planner 的安全闸门也必须覆盖急症词。
+
+    这是第三张安全词表：`qa_safety` 管问答话术、`review.py` 管规则冲突，
+    而 `PlannerAgent.SAFETY_OVERRIDE` 管**计划生成入口的路由**。它原先同样
+    只有伤病词（间盘/腰突/疼/痛…），"胸闷"连"痛"字都没有，命不中任何一条，
+    于是用户带着急症症状请求生成计划时，系统会照常拆解训练任务。
+    """
+
+    def test_planner_reuses_the_shared_emergency_list(self):
+        """复用单一事实源，避免第三张表各自漂移。"""
+        from src.agents.planner import PlannerAgent
+        from src.core.qa_safety import EMERGENCY_KEYWORDS
+
+        assert set(PlannerAgent.EMERGENCY_OVERRIDE) == set(EMERGENCY_KEYWORDS)
+
+    @pytest.mark.parametrize(
+        "text",
+        ["我训练时胸闷", "最近老头晕", "帮我做个计划，偶尔心悸", "喘不上气怎么练"],
+    )
+    def test_emergency_text_hits_planner_gate(self, text):
+        from src.agents.planner import PlannerAgent
+
+        assert any(kw in text for kw in PlannerAgent.EMERGENCY_OVERRIDE)
+
+    def test_injury_words_still_hit_planner_gate(self):
+        """原有伤病词能力不得因这次改动丢失。"""
+        from src.agents.planner import PlannerAgent
+
+        for text in ["我腰椎间盘突出", "膝盖疼", "半月板损伤", "刚做完手术"]:
+            assert any(kw in text for kw in PlannerAgent.SAFETY_OVERRIDE), text

@@ -259,6 +259,17 @@ def test_hitl_review_danger_issue():
 
 
 def test_hitl_review_warning_issue():
+    """警告级提示不阻断交付，但信息必须保留。
+
+    本断言在 2026-09-24 由「needs_review is True」改为 False。动因是实测
+    发现：LLM 检查器几乎从不返回空 issues，而原逻辑把**任何** warning 都
+    当成送审条件，导致连无伤病、无冲突的健康用户也一律被扣进审核队列。
+    本项目 HITL 只实现了机制、未定义"审核人"角色，于是形成死锁——用户
+    永远拿不到计划，也没人来审核。
+
+    保留 needs_review 之外的断言，是为了确认这次放宽没有把"让用户知道
+    有建议"这件事一起丢掉。
+    """
     review = HITLReview()
     result = review.check({
         "confidence": 0.8,
@@ -266,9 +277,39 @@ def test_hitl_review_warning_issue():
             {"issue": "可能不太适合", "severity": "warning"},
         ]
     })
-    assert result.needs_review is True
+    assert result.needs_review is False
     assert result.severity == "warning"
     assert "可能不太适合" in result.suggestions
+
+
+def test_hitl_review_danger_still_blocks():
+    """放宽 warning 不得把 danger 一起放行——这是本次改动的红线。"""
+    review = HITLReview()
+    result = review.check({
+        "confidence": 0.9,
+        "issues": [{"issue": "该动作会加重腰椎损伤", "severity": "danger"}],
+    })
+    assert result.needs_review is True
+    assert result.severity == "danger"
+
+
+def test_hitl_review_low_confidence_still_blocks():
+    """低置信度仍须送审，不受 warning 解禁影响。"""
+    review = HITLReview()
+    result = review.check({"confidence": 0.5, "issues": []})
+    assert result.needs_review is True
+
+
+def test_hitl_review_injury_conflict_still_blocks():
+    """伤病-动作冲突（规则引擎）仍须送审，且为 danger 级。"""
+    review = HITLReview()
+    plan = {"days": [{"focus": "腿部", "exercises": [{"name": "杠铃硬拉"}]}]}
+    result = review.check(
+        {"confidence": 0.9, "issues": []},
+        plan=plan, profile={"injuries": ["腰椎间盘突出"]},
+    )
+    assert result.needs_review is True
+    assert result.severity == "danger"
 
 
 # ---------- LongTermMemory（使用隔离的测试 Redis DB）----------

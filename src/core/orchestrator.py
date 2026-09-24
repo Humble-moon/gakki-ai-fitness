@@ -319,7 +319,18 @@ class Orchestrator:
         provider_degraded = provider_degraded or bool(check.get("_degraded"))
         all_checks.append(check)
         yield ("factcheck_done", {"safe": check.get("is_safe", True), "issues": len(check.get("issues", [])), "confidence": check.get("confidence", 0)})
-        while (not check.get("is_safe", True) or check.get("issues")) and rewrite_count < 3:
+        # 循环条件只看 is_safe，不再看 issues 是否为空。
+        #
+        # 原条件是 `not is_safe or issues`，但 LLM 检查器几乎总会给出若干条
+        # **建议性**提示（实测四轮为 3/4/2/2 条），issues 极少为空，于是几乎
+        # 每次都跑满 3 轮。实测一轮重写要 20~58s，白跑的轮次直接拖长等待。
+        #
+        # 只看 is_safe 是与**交付闸门对齐**的：finalize_result 里决定
+        # requires_review 的是 is_safe，issues 只作为 warnings 展示给用户、
+        # 或参与缓存判据（_persistence_allowed 要求 issues 清空），
+        # 本身并不阻断交付。所以"安全性已通过但仍有建议"时继续重写，
+        # 换不来交付上的任何差别。
+        while not check.get("is_safe", True) and rewrite_count < 3:
             yield ("stage", f"[修正] 安全检查发现 {len(check.get('issues', []))} 个问题，第 {rewrite_count + 1} 次重写...")
             result = self._normalize_plan(
                 self.writer.rewrite_plan(result, check.get("issues", []), retrieved, profile_dict),

@@ -16,9 +16,15 @@
 ===========================================================================
 """
 
+from concurrent.futures import ThreadPoolExecutor
+
 from src.rag.agentic_rag import AgenticRAG
 from src.mcp.tool_registry import ToolRegistry
 from src.mcp.exercise_server import McpToolError
+
+#: 子任务检索的最大并发数。取 6 是因为 Planner 实测最多产出 6 个子任务，
+#: 正好覆盖而不至于在异常多的子任务时打出过多并发 LLM 请求。
+_SUBTASK_WORKERS = 6
 
 
 class RetrieverAgent:
@@ -73,15 +79,19 @@ class RetrieverAgent:
             filters = {}
 
         # === 路 1：AgenticRAG 语义检索 ===
-        # 对每个子任务逐一检索。AgenticRAG 内部含自校正循环：
+        # 对每个子任务检索。AgenticRAG 内部含自校正循环：
         # 检索 → 评估质量 → 不够好就改写查询 → 再检索，直到满意或达到最大轮次
-        for subtask in subtasks:
-            if route is None:
-                # Preserve the historical call shape for older injected fakes.
-                rag_results = self.agentic_rag.search(subtask, filters=filters)
-            else:
-                rag_results = self.agentic_rag.search(subtask, filters=filters, route=route)
-            results["exercises"].extend(self._valid_rows(rag_results))
+        #
+        # 子任务之间彼此独立，因此并发执行。实测 Planner 为一个计划产出 6 个子
+        # 任务，串行时每个子任务要跑一轮"向量+关键词检索 + LLM 质量评估"，
+        # 合计约 22.8s——这段是计划生成里仅次于重写回路的第二大耗时。
+        #
+        # 并发是安全的：PGClient 用 SQLAlchemy 连接池（每次 fetch 取独立连接），
+        # LLM 客户端基于 httpx，均可跨线程使用。
+        #
+        # 结果按原始顺序汇总：去重逻辑保留"首次出现"的条目，顺序变了输出就变了，
+        # 所以不能用 as_completed 的完成顺序。
+        results["exercises"].extend(self._search_subtasks(subtasks, filters, route))
 
         # Explicit graph/injury routes fail closed; do not supplement them with
         # generic muscle search results when the routed backend returns nothing.
@@ -144,6 +154,36 @@ class RetrieverAgent:
                 parts.extend(vals)
         # Valid but unclassified planner output keeps the historical broad fallback.
         return parts if parts else ["胸", "背", "腿"]
+
+    def _search_subtasks(self, subtasks: list[str], filters: dict, route) -> list[dict]:
+        """并发检索各子任务，按原始顺序汇总结果。
+
+        为什么并发：每个子任务内部要走 AgenticRAG 的自校正循环（含一次 LLM
+        质量评估），串行时 6 个子任务约 22.8s。子任务之间无依赖，并发不改变
+        语义。
+
+        为什么保序：`_deduplicate` 保留"首次出现"的条目，若按完成顺序汇总，
+        先返回的子任务会抢占同名动作的元数据，输出就不可复现了。
+        用 `executor.map` 即可——它按入参顺序返回，与完成先后无关。
+        """
+        if not subtasks:
+            return []
+
+        def _one(subtask: str) -> list[dict]:
+            if route is None:
+                # Preserve the historical call shape for older injected fakes.
+                rag_results = self.agentic_rag.search(subtask, filters=filters)
+            else:
+                rag_results = self.agentic_rag.search(subtask, filters=filters, route=route)
+            return self._valid_rows(rag_results)
+
+        if len(subtasks) == 1:
+            # 单个子任务不值得起线程池——省下池的建立开销。
+            return _one(subtasks[0])
+
+        with ThreadPoolExecutor(max_workers=min(_SUBTASK_WORKERS, len(subtasks))) as pool:
+            # 保持既有失败语义：任一子任务抛错仍然向上传播，不静默吞掉。
+            return [row for rows in pool.map(_one, subtasks) for row in rows]
 
     @staticmethod
     def _valid_rows(rows) -> list[dict]:
