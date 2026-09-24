@@ -39,11 +39,13 @@ async def run() -> dict[str, object]:
             yield "stage", "offline"
             yield "done", {"success": True}
 
-        def analyze_exercise_stream(self, *args):
+        def analyze_exercise_stream(self, *args, **kwargs):
             yield "stage", "offline"
             yield "done", {"success": True}
 
-        def answer_question_stream(self, *args):
+        def answer_question_stream(self, *args, **kwargs):
+            # 用 **kwargs 而非固定签名：这条 E2E 只验证 SSE 链路的形态，
+            # 不关心业务参数。接口新增字段时不该把这条链路一起打断。
             yield "stage", "offline"
             yield "done", {"success": True}
 

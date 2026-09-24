@@ -388,8 +388,19 @@ def summarize_plan_for_context(plan: dict) -> str:
 
 
 def persist_if_safe(cache, conversation, long_term, profile: dict, query: str,
-                    result: dict, session_id: str | None = None) -> bool:
-    """Persist only a fully safe terminal result."""
+                    result: dict, session_id: str | None = None,
+                    athlete_key: str | None = None) -> bool:
+    """Persist only a fully safe terminal result.
+
+    长期记忆的身份用 ``athlete_key``（前端 localStorage 的稳定 UUID），
+    缺失时才退回 ``make_user_key(profile)`` 指纹。原因：后者由身高体重哈希
+    而成，而增肌减脂期体重必然变化，等于每换一次体重就换一个身份——
+    用户会读不到自己先前的偏好，删除数据时也无从定位。
+
+    注意语义缓存**仍然**按 profile 指纹（``cache.set(profile, ...)``）：
+    缓存的语义是"同一份身体数据 + 同一目标命中同一份计划"，用指纹是对的，
+    把它换掉反而会让缓存失效。身份与缓存键是两件事。
+    """
     if not isinstance(result, dict) or result.get("_persistence_allowed") is not True:
         return False
     if not safe_cached_result(result, expected_goal=profile.get("goal")):
@@ -400,8 +411,17 @@ def persist_if_safe(cache, conversation, long_term, profile: dict, query: str,
         conversation.add_turn(session_id, "assistant", summary[:500])
     else:
         cache.set(profile, query, result)
-    pseudo_uid = make_user_key(profile)
-    long_term.save_preference(pseudo_uid, "profile", profile)
-    long_term.save_preference(pseudo_uid, "goal", profile.get("goal", ""))
-    long_term.save_preference(pseudo_uid, "equipment", profile.get("available_equipment", []))
+    user_key = athlete_key or make_user_key(profile)
+    long_term.save_preference(user_key, "profile", profile)
+    long_term.save_preference(user_key, "goal", profile.get("goal", ""))
+    long_term.save_preference(user_key, "equipment", profile.get("available_equipment", []))
     return True
+
+
+def long_term_user_key(profile: dict, athlete_key: str | None = None):
+    """长期记忆的身份键。集中一处，避免读写两侧各算各的而漂移。
+
+    读写必须用同一个键：写用 athlete_key、读用 profile 指纹的话，
+    用户永远读不回自己刚存的偏好。
+    """
+    return athlete_key or make_user_key(profile)

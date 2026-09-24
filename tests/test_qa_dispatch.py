@@ -39,11 +39,34 @@ def _fixed_stream(events):
     """替换固定流水线的假实现，记录它有没有被调用。"""
     calls = []
 
-    def _impl(self, question, profile, session_id=None):
+    def _impl(self, question, profile, session_id=None, athlete_key=None):
         calls.append((question, session_id))
         yield from events
 
     return _impl, calls
+
+
+def test_athlete_key_is_forwarded_to_fixed_pipeline(monkeypatch):
+    """athlete_key 必须一路传到固定流水线。
+
+    长期记忆以 athlete_key 为身份（见 plan_finalization.long_term_user_key）。
+    若在分发层把它丢掉，读取侧就会退回 profile 指纹——用户改一次体重就再也
+    读不回先前的偏好，删除数据时也无从定位。这个参数很容易在加字段时漏传，
+    因此单独钉死。
+    """
+    monkeypatch.delenv("HARNESS_AGENT_LOOP", raising=False)
+    seen = []
+
+    def _impl(self, question, profile, session_id=None, athlete_key=None):
+        seen.append(athlete_key)
+        yield ("stage", "固定流水线")
+
+    monkeypatch.setattr(Orchestrator, "_answer_question_fixed_stream", _impl)
+    orch = _make_orch()
+
+    list(orch.answer_question_stream("增肌怎么吃", PROFILE, athlete_key="athlete-xyz"))
+
+    assert seen == ["athlete-xyz"]
 
 
 def _ok_loop(steps=2):

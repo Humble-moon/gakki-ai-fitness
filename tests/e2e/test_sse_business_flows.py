@@ -20,11 +20,12 @@ async def client(monkeypatch):
             yield "stage", "plan"
             yield "done", {"success": True}
 
-        def analyze_exercise_stream(self, *args):
+        def analyze_exercise_stream(self, *args, **kwargs):
             yield "stage", "analysis"
             yield "done", {"success": True}
 
-        def answer_question_stream(self, *args):
+        def answer_question_stream(self, *args, **kwargs):
+            # 只验证 SSE 业务链路的形态，不关心业务参数
             yield "stage", "answer"
             yield "done", {"success": True}
 

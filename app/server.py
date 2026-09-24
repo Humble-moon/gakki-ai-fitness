@@ -22,6 +22,7 @@ API 端点总览：
 import json
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 # 将项目根目录加入 Python 模块搜索路径，确保 src.* 导入正常
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -179,6 +180,9 @@ class QuestionRequest(BaseModel):
     session_id: Optional[str] = None
     # 会话 ID，用于多轮对话上下文追踪
     # None 时系统自动创建新会话
+    athlete_key: Optional[str] = None
+    # 稳定运动员标识（前端 localStorage）。用于读取跨会话长期记忆——
+    # 与训练日志共用同一个身份，用户改体重后仍能读回自己的偏好。
 
 
 class TrainingLogEntryInput(BaseModel):
@@ -414,7 +418,8 @@ def ask_question(req: QuestionRequest):
         days_per_week=req.days_per_week, injuries=req.injuries
     )
     return StreamingResponse(
-        _stream_events(orch.answer_question_stream(req.question, profile, req.session_id)),
+        _stream_events(orch.answer_question_stream(req.question, profile, req.session_id,
+                                                   athlete_key=req.athlete_key)),
         media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
@@ -564,6 +569,116 @@ async def list_training_logs(athlete_key: str = "", weeks: int = 12,
     logs = store.get_logs(athlete_key, weeks=max(1, min(weeks, 52)),
                           limit=max(1, min(limit, 100)), exercise=exercise)
     return {"logs": logs, "count": len(logs)}
+
+
+@app.get("/api/user-data/export")
+def export_user_data(athlete_key: str = "", session_id: Optional[str] = None):
+    """导出该 athlete_key 名下的全部个人数据（JSON）。
+
+    健康数据属于个人信息，用户有权取回自己产生的全部内容。导出覆盖三处
+    存储：训练日志（PostgreSQL）、长期记忆（Redis）、当前会话（Redis）。
+    缓存不在导出范围——它是"同一份身体数据 + 同一目标命中同一计划"的
+    去重产物，不绑定个人身份。
+    """
+    if not athlete_key:
+        return JSONResponse(status_code=400, content={
+            "error": "athlete_key_required",
+            "message": "必须提供 athlete_key 才能定位你的数据。",
+        })
+
+    payload: dict = {
+        "athlete_key": athlete_key,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "training_logs": [],
+        "long_term_memory": {},
+        "conversation": None,
+        "note": (
+            "本文件包含你的全部个人数据。训练计划由 AI 生成，仅供参考，"
+            "不构成医疗建议。"
+        ),
+    }
+
+    try:
+        store = _get_training_log_store()
+        # 取足够长的窗口以覆盖全部历史（10 年）——导出不做时间裁剪
+        payload["training_logs"] = store.get_logs(athlete_key, weeks=520, limit=10_000)
+    except Exception as exc:  # noqa: BLE001 - 单源失败不该让整份导出失败
+        logger.warning("[data-rights] 导出训练日志失败：%s", exc)
+        payload["training_logs_error"] = str(exc)
+
+    try:
+        payload["long_term_memory"] = orch.long_term.get_preferences(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[data-rights] 导出长期记忆失败：%s", exc)
+        payload["long_term_memory_error"] = str(exc)
+
+    if session_id:
+        try:
+            payload["conversation"] = {
+                "session_id": session_id,
+                "context": orch.conversation.get_context(session_id),
+                "plan_state": orch.conversation.get_plan_state(session_id),
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[data-rights] 导出会话失败：%s", exc)
+            payload["conversation_error"] = str(exc)
+
+    return payload
+
+
+@app.delete("/api/user-data")
+def delete_user_data(athlete_key: str = "", confirm: str = "",
+                     session_id: Optional[str] = None):
+    """删除该 athlete_key 名下的全部个人数据。
+
+    **不可逆操作**，因此要求显式传 ``confirm=DELETE``——一个拼错的请求
+    不该把用户几个月的训练记录抹掉。
+
+    无认证场景下 athlete_key 是唯一的"凭证"，而它在浏览器 localStorage 里，
+    因此这里加一条审计日志：真实部署接入账号体系后，这条日志就是追溯依据。
+
+    删除范围与导出对齐（训练日志 / 长期记忆 / 会话）。**不做部分成功**：
+    任一步抛错都如实返回失败与已完成的部分，不谎报"已全部删除"。
+    """
+    if not athlete_key:
+        return JSONResponse(status_code=400, content={
+            "error": "athlete_key_required",
+            "message": "必须提供 athlete_key 才能定位你的数据。",
+        })
+    if confirm != "DELETE":
+        return JSONResponse(status_code=400, content={
+            "error": "confirmation_required",
+            "message": "删除不可恢复。请带上 confirm=DELETE 明确确认。",
+        })
+
+    logger.warning("[data-rights] 收到删除请求 athlete_key=%s session_id=%s",
+                   athlete_key, session_id or "-")
+
+    result: dict = {"athlete_key": athlete_key, "deleted": {}, "errors": {}}
+
+    try:
+        result["deleted"]["training_logs"] = _get_training_log_store().delete_logs(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[data-rights] 删除训练日志失败：%s", exc)
+        result["errors"]["training_logs"] = str(exc)
+
+    try:
+        result["deleted"]["long_term_keys"] = orch.long_term.purge(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[data-rights] 删除长期记忆失败：%s", exc)
+        result["errors"]["long_term"] = str(exc)
+
+    if session_id:
+        try:
+            result["deleted"]["conversation_keys"] = orch.conversation.purge(session_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("[data-rights] 删除会话失败：%s", exc)
+            result["errors"]["conversation"] = str(exc)
+
+    result["ok"] = not result["errors"]
+    if not result["ok"]:
+        result["message"] = "部分数据删除失败，详见 errors。请重试或联系支持。"
+    return JSONResponse(status_code=200 if result["ok"] else 500, content=result)
 
 
 @app.get("/api/training-stats")

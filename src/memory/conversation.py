@@ -221,6 +221,31 @@ class ConversationManager:
         """
         self.redis.set(f"conv:{session_id}:plan", plan_summary[:800], ex=SESSION_TTL)
 
+    def purge(self, session_id: str) -> int:
+        """删除该会话的全部痕迹（对话轮次 / 摘要 / 计划快照）。返回删除的 key 数。
+
+        用于"删除我的数据"。用 SCAN 前缀匹配而不是逐个删已知字段——
+        会话的 key 种类会随功能增加（当前有 turns / summary / plan），
+        逐个枚举将来必漏。
+        """
+        pattern = f"conv:{session_id}:*"
+        deleted = 0
+        try:
+            keys = [
+                k.decode() if isinstance(k, bytes) else k
+                for k in self.redis.conn.scan_iter(match=pattern, count=50)
+            ]
+        except Exception as exc:  # noqa: BLE001 - 删除失败必须如实上报
+            logging.getLogger(__name__).error("[conversation] 扫描待删 key 失败：%s", exc)
+            raise
+        for key in keys:
+            try:
+                self.redis.delete(key)
+                deleted += 1
+            except Exception as exc:  # noqa: BLE001
+                logging.getLogger(__name__).error("[conversation] 删除 %s 失败：%s", key, exc)
+        return deleted
+
     def get_plan_state(self, session_id: str) -> str | None:
         """获取当前会话中的训练计划摘要。
 

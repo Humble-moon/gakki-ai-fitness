@@ -15,8 +15,11 @@
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 from src.storage.redis_client import RedisClient
+
+logger = logging.getLogger(__name__)
 
 
 class LongTermMemory:
@@ -129,6 +132,31 @@ class LongTermMemory:
         }
         key = f"{self.prefix}{user_id}:feedback:{plan_id}"
         self.redis.set(key, json.dumps(feedback))
+
+    def purge(self, user_id: int | str) -> int:
+        """删除该用户的全部长期记忆（偏好 + 反馈）。返回删除的 key 数。
+
+        用于"删除我的数据"——健康相关数据属于个人信息，用户必须能删干净。
+        用 SCAN 前缀匹配而不是逐个 key 删：长期记忆的 key 由写入方决定
+        （pref:* / feedback:*），逐个枚举会漏掉将来新增的种类。
+        """
+        pattern = f"{self.prefix}{user_id}:*"
+        deleted = 0
+        try:
+            keys = [
+                k.decode() if isinstance(k, bytes) else k
+                for k in self.redis.conn.scan_iter(match=pattern, count=50)
+            ]
+        except Exception as exc:  # noqa: BLE001 - 删除失败要如实上报，不能假装成功
+            logger.error("[long_term] 扫描待删除 key 失败：%s", exc)
+            raise
+        for key in keys:
+            try:
+                self.redis.delete(key)
+                deleted += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.error("[long_term] 删除 key %s 失败：%s", key, exc)
+        return deleted
 
     def get_injury_history(self, user_id: int) -> list:
         """

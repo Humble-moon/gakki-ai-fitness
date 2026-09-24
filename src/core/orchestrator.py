@@ -148,11 +148,12 @@ class Orchestrator:
         return plan_finalization.review_pending_result(self.review_store, profile, query, result)
 
     def _persist_if_safe(self, profile: dict, query: str, result: dict,
-                         session_id: str | None = None) -> bool:
+                         session_id: str | None = None,
+                         athlete_key: str | None = None) -> bool:
         """Persist only a fully safe terminal result."""
         return plan_finalization.persist_if_safe(
             self.cache, self.conversation, self.long_term,
-            profile, query, result, session_id)
+            profile, query, result, session_id, athlete_key)
 
     def generate_plan(self, profile: UserProfileInput, query: str = "",
                       athlete_key: str | None = None) -> dict:
@@ -233,7 +234,7 @@ class Orchestrator:
         if not plan_goal_matches(result, expected_goal):
             raise GoalConsistencyError("训练计划目标与用户目标不一致")
         result["explain"] = build_explanation(plan, retrieved, result)
-        self._persist_if_safe(profile_dict, query, result)
+        self._persist_if_safe(profile_dict, query, result, athlete_key=athlete_key)
         task.complete()
         return self._review_pending_result(profile_dict, query, result)
 
@@ -251,8 +252,10 @@ class Orchestrator:
             conv_context = self.conversation.build_context_for_prompt(session_id, query or "")
             plan_context = self.conversation.get_plan_state(session_id) or ""
 
-        pseudo_uid = self._make_user_key(profile_dict)
-        long_term_context = self.long_term.build_context_for_prompt(pseudo_uid)
+        # 与写入侧用同一个身份键（见 plan_finalization.long_term_user_key）——
+        # 写用 athlete_key、读用 profile 指纹的话，用户永远读不回自己的偏好。
+        long_term_key = plan_finalization.long_term_user_key(profile_dict, athlete_key)
+        long_term_context = self.long_term.build_context_for_prompt(long_term_key)
         if not session_id:
             cached = self._safe_cached_result(self.cache.get(profile_dict, query), expected_goal=expected_goal)
             if cached:
@@ -352,7 +355,8 @@ class Orchestrator:
             yield ("error", {"code": GoalConsistencyError.code, "message": "训练计划目标校验失败，请重试"})
             return
         result["explain"] = build_explanation(plan, retrieved, result)
-        self._persist_if_safe(profile_dict, query, result, session_id=session_id)
+        self._persist_if_safe(profile_dict, query, result, session_id=session_id,
+                              athlete_key=athlete_key)
         yield ("done", self._review_pending_result(profile_dict, query, result))
 
     def _normalize_plan(self, result: dict, *, profile: dict | None = None,
@@ -451,7 +455,8 @@ class Orchestrator:
         yield ("done", result)
 
     def answer_question_stream(self, question: str, profile: UserProfileInput,
-                               session_id: str = None):
+                               session_id: str = None,
+                               athlete_key: str | None = None):
         """多源融合问答的统一入口。
 
         默认走 `_answer_question_fixed_stream`（固定五步流水线）。
@@ -469,7 +474,8 @@ class Orchestrator:
                 return
             logger.warning("[qa] 自主循环未产出答案，回退固定流水线")
             yield ("stage", "[回退] 自主检索未收敛，改用固定检索流程...")
-        yield from self._answer_question_fixed_stream(question, profile, session_id)
+        yield from self._answer_question_fixed_stream(question, profile, session_id,
+                                                      athlete_key=athlete_key)
 
     def _run_agent_qa(self, question: str, profile: UserProfileInput):
         """跑一次自主循环问答。
@@ -514,7 +520,9 @@ class Orchestrator:
         return events, True
 
 
-    def _answer_question_fixed_stream(self, question: str, profile: UserProfileInput, session_id: str = None):
+    def _answer_question_fixed_stream(self, question: str, profile: UserProfileInput,
+                                      session_id: str = None,
+                                      athlete_key: str | None = None):
         """【流式版】多源融合问答 —— 结合知识库 + 动作数据库 + 知识图谱回答用户问题。
 
         输入：
@@ -649,8 +657,9 @@ class Orchestrator:
             conv_context = self.conversation.build_context_for_prompt(session_id, question)
 
         # === 长期记忆：读取跨会话的用户画像 ===
-        pseudo_uid = self._make_user_key(profile_dict)
-        long_term_context = self.long_term.build_context_for_prompt(pseudo_uid)
+        # 身份键与写入侧一致（见 plan_finalization.long_term_user_key）
+        long_term_key = plan_finalization.long_term_user_key(profile_dict, athlete_key)
+        long_term_context = self.long_term.build_context_for_prompt(long_term_key)
 
         # 安全提示模板：检测到伤病关键词或有伤病史时注入
 

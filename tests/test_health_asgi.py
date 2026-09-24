@@ -16,10 +16,12 @@ async def client(monkeypatch):
             yield "stage", "offline"
             yield "done", {"success": True}
 
-        def analyze_exercise_stream(self, *args):
+        def analyze_exercise_stream(self, *args, **kwargs):
             yield "done", {"success": True}
 
-        def answer_question_stream(self, *args):
+        def answer_question_stream(self, *args, **kwargs):
+            # 本测试只验证 ASGI/SSE 契约，不关心业务参数；用 **kwargs
+            # 让接口新增字段时不必同步改替身。
             yield "done", {"success": True}
 
     monkeypatch.setattr(server, "orch", FakeOrchestrator())

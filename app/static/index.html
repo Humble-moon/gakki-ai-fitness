@@ -3446,7 +3446,7 @@ async function askQuestion() {
   const stage = el('div', 'live-stage', ''); stage.appendChild(el('span', 'dot-pulse', '')); appendText(stage, '正在分析…'); turn.appendChild(stage);
   const detail = el('div', 'stage-detail', ''); turn.appendChild(detail);
   try {
-    const resp = await fetch('/api/ask-question', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...getProfile(), question, session_id: qaSessionId }), signal: controller.signal });
+    const resp = await fetch('/api/ask-question', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...getProfile(), question, session_id: qaSessionId, athlete_key: athleteKey }), signal: controller.signal });
     let text = '';
     await consumeSse(resp, {
       signal: controller.signal,
