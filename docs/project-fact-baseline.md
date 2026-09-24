@@ -82,6 +82,42 @@ python scripts/verify_project_facts.py --json
 
 **历史修正**：`src/core/harness.py` 曾以文件头注释声称"被各 Agent 类通过 `@with_retry` 装饰其内部方法"，但全仓库零 import，实际重试逻辑在 `src/llm/provider.py` 另行实现。注释与事实不符的情况已随文件删除消除。
 
+## 2026-09-24 安全门修复与上线准备（可复核）
+
+本轮由一次**真实执行的对抗测试**驱动：不看代码声明，直接发真实请求看输出，打出并修复了若干缺陷。以下每项都可按证据路径复核。
+
+### 安全门
+
+| 事实 | 证据路径 | 状态 |
+|---|---|---|
+| **急症词表**独立于伤病词表（心血管/神经/呼吸/体征四类），命中即注入**禁止任何训练建议**的约束，且与普通安全话术**互斥**（伤病允许康复建议、急症禁止训练指导，叠加会自相矛盾） | `src/core/qa_safety.py::EMERGENCY_KEYWORDS`、`tests/test_safety_emergency.py` | 已实现+已测试+**端到端实测** |
+| **Planner 安全闸门复用同一急症词表**（此前是第三张独立词表，同样缺急症词） | `src/agents/planner.py`、`tests/test_safety_emergency.py::TestPlannerSafetyGate` | 已实现+已测试（含"复用单一事实源"的接线断言） |
+| **动作库校验**：计划中的动作名必须在 338 库内；比较前做名称归一化（去括号说明 + 剥一层姿势前缀），归后仍在库外则仅**提示**不阻断 | `src/core/plan_finalization.py::collect_unknown_exercises`、`tests/test_plan_quality_gates.py` | 已实现+已测试 |
+| 规则引擎不再把训练日 `focus` 当伤病文本（此前 focus「胸肌与肩部」会让卧推被判与腰突冲突） | `src/hitl/review.py::_check_conflicts` | 已实现+已测试（含修复前会失败的反证） |
+| 同「伤病+动作」的冲突合并为一条，触发词并列展示（`触发词: 腰/椎/间盘`）；端到端 16 条 → 4 条 | 同上 | 已实现+已测试+端到端实测 |
+| **交付分流**：伤病冲突/语义匹配/danger/低置信度 → 扣下送审；**warning 级建议 → 照常交付** | `src/hitl/review.py::check`、`tests/test_advanced.py` | 已实现+已测试+端到端实测 |
+
+**实测记录**：修复前「训练时突然胸闷、头晕，眼前发黑」答的是呼吸技巧、未建议就医；修复后答「请立即停止运动，尽快就医或拨打急救电话……我不能也不应该判断它严不严重」。交付分流实测：健康新手 `safe_delivered` + 9 条警告，腰突患者 `review_pending`（规则引擎检出冲突）。
+
+**为什么 warning 级不阻断（重要）**：LLM 检查器几乎从不返回空 issue 列表，把 warning 当送审判据会让**所有计划都进审核队列**；而本项目 HITL 只实现了机制、未定义"审核人"角色，形成死锁——用户拿不到计划、也无人审核。**这不等于放宽安全**：伤病冲突、danger、低置信度三层拦截保持不变。
+
+**为什么库外动作不阻断（重要）**：实测中被点名的多是命名变体（`保加利亚分腿蹲（扶支撑）` → 库里是 `保加利亚分腿蹲`）与真实但本库未收录的动作（`帕洛夫推`），而 LLM 生成的计划本就用不全库内动作名。一律拦截等于 100% 的计划交付不出去。真幻觉（如 `慢离心哑铃地板卧推`，由两个真名拼接）仍会被识别并提示。
+
+### 性能与可运维性
+
+| 事实 | 证据路径 | 状态 |
+|---|---|---|
+| 计划生成 **226s → 47s**：子任务并发（检索 22.8→3.9s，`executor.map` 保序）、重写改用 `REWRITE_MODEL`（单次 42~58s→5~8s）、重写循环收敛即停 | `src/agents/retriever.py`、`src/agents/writer.py`、`src/core/orchestrator.py`、`src/graph/routing.py` | 已实测（A/B 对照显示两模型重写输出逐条一致） |
+| 循环条件与交付闸门对齐：由 `not is_safe or issues` 改为 `not is_safe`，因 `finalize_result` 决定交付的是 `is_safe` | 同上（两后端同步改） | 已实现+已测试 |
+| **当日 LLM 成本上限**：Redis 计数（跨进程有效）、API 入口快速失败、排除法拦截（默认拦所有 POST，只放行不花钱端点）、Redis 故障降级放行 | `src/security/cost_guard.py`、`src/security/api_guard.py::CostLimitMiddleware`、`tests/test_security/test_cost_guard.py` | 已实现+已测试+端到端实测 |
+| **个人数据导出与删除**：覆盖训练日志/长期记忆/会话；删除要求 `confirm=DELETE`，部分失败如实上报不谎报 | `app/server.py`、`src/memory/long_term.py::purge`、`tests/test_data_rights.py` | 已实现+已测试+端到端实测（删后 Redis 无残留、PG 主从表 0 条） |
+| 长期记忆身份改用稳定的 `athlete_key`（原用身高体重哈希，**体重一变就换身份**，读不回偏好且无从删除） | `src/core/plan_finalization.py::long_term_user_key` | 已实现+已测试 |
+| 计划草稿在安全检查完成前流式渲染，附「请勿照此训练」横幅 + 虚线视觉降级 + 隐藏操作入口 | `app/static/index.html::renderPlanDraft`、`tests/test_web_frontend_contract.py` | 已实现+已测试+headless 渲染验证 |
+
+**实测成本参考**：单份计划约 **¥0.32**（36 次 LLM 调用，其中 reasoner 占约 91% 的开销）；单次问答约 ¥0.01。并发 5 路问答墙钟 12.2s（并行度 4.7x），语义缓存命中约 0.0s。
+
+**动作库查询修复**：`target_muscles` 是 json 列却用 `ILIKE` 查询，PostgreSQL 无 `json ~~* unknown` 操作符 → 整条 SQL 报错并**静默降级到 3 条演示数据**（实测 `search_by_muscle("胸")` 只返回 1 条）。已改为 `jsonb_array_elements_text` 展开，修复后返回 20 条。该缺陷能长期存活，是因为 `tests/test_advanced.py` 与 `tests/test_mcp_v2.py` 的 autouse fixture 强制关闭数据库分支——整个 MCP 工具层测试都在 3 条演示数据上跑；现补 `tests/test_exercise_query_sql.py`（离线断言 SQL 形态 + 集成层连真实库）。
+
 ## 未核验与历史结果
 
 **开发时间线（仓库不可独立复核，主动声明）**：本项目自 **2026-04** 起在本地开发，**2026-07-01 才初始化 Git 仓库**并开始产生提交历史。因此 `git log` 的最早提交（`4960e07`）晚于实际开工时间约三个月；且早期提交是在 07-01 上午批量落地的（最早三个提交相隔 3–4 分钟），不代表"当天才开始写第一行代码"。这一段属于开发者的一手陈述，**无法由仓库文件独立复核**，故按本文档标准不计入强事实，仅作背景说明——被问到时以此为准，不主张为可验证事实。
