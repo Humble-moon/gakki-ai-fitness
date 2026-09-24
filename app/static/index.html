@@ -1347,6 +1347,43 @@ body::after {
   text-transform: uppercase;
 }
 
+/* ── Plan Draft：安全检查完成前的前置预览 ──
+   草稿必须一眼看出「还没检查完」。本项目的前提是"不安全不交付"，
+   若草稿长得与正式结果一样，用户会直接照着练，安全门就形同虚设。
+   因此用虚线边框 + 降饱和处理，并在顶部放一条明确的横幅。 */
+.plan-draft {
+  border: 1px dashed var(--steel-light);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  background: rgba(23,33,43,0.45);
+}
+
+.plan-draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  background: rgba(240,160,64,0.08);
+  border-left: 3px solid var(--warn);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--warn);
+}
+
+.plan-draft-banner .dot-pulse {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+  flex-shrink: 0;
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+
+/* 草稿里的计划卡片降饱和，与最终交付拉开层次 */
+.plan-draft .plan-day-column { opacity: .78; }
+.plan-draft .plan-actions { display: none; }
+
 /* ── Plan Card (compact grid version) ── */
 .plan-card {
   background: var(--bg-card);
@@ -2914,12 +2951,22 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
         detailEl = el('div', 'stage-detail', '');
         appendText(detailEl, `${data?.safe ? '✓' : '⚠'} 安全审查 · ${data?.issues || 0} 问题 · 置信度 ${Math.round((data?.confidence || 0) * 100)}%`);
         (mode === 'plan' ? document.getElementById('plan-stream') : resultArea)?.appendChild(detailEl);
+      } else if (event === 'writer_done_raw') {
+        // 首轮草稿先渲染出来。计划生成要几十秒（含重写回路），
+        // 这段时间里用户原本只看到一句开场白——而内容其实早就能拿到了。
+        // 注意 data 是 LLM 原始输出文本，且**未经安全检查**，
+        // renderPlanDraft 会带上明确的"请勿照此训练"横幅。
+        if (mode === 'plan') {
+          renderPlanDraft(document.getElementById('plan-result'), data);
+        }
       }
     },
     onTerminal: (event, data) => {
       if (event !== 'done') return;
       const resultArea = mode === 'plan' ? document.getElementById('plan-result') : document.getElementById(outputId);
-      if (mode !== 'plan') resultArea.replaceChildren();
+      // plan 模式这里曾经不清空，因为历史上没有东西需要清。现在
+      // writer_done_raw 会先渲染草稿，不清就会与最终结果叠在一起。
+      resultArea?.replaceChildren();
       if (mode === 'plan' && data?.delivery_status === 'review_pending') {
         renderReviewPending(resultArea, data?.review);
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3055,6 +3102,78 @@ function renderPlanExplanation(container, explain) {
   container.appendChild(panel);
 }
 
+/* 计划卡片网格。抽出来给「正式结果」与「流式草稿」共用——
+   两处各写一份的话，改了一边另一边就会漂移。 */
+function renderPlanDays(container, days) {
+  if (!container || !Array.isArray(days) || !days.length) return;
+  const grid = el('div', 'plan-result-grid', '');
+  days.forEach((day, index) => {
+    const exercises = Array.isArray(day?.exercises) ? day.exercises : [];
+    const card = el('article', 'plan-day-column', '');
+    card.style.animationDelay = `${.04 * index}s`;
+    const header = el('div', 'plan-day-header', `DAY ${day?.day ?? index + 1} · ${day?.focus || ''}`);
+    header.appendChild(el('span', '', `${exercises.length} EX`));
+    card.appendChild(header);
+    const body = el('div', 'plan-day-body', '');
+    const heading = el('div', 'plan-ex-heading', '');
+    ['动作', '组数', '次数', '休息'].forEach(label => heading.appendChild(el('span', '', label)));
+    body.appendChild(heading);
+    exercises.forEach(exercise => {
+      const row = el('div', 'plan-ex-row', '');
+      const nameCell = el('span', 'plan-ex-name', exercise?.name || '未命名动作'); nameCell.dataset.planColumn = '动作'; row.appendChild(nameCell);
+      const setsCell = el('span', 'plan-ex-sets', `${exercise?.sets ?? '?'} 组`); setsCell.dataset.planColumn = '组数'; row.appendChild(setsCell);
+      const repsCell = el('span', 'plan-ex-reps', `${exercise?.reps ?? '?'} 次`); repsCell.dataset.planColumn = '次数'; row.appendChild(repsCell);
+      const restCell = el('span', 'plan-ex-rest', `休息 ${exercise?.rest || '60 秒'}`); restCell.dataset.planColumn = '休息'; row.appendChild(restCell);
+      if (exercise?.notes) row.appendChild(el('div', 'plan-ex-notes', exercise.notes));
+      body.appendChild(row);
+    });
+    card.appendChild(body);
+    grid.appendChild(card);
+  });
+  container.appendChild(grid);
+}
+
+/* 把 LLM 原始输出解析成计划对象。容错是必需的：模型偶尔用 ```json 包裹，
+   也可能输出解析不了的文本——两种都要能降级，不能让草稿区变成空白。 */
+function parseDraftPlan(rawText) {
+  if (!rawText) return null;
+  let text = String(rawText).trim();
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) text = fence[1].trim();
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/* 渲染流式草稿——**未经安全检查**的内容。
+   横幅文案必须说清"还会变"，且草稿里不提供任何"照着练"的入口
+   （重新生成等操作按钮由 .plan-draft .plan-actions 隐藏）。
+   这不是多余的小心：本项目的前提就是"不安全不交付"，
+   草稿若与正式结果看不出区别，用户会直接照着练，安全门就白做了。 */
+function renderPlanDraft(container, rawText) {
+  if (!container) return;
+  container.replaceChildren();
+  const wrap = el('div', 'plan-draft', '');
+
+  const banner = el('div', 'plan-draft-banner', '');
+  banner.appendChild(el('span', 'dot-pulse', ''));
+  appendText(banner, '初稿已生成，正在做安全检查（伤病冲突、动作风险、强度匹配）。检查通过后会自动替换为正式计划——在此之前请勿照此训练。');
+  wrap.appendChild(banner);
+
+  const plan = parseDraftPlan(rawText);
+  const days = Array.isArray(plan?.days) ? plan.days : [];
+  if (days.length) {
+    renderPlanDays(wrap, days);
+  } else {
+    // 解析失败也要给出进度反馈，而不是留一片空白
+    wrap.appendChild(el('div', 'stream-box', String(rawText || '').slice(0, 4000)));
+  }
+  container.appendChild(wrap);
+}
+
 function renderPlanResult(container, data) {
   if (!container) return;
   const plan = data || {};
@@ -3081,31 +3200,7 @@ function renderPlanResult(container, data) {
   renderPlanExplanation(container, plan.explain);
   const days = Array.isArray(plan.days) ? plan.days : [];
   if (days.length) {
-    const grid = el('div', 'plan-result-grid', '');
-    days.forEach((day, index) => {
-      const exercises = Array.isArray(day?.exercises) ? day.exercises : [];
-      const card = el('article', 'plan-day-column', '');
-      card.style.animationDelay = `${.04 * index}s`;
-      const header = el('div', 'plan-day-header', `DAY ${day?.day ?? index + 1} · ${day?.focus || ''}`);
-      header.appendChild(el('span', '', `${exercises.length} EX`));
-      card.appendChild(header);
-      const body = el('div', 'plan-day-body', '');
-      const heading = el('div', 'plan-ex-heading', '');
-      ['动作', '组数', '次数', '休息'].forEach(label => heading.appendChild(el('span', '', label)));
-      body.appendChild(heading);
-      exercises.forEach(exercise => {
-        const row = el('div', 'plan-ex-row', '');
-        const nameCell = el('span', 'plan-ex-name', exercise?.name || '未命名动作'); nameCell.dataset.planColumn = '动作'; row.appendChild(nameCell);
-        const setsCell = el('span', 'plan-ex-sets', `${exercise?.sets ?? '?'} 组`); setsCell.dataset.planColumn = '组数'; row.appendChild(setsCell);
-        const repsCell = el('span', 'plan-ex-reps', `${exercise?.reps ?? '?'} 次`); repsCell.dataset.planColumn = '次数'; row.appendChild(repsCell);
-        const restCell = el('span', 'plan-ex-rest', `休息 ${exercise?.rest || '60 秒'}`); restCell.dataset.planColumn = '休息'; row.appendChild(restCell);
-        if (exercise?.notes) row.appendChild(el('div', 'plan-ex-notes', exercise.notes));
-        body.appendChild(row);
-      });
-      card.appendChild(body);
-      grid.appendChild(card);
-    });
-    container.appendChild(grid);
+    renderPlanDays(container, days);
   } else if (plan.raw) container.appendChild(el('div', 'stream-box', plan.raw));
 
   const bar = el('div', 'plan-actions', '');

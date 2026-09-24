@@ -218,7 +218,13 @@ def test_review_pending_done_renders_only_safe_review_panel_and_skips_history():
 
 
 def test_plan_result_uses_safe_dynamic_dom_and_responsive_cards():
-    start = HTML.index("function renderPlanResult")
+    """计划卡片必须用安全 DOM API 构造（防 XSS），响应式布局在位。
+
+    范围覆盖 `renderPlanDays` 与 `renderPlanResult`：卡片构造逻辑在
+    2026-09-24 被抽到 `renderPlanDays`，供「正式结果」与「流式草稿」共用。
+    若只检查后者，卡片构造就脱离了这条安全契约的保护。
+    """
+    start = HTML.index("function renderPlanDays")
     end = HTML.find("function renderAnalysisResult", start)
     body = HTML[start:end]
     assert ".innerHTML" not in body
@@ -282,12 +288,53 @@ def test_plan_mobile_card_copy_is_readable():
 
 
 def test_plan_backend_json_stream_is_not_rendered_to_users():
+    """后端原始 JSON 不得直接展示给用户。
+
+    这条契约来自 c0676d5（fix: hide internal json streaming output）：
+    当时界面把逐 token 的 `writer_chunk` 直接 appendText 出去，用户看到的
+    是一串 `{"plan_name": ...` 的原文，既不可读也没有意义，因此被移除。
+
+    2026-09-24 起首轮草稿会通过 `writer_done_raw` 提前渲染以缩短等待感
+    （计划生成含重写回路，实测约 47s）。**契约的核心没有放宽**——
+    仍然禁止逐 token 原文，且草稿必须经 `renderPlanDraft` 解析成结构化
+    对象后渲染。草稿未经安全检查，额外的安全约束见
+    `test_plan_draft_is_marked_unsafe_and_visually_distinct`。
+    """
     start = HTML.index("async function streamFrom")
     end = HTML.index("// ═══════════════ RENDER PLAN", start)
     body = HTML[start:end]
-    assert "event === 'writer_chunk'" not in body
-    assert "writer_done_raw" not in body
+    assert "event === 'writer_chunk'" not in body, "逐 token 原始 JSON 不得直接渲染"
     assert "renderPlanResult(resultArea, data)" in body
+    # 草稿若渲染，必须走解析函数——不得把 raw 文本直接交给用户
+    assert "writer_done_raw" in body, "首轮草稿应提前渲染（见 P0-2 延迟优化）"
+    assert "renderPlanDraft(" in body, "草稿必须经 renderPlanDraft 解析后渲染"
+
+
+def test_plan_draft_is_marked_unsafe_and_visually_distinct():
+    """草稿未经安全检查，必须在界面上说清楚，且不能长得像正式结果。
+
+    这不是文案偏好，是安全约束：本项目的前提是"检查通过才交付"。
+    若草稿与正式计划看不出区别，用户会直接照着练——一个可能含冲突动作的
+    计划就绕过了整个安全门。因此草稿在三个维度上必须与正式结果不同：
+        1. 顶部有明确的"检查中 / 请勿照此训练"横幅
+        2. 视觉上降级（虚线边框、降饱和），一眼可辨
+        3. 不提供任何操作入口（重生成等按钮隐藏）
+    """
+    start = HTML.index("function renderPlanDraft")
+    end = HTML.index("function renderPlanResult", start)
+    body = HTML[start:end]
+    # 1. 必须警示
+    assert "正在做安全检查" in body
+    assert "请勿照此训练" in body
+    # 2. 结构化渲染，不是原文
+    assert "renderPlanDays(" in body
+    assert "parseDraftPlan(" in body
+    # 3. 不得带操作入口
+    assert "plan-actions" not in body
+    # 4. CSS 层面确实降级
+    assert ".plan-draft {" in HTML
+    assert "dashed" in HTML
+    assert ".plan-draft .plan-actions { display: none; }" in HTML
 
 
 def test_analysis_backend_json_stream_is_not_rendered_to_users():
