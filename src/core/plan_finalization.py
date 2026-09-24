@@ -92,10 +92,48 @@ def normalize_plan(result: dict, *, profile: dict | None = None,
     return result
 
 
+def collect_unknown_exercises(result: dict, known_names) -> list[str]:
+    """找出计划中不在动作库里的动作名（保持出现顺序，去重）。
+
+    为什么需要这道校验：重写回路只做键名归一，**不校验动作名是否存在**。
+    实测中首轮计划的动作名都是真的（哑铃卧推等），
+    但重写 3 轮后出现了「俯卧地板单臂哑铃划船」这类库里查不到的名字——
+    它们不是凭空编造，而是由真实动作名词素重组而成
+    （哑铃单臂划船 + 俯卧地板），因此比纯幻觉更难被人工发现。
+
+    依赖显式传入 ``known_names`` 而非在此查库：本模块是纯函数模块，
+    不做 IO（见模块 docstring）。
+    """
+    if not known_names:
+        return []
+    known = known_names if isinstance(known_names, (set, frozenset)) else set(known_names)
+    unknown: list[str] = []
+    seen: set[str] = set()
+    for day in result.get("days") or []:
+        if not isinstance(day, dict):
+            continue
+        for ex in day.get("exercises") or []:
+            if not isinstance(ex, dict):
+                continue
+            name = ex.get("name") or ex.get("exercise") or ""
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            if name not in known:
+                unknown.append(name)
+    return unknown
+
+
 def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
                     *, provider_degraded: bool = False,
-                    expected_goal: str | None = None) -> dict:
-    """Normalize one terminal state and decide whether persistence is allowed."""
+                    expected_goal: str | None = None,
+                    known_exercise_names=None) -> dict:
+    """Normalize one terminal state and decide whether persistence is allowed.
+
+    ``known_exercise_names`` 可选：动作库全部动作名的集合。传入时会校验计划中的
+    动作名是否存在，把库外动作记为 ``unknown_exercises`` 并强制送审。
+    不传则跳过该校验（老调用方保持原行为）。
+    """
     result = dict(result) if isinstance(result, dict) else {}
     checks = checks if isinstance(checks, list) else []
     if expected_goal is not None:
@@ -138,20 +176,32 @@ def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
     # 只看最终轮是安全的：计划层面的问题（某动作与伤病冲突）被重写改掉后，最后一轮
     # 自然不再报；查询层面的问题（用户问的就是危险动作）不随重写改变，最后一轮依然
     # 会报。两种情况的拦截能力都不受影响。
+    # 动作库校验：库外动作名是**确定性证据**，不依赖 LLM 检查器的主观判断。
+    # 命中即送审——一个含库里不存在动作的计划，无论 LLM 怎么说"安全"都不能直接交付。
+    unknown_exercises = collect_unknown_exercises(result, known_exercise_names)
+    if unknown_exercises:
+        warnings = warnings + [f"动作「{name}」不在动作库中" for name in unknown_exercises]
+
     requires_review = final.get("requires_human_review") is True
     confidence = final.get("confidence")
     confidence_valid = isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
+    has_unknown = bool(unknown_exercises)
     result.update({"warnings": warnings, "active_issues": active_issues,
                    "resolved_issues": resolved_issues,
-                   "requires_review": requires_review or not checks or not is_safe,
-                   "review_reason": final.get("review_reason", ""),
-                   "review_severity": final.get("review_severity", ""),
+                   "unknown_exercises": unknown_exercises,
+                   "requires_review": requires_review or not checks or not is_safe or has_unknown,
+                   "review_reason": final.get("review_reason", "") or (
+                       f"计划包含 {len(unknown_exercises)} 个动作库中不存在的动作，需人工确认"
+                       if has_unknown else ""
+                   ),
+                   "review_severity": final.get("review_severity", "") or ("danger" if has_unknown else ""),
                    "review_suggestions": list(final.get("review_suggestions") or []),
                    "confidence": confidence if confidence_valid else 0,
                    "rewrite_count": rewrite_count})
     goal_matches = expected_goal is None or plan_goal_matches(result, expected_goal)
     result["_persistence_allowed"] = bool(schema_valid and is_safe and issues_empty and not requires_review
-        and confidence_valid and goal_matches and not provider_degraded and not result.get("_degraded", False))
+        and confidence_valid and goal_matches and not provider_degraded and not result.get("_degraded", False)
+        and not has_unknown)
     return result
 
 
@@ -207,6 +257,11 @@ def build_review_pending_payload(result: dict, artifact, thread_id: str | None =
             "next_step": "请等待专业审核；在审核完成前不要执行或调整训练计划。",
         },
     }
+    # 库外动作单独列出：审核者需要直接看到"哪些动作名是模型编造的"，
+    # 这比混在 issues 列表里更容易被跳过，而它恰恰是最该被核对的一项。
+    unknown = result.get("unknown_exercises")
+    if unknown:
+        payload["review"]["unknown_exercises"] = list(unknown)
     if thread_id is not None:
         payload["thread_id"] = thread_id
     # 解释块只含检索统计与检查计数，不含被扣下的计划内容，

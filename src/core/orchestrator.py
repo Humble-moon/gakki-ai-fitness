@@ -40,8 +40,11 @@ from src.core.goal_contract import GoalConsistencyError, plan_goal_issue, plan_g
 from src.core.plan_explanation import build_explanation
 from src.core.qa_agent import answer_with_agent_loop
 from src.core.qa_safety import (
+    EMERGENCY_NOTE,
     SAFETY_NOTE,
+    build_emergency_messages,
     build_safety_messages,
+    detect_emergency,
     detect_safety_concern,
 )
 from src.harness.loop import agent_loop_enabled
@@ -81,6 +84,41 @@ class Orchestrator:
         self.long_term = LongTermMemory()
         self.documents = DocumentStore()
         self.review_store = InMemoryReviewArtifactStore()
+        #: 动作库名单缓存（进程级）。None 表示尚未查询；空集合表示查询失败，
+        #: 失败后不再重试，避免每次生成都白等一次库超时。
+        self._library_names: set[str] | None = None
+
+    def _library_exercise_names(self) -> set[str]:
+        """动作库全部动作名，用于校验计划中的动作是否真实存在。
+
+        为什么需要：重写回路只做键名归一，不校验动作名是否存在，
+        实测中出现过重写后动作名变成库中不存在的词素重组名
+        （如「俯卧地板单臂哑铃划船」）。
+
+        **查库失败时返回空集合**，``collect_unknown_exercises`` 对空集合返回
+        空列表即跳过校验——新增的安全校验不应变成本身成为新的单点故障。
+        """
+        # 用 getattr 而非直接取属性：单元测试会绕过 __init__ 直接构造实例
+        # （见 tests/test_core/test_plan_explanation_wiring.py 的 _orchestrator），
+        # 那种构造下实例字段并不存在。
+        cached = getattr(self, "_library_names", None)
+        if cached is None:
+            try:
+                # 延迟导入：避免 core 与 mcp 层在模块加载期相互引用。
+                from src.mcp.exercise_server import list_all_exercises
+
+                cached = {
+                    item["name"]
+                    for item in list_all_exercises(limit=2000)
+                    if isinstance(item, dict) and item.get("name")
+                }
+            except Exception as exc:  # noqa: BLE001 - 增强校验失败不应中断生成
+                logger.warning("[orchestrator] 动作库名单获取失败，跳过动作名校验：%s", exc)
+                cached = set()
+            if not cached:
+                logger.warning("[orchestrator] 动作库名单为空，跳过动作名校验")
+            self._library_names = cached
+        return cached
 
     @staticmethod
     def _safe_cached_result(result: dict | None, expected_goal: str | None = None) -> dict | None:
@@ -95,10 +133,15 @@ class Orchestrator:
     def _finalize_result(self, result: dict, checks: list[dict], rewrite_count: int,
                          *, provider_degraded: bool = False,
                          expected_goal: str | None = None) -> dict:
-        """Normalize one terminal state and decide whether persistence is allowed."""
+        """Normalize one terminal state and decide whether persistence is allowed.
+
+        一并注入动作库名单：重写可能引入库中不存在的动作名，
+        该类计划即使 LLM 判 safe 也必须送审。
+        """
         return plan_finalization.finalize_result(
             result, checks, rewrite_count,
-            provider_degraded=provider_degraded, expected_goal=expected_goal)
+            provider_degraded=provider_degraded, expected_goal=expected_goal,
+            known_exercise_names=self._library_exercise_names())
 
     def _review_pending_result(self, profile: dict, query: str, result: dict) -> dict:
         """Deliver only a review summary when the final gate requires human review."""
@@ -553,6 +596,9 @@ class Orchestrator:
         # 检测逻辑与安全提示词已抽到 src/core/qa_safety.py，供自主循环路径共用。
         # 抽出的动因：若两条问答路径各存一份安全实现，它们会各自漂移，
         # 而这是伤病相关系统——"其中一条路径的约束悄悄松了"是不可接受的失败模式。
+        # 急症优先：命中急症时不叠加普通安全话术，两种规则对"能否给训练建议"
+        # 的要求相反（详见 src/core/qa_safety.py 的 EMERGENCY_SYSTEM_MESSAGE）。
+        is_emergency = detect_emergency(question)
         has_safety_concern = detect_safety_concern(
             question,
             injuries=profile_dict.get("injuries", []),
@@ -625,11 +671,17 @@ class Orchestrator:
 6. 200-350 字，口语化，像教练在聊天
 7. 纯文字段落，不用 markdown
 {"8. 如果用户使用了'改一下''换一个''刚才说的'等指代，请结合对话历史中的上下文理解用户的真正意图。" if conv_context else ""}
-{SAFETY_NOTE if has_safety_concern else ""}"""
+{EMERGENCY_NOTE if is_emergency else (SAFETY_NOTE if has_safety_concern else "")}"""
 
         # 安全规则注入: system 级消息比 user prompt 更难被 prompt injection 覆盖。
         # 文案由 src/core/qa_safety.py 提供，与自主循环路径共用同一份。
-        messages = build_safety_messages() if has_safety_concern else []
+        # 急症话术互斥：急症禁止任何训练建议，不能与普通安全话术叠加注入。
+        if is_emergency:
+            messages = build_emergency_messages()
+        elif has_safety_concern:
+            messages = build_safety_messages()
+        else:
+            messages = []
         messages.append({"role": "user", "content": prompt})
         full_text = ""
         for chunk in self.writer.llm.chat_stream(messages, temperature=0.5):

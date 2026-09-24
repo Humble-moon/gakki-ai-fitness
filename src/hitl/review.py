@@ -411,39 +411,52 @@ class HITLReview:
                 if name:
                     exercise_names.append(name)
 
-        # 同时检查 plan 中的 user_query / focus 文本
-        query_text = plan.get("user_query", "")
-        if not query_text:
-            for day in plan.get("days", []):
-                focus = day.get("focus", "")
-                if focus:
-                    query_text += focus
+        # 用户查询文本，**只取真正的用户查询**。
+        # 这里曾在 user_query 为空时用 day["focus"] 兜底，那是错的：focus 是
+        # 系统生成的动作主题（如"胸肌与肩部"），把它当伤病文本去匹配触发词会
+        # 命中「肩」，于是明明没有肩伤的用户，计划里的卧推/飞鸟也会被判成与
+        # 「腰椎间盘突出」冲突——审核队列被误报淹没，真报反而被埋掉。
+        query_text = plan.get("user_query", "") or ""
 
-        issues = []
+        # 按 (伤病, 目标) 聚合触发词，而不是逐触发词各报一条。
+        # 一个伤病描述会命中多个触发词——「腰椎间盘突出」同时含「腰」「椎」「间盘」，
+        # 逐个触发词展开会让 3 个动作膨胀成 9 条同义 issue，审核者得在噪声里找信号。
+        # 合并成一条、触发词并列展示：信息不丢，条数等于真实冲突数。
+        exercise_conflicts: dict[tuple, list] = {}
+        query_conflicts: dict[tuple, list] = {}
 
         for injury in injuries:
             injury_lower = injury.lower() if isinstance(injury, str) else str(injury)
-            # 检查每个伤病关键词 → 冲突动作
             for keyword, forbidden_exercises in INJURY_EXERCISE_CONFLICTS.items():
-                if keyword in injury_lower or keyword in query_text:
-                    # 1. 检查 plan 中的已知动作名
-                    for ex_name in exercise_names:
-                        for forbidden in forbidden_exercises:
-                            if forbidden in ex_name:
-                                issues.append(
-                                    f"[规则引擎] 伤病「{injury}」与动作「{ex_name}」"
-                                    f"存在冲突（触发词: {keyword}），建议人工审核"
-                                )
-                                break  # 每个动作只报一次
+                if keyword not in injury_lower and keyword not in query_text:
+                    continue
 
-                    # 2. 也检查 query 文本中是否提到了禁止动作
-                    # 例如用户问"跟腱炎怎么练小腿"，query 中提到"小腿"→推测为提踵类动作→触发冲突
-                    for forbidden in forbidden_exercises:
-                        if forbidden in query_text:
-                            issues.append(
-                                f"[规则引擎] 用户查询含伤病「{injury}」，"
-                                f"且提到高风险动作「{forbidden}」（触发词: {keyword}），建议人工审核"
-                            )
+                # 1. 检查 plan 中的已知动作名
+                for ex_name in exercise_names:
+                    if any(forbidden in ex_name for forbidden in forbidden_exercises):
+                        keywords = exercise_conflicts.setdefault((injury, ex_name), [])
+                        if keyword not in keywords:
+                            keywords.append(keyword)
+
+                # 2. 也检查 query 文本中是否提到了禁止动作
+                # 例如用户问"跟腱炎怎么练小腿"，query 中提到"小腿"→推测为提踵类动作→触发冲突
+                for forbidden in forbidden_exercises:
+                    if forbidden in query_text:
+                        keywords = query_conflicts.setdefault((injury, forbidden), [])
+                        if keyword not in keywords:
+                            keywords.append(keyword)
+
+        issues = []
+        for (injury, ex_name), keywords in exercise_conflicts.items():
+            issues.append(
+                f"[规则引擎] 伤病「{injury}」与动作「{ex_name}」"
+                f"存在冲突（触发词: {'/'.join(keywords)}），建议人工审核"
+            )
+        for (injury, forbidden), keywords in query_conflicts.items():
+            issues.append(
+                f"[规则引擎] 用户查询含伤病「{injury}」，"
+                f"且提到高风险动作「{forbidden}」（触发词: {'/'.join(keywords)}），建议人工审核"
+            )
 
         # 检查 query_text 中是否包含高危伤病关键词
         for keyword in CRITICAL_INJURY_KEYWORDS:

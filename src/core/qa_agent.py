@@ -31,8 +31,11 @@ from __future__ import annotations
 import logging
 
 from src.core.qa_safety import (
+    EMERGENCY_NOTE,
     SAFETY_NOTE,
+    build_emergency_messages,
     build_safety_messages,
+    detect_emergency,
     detect_safety_concern,
 )
 from src.harness.loop import LoopResult, ToolInvoker, run_agent_loop
@@ -65,17 +68,27 @@ def build_qa_messages(question: str, profile: dict) -> list[dict]:
     只需保证顺序正确。
     """
     injuries = profile.get("injuries", [])
-    needs_safety = detect_safety_concern(question, injuries=injuries)
+    # 急症优先判定：命中急症时**不叠加**普通安全话术。两种规则对"能否给训练
+    # 建议"的要求相反——安全规则允许运动康复建议，急症规则禁止任何训练指导，
+    # 同时注入会让模型收到自相矛盾的约束。
+    is_emergency = detect_emergency(question)
+    needs_safety = False if is_emergency else detect_safety_concern(
+        question, injuries=injuries
+    )
 
     messages: list[dict] = []
 
     base = _BASE_SYSTEM
-    if needs_safety:
+    if is_emergency:
+        base += "\n" + EMERGENCY_NOTE
+    elif needs_safety:
         base += "\n" + SAFETY_NOTE
     messages.append({"role": "system", "content": base})
 
-    if needs_safety:
+    if is_emergency:
         # 硬约束单独再放一条 system——比混在人设里更难被后续指令覆盖。
+        messages.extend(build_emergency_messages())
+    elif needs_safety:
         messages.extend(build_safety_messages())
 
     profile_line = (
