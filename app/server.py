@@ -41,7 +41,11 @@ from src.graph import build_inputs, build_runtime, graph_stream_events
 from src.hitl.review_resolution import make_resolution
 from src import config
 from src.security.api_guard import (AdminAuthMiddleware, ApiKeyMiddleware,
-                                    RateLimitMiddleware, cors_allow_origins)
+                                    CostLimitMiddleware, RateLimitMiddleware,
+                                    cors_allow_origins)
+from src.security.cost_guard import CostGuard
+from src.storage.redis_client import RedisClient
+from src.llm.cost_tracker import cost_tracker
 from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
@@ -85,6 +89,14 @@ app.add_middleware(AdminAuthMiddleware,
                    admin_token=config.ADMIN_TOKEN,
                    api_token=config.API_AUTH_TOKEN)
 app.add_middleware(ApiKeyMiddleware, token=config.API_AUTH_TOKEN)
+
+# 当日成本上限：防"请求不频繁但一天累积花超"。计数存 Redis，
+# 因此重启不会把预算重置回零。接线方式是给 cost_tracker 挂一个 sink，
+# 这样 LLMProvider 不必知道预算守卫的存在。
+cost_guard = CostGuard(redis_client=RedisClient(),
+                       daily_limit=config.COST_DAILY_LIMIT_YUAN)
+cost_tracker.add_sink(cost_guard.record)
+app.add_middleware(CostLimitMiddleware, guard=cost_guard)
 
 
 # ============================================================

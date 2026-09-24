@@ -59,6 +59,20 @@ class CostTracker:
         self._total_calls: int = 0
         self._start_time: float = time.time()
         self._enabled: bool = True
+        # 成本回调。见 add_sink 的说明——用回调而不是让本模块直接依赖
+        # 预算守卫，是为了保持"观测"与"管控"两件事解耦。
+        self._sinks: list = []
+
+    def add_sink(self, sink) -> None:
+        """注册成本回调，每次 record 后以本次成本（元）调用。
+
+        用途：把"这一笔花了多少钱"广播给预算守卫（src/security/cost_guard.py），
+        而 LLMProvider 完全不需要知道预算的存在——接线只在应用启动处做一次。
+
+        回调抛出的异常会被吞掉：记账失败最多让预算不准，
+        为此中断一次正常的 LLM 调用是更糟的取舍。
+        """
+        self._sinks.append(sink)
 
     # ------------------------------------------------------------------
     # 核心 API
@@ -83,6 +97,12 @@ class CostTracker:
         self._cost[model] += cost
         self._calls[model] += 1
         self._total_calls += 1
+
+        for sink in self._sinks:
+            try:
+                sink(cost)
+            except Exception as exc:  # noqa: BLE001 - 见 add_sink 的说明
+                logger.warning("[Cost] sink 回调失败（不影响调用）：%s", exc)
 
         # 单次调用日志：精确到小数点后 4 位
         tag = f"[{extra}]" if extra else ""

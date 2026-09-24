@@ -298,6 +298,13 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 # 每客户端 IP 每分钟请求上限（滑动窗口）。/health/* 探针不受限。
 
+COST_DAILY_LIMIT_YUAN = float(os.getenv("COST_DAILY_LIMIT_YUAN", "10"))
+# 当日 LLM 成本上限（元），跨进程生效（计数存 Redis）。
+# 限流管的是"请求太频繁"，本限额管的是"今天已经花超了"——两者互补：
+# 前者防瞬时冲击，后者防成本在一天内无感累积。
+# 实测单份计划约 ¥0.32，¥10 相当于每天约 30 份，够小范围封闭测试。
+# 设为 0 或负数表示不限制。
+
 # CORS 白名单在 src/security/api_guard.py 的 cors_allow_origins() 中读取
 # （CORS_ALLOW_ORIGINS，逗号分隔；默认仅本机前端来源）。
 

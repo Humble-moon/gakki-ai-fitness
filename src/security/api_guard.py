@@ -171,6 +171,57 @@ class RateLimitMiddleware:
         await self.app(scope, receive, send)
 
 
+class CostLimitMiddleware:
+    """当日 LLM 成本超限时拒绝会花钱的请求。
+
+    与 ``RateLimitMiddleware`` 互补：限流管"请求太频繁"（防瞬时冲击），
+    本中间件管"今天已经花超了"（防成本在一天内无感累积）。
+
+    拦截范围用**排除法**而不是白名单：默认拦所有会触发生成的请求，
+    只放行明确不花钱的端点。这样将来新增端点时默认受保护，
+    不会因为忘了加白名单而留下缺口。
+    """
+
+    #: 只写本地存储、不调用 LLM 的端点，成本超限时也应可用。
+    _FREE_SUFFIXES = ("/training-logs",)
+
+    def __init__(self, app, guard, protected_prefix: str = "/api"):
+        self.app = app
+        self.guard = guard
+        self.protected_prefix = protected_prefix
+
+    def _is_free(self, path: str) -> bool:
+        return any(path.endswith(suffix) for suffix in self._FREE_SUFFIXES)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope["path"]
+        # 只拦写操作：GET 是查询，不产生 LLM 开销
+        if (
+            scope.get("method") != "POST"
+            or not path.startswith(self.protected_prefix)
+            or self._is_free(path)
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        allowed, spent = self.guard.check()
+        if not allowed:
+            await _json_response(send, 429, {
+                "error": "daily_cost_limit_reached",
+                "message": (
+                    f"今日生成额度已用完（已消耗 ¥{spent:.2f} / 上限 "
+                    f"¥{self.guard.daily_limit:.2f}），请明天再试。"
+                ),
+                "spent_today": round(spent, 4),
+                "daily_limit": self.guard.daily_limit,
+            })
+            return
+        await self.app(scope, receive, send)
+
+
 def cors_allow_origins() -> list[str]:
     """CORS origin whitelist from config; localhost defaults for the demo."""
     raw = os.getenv(
