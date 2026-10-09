@@ -33,15 +33,22 @@ def test_fact_script_has_reviewable_contract_sections():
     result = run_fact_script()
     assert set(("data_counts", "eval_counts", "test_counts", "runtime_contract", "warnings")) <= result.keys()
     assert result["runtime_contract"]["host"] == "localhost"
-    assert result["runtime_contract"]["mode"] == "single_user_demo"
+    # 2026-10-09 账号体系上线，定位由「纯单用户演示」变为「游客或本地账号」
+    assert result["runtime_contract"]["mode"] == "local_guest_or_account"
+    assert result["runtime_contract"]["auth_endpoints"] == [
+        "/api/auth/register", "/api/auth/login",
+        "/api/auth/logout", "/api/auth/session"]
     assert isinstance(result["warnings"], list)
 
 
-def test_readme_declares_localhost_single_user_boundary():
+def test_readme_declares_the_local_boundary_and_account_scope():
     readme = (ROOT / "README.md").read_text()
-    assert "localhost 单用户" in readme
+    assert "localhost" in readme
+    assert "单用户" in readme or "游客" in readme
     assert "医疗级" not in readme
     assert "生产 SLA" not in readme
+    # 账号是本地演示级：不得让它读起来像公网多租户服务
+    assert "多租户" not in readme or "不是" in readme or "非" in readme
     # README must keep disclosing what the static inventory cannot verify.
     # The wording tracks the current claim: the chunk count is sourced from a
     # real ingestion run, but it lives in PostgreSQL, so no on-disk inventory

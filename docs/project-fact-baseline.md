@@ -22,7 +22,7 @@ python scripts/verify_project_facts.py --json
 | 知识子集 54 条 | `eval/golden_dataset/knowledge_queries.json` 的 JSON list 长度 | 已复核 | 2026-08-19 | 知识评测子集有 54 条记录 |
 | 条件上下文生成集 10 条 | `eval/e2e_results.json` 的 JSON list 长度 | 已复核 | 2026-08-19 | 条件上下文生成评测包含 10 条结果 |
 | RAGAS 子集 68 条 | `eval/ragas_results.json` 的 `num_queries` | 已复核 | 2026-08-19 | RAGAS 结果声明 68 条查询 |
-| localhost 单用户演示 | `runtime_contract` 及 `app/server.py` 路由 | 已复核为产品边界 | 2026-08-19 | 仅定位为 localhost 单用户演示，不代表公网多用户生产系统 |
+| localhost 本地部署（游客或本地账号） | `runtime_contract` 及 `app/server.py` 路由 | 已复核为产品边界 | 2026-10-09 | 账号体系上线，定位由「单用户演示」变更为「游客可用 + 可选本地账号」；仍不代表公网多租户生产系统 |
 
 ## 架构与能力边界
 
@@ -130,4 +130,6 @@ python scripts/verify_project_facts.py --json
 
 ## 推荐边界话术
 
-可以说：项目是一个运行在 localhost 的单用户 AI 健身应用展示版，当前仓库包含上述可复核的数据和评测样本，并提供 FastAPI/SSE、多 Agent 编排和检索相关实现。不能说：它已经是公网多用户系统、完整人工审核闭环、医疗级产品或具有生产 SLA。
+可以说：项目是一个运行在 localhost 的 AI 健身应用，游客可直接使用，也可注册本地账号把数据归到自己名下；当前仓库包含上述可复核的数据和评测样本，并提供 FastAPI/SSE、多 Agent 编排、检索实现，以及本地账号体系（scrypt 加盐哈希 + HttpOnly Cookie 会话 + 按身份隔离的业务数据）。不能说：它已经是公网多租户系统、完整人工审核闭环、医疗级产品或具有生产 SLA。
+
+**账号体系的边界（2026-10-09 起）**：账号是**本地演示级**的。有密码哈希、会话管理、归属校验（登录用户不能读写他人数据）与数据导出/删除；**没有**注册审核、邮件找回、密码策略、审计日志、权限分级与登录风控。它的存在是为了让「记住用户」真正成立，而不是把它当作可对外开放的账号服务来评价。

@@ -65,12 +65,19 @@ def _client_ip(scope) -> str:
 
 
 class ApiKeyMiddleware:
-    """Optional bearer-token auth for /api/* routes."""
+    """Optional bearer-token auth for /api/* routes.
 
-    def __init__(self, app, token: str = "", protected_prefix: str = "/api"):
+    ``exempt_prefixes`` 存在的理由：登录、注册这些端点必须能在无凭据时访问，
+    否则会形成鸡生蛋——要拿令牌得先有令牌。它同时也是全局 API key 与
+    「按用户的登录态」两套机制共存的接缝。
+    """
+
+    def __init__(self, app, token: str = "", protected_prefix: str = "/api",
+                 exempt_prefixes: tuple = ()):
         self.app = app
         self.token = token
         self.protected_prefix = protected_prefix
+        self.exempt_prefixes = exempt_prefixes
 
     def _authorized(self, scope) -> bool:
         auth = _header(scope, "authorization")
@@ -86,8 +93,17 @@ class ApiKeyMiddleware:
         if scope["type"] != "http" or not self.token:
             await self.app(scope, receive, send)
             return
+        # CORS 预检不带凭据（浏览器规范如此），拦下它就等于永远走不到 CORS 层，
+        # 前端会看到预检 401 而不是真正的跨源策略。预检本身不读业务数据，
+        # 放行不降低安全性。
+        if scope.get("method") == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
         path = scope["path"]
         if not path.startswith(self.protected_prefix):
+            await self.app(scope, receive, send)
+            return
+        if any(path.startswith(p) for p in self.exempt_prefixes):
             await self.app(scope, receive, send)
             return
         if self._authorized(scope):
@@ -185,13 +201,18 @@ class CostLimitMiddleware:
     #: 只写本地存储、不调用 LLM 的端点，成本超限时也应可用。
     _FREE_SUFFIXES = ("/training-logs",)
 
+    #: 不消耗 LLM 的前缀。认证端点在列：额度用完时若连登录、登出都被拦，
+    #: 用户会被卡在一个既不能用、也退不出的状态——而这两个操作本身不花钱。
+    _FREE_PREFIXES = ("/api/auth/",)
+
     def __init__(self, app, guard, protected_prefix: str = "/api"):
         self.app = app
         self.guard = guard
         self.protected_prefix = protected_prefix
 
     def _is_free(self, path: str) -> bool:
-        return any(path.endswith(suffix) for suffix in self._FREE_SUFFIXES)
+        return (any(path.endswith(s) for s in self._FREE_SUFFIXES)
+                or any(path.startswith(p) for p in self._FREE_PREFIXES))
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":

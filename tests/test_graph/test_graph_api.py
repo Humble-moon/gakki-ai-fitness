@@ -35,7 +35,7 @@ def _client(server):
 async def test_v2_plan_delivers_safe(monkeypatch):
     server = _patch(monkeypatch, make_runtime())
     async with _client(server) as client:
-        resp = await client.post("/api/v2/plan", json={"query": "帮我增肌"})
+        resp = await client.post("/api/v2/plan", json={"query": "帮我增肌", "athlete_key": "v2-guest"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["delivery_status"] == "safe_delivered"
@@ -48,7 +48,7 @@ async def test_v2_plan_goal_mismatch_returns_422(monkeypatch):
     # plan goal 增肌 vs request goal 减脂 → GoalConsistencyError → 422
     server = _patch(monkeypatch, make_runtime(plan=valid_plan(goal="增肌")))
     async with _client(server) as client:
-        resp = await client.post("/api/v2/plan", json={"goal": "减脂"})
+        resp = await client.post("/api/v2/plan", json={"goal": "减脂", "athlete_key": "v2-guest"})
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "GOAL_CONSISTENCY_FAILED"
 
@@ -57,7 +57,7 @@ async def test_v2_plan_goal_mismatch_returns_422(monkeypatch):
 async def test_v2_plan_interrupt_returns_review_payload(monkeypatch):
     server = _patch(monkeypatch, make_runtime(checks=[_needs_review_check()]))
     async with _client(server) as client:
-        resp = await client.post("/api/v2/plan", json={})
+        resp = await client.post("/api/v2/plan", json={"athlete_key": "v2-guest"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["delivery_status"] == "review_pending"
@@ -69,7 +69,7 @@ async def test_v2_plan_interrupt_returns_review_payload(monkeypatch):
 async def test_v2_plan_stream_ends_with_done(monkeypatch):
     server = _patch(monkeypatch, make_runtime())
     async with _client(server) as client:
-        resp = await client.post("/api/v2/plan/stream", json={"query": "增肌"})
+        resp = await client.post("/api/v2/plan/stream", json={"query": "增肌", "athlete_key": "v2-guest"})
     events = decode_sse(resp.text)
     terminals = [e["event"] for e in events
                  if e["event"] in {"done", "error", "cancelled"}]
@@ -84,7 +84,7 @@ async def test_v2_resolve_approves_and_delivers(monkeypatch):
     runtime = make_runtime(checks=[_needs_review_check()])
     server = _patch(monkeypatch, runtime)
     async with _client(server) as client:
-        plan = (await client.post("/api/v2/plan", json={})).json()
+        plan = (await client.post("/api/v2/plan", json={"athlete_key": "v2-guest"})).json()
         review_id = plan["review"]["review_id"]
 
         resp = await client.post(
@@ -104,7 +104,7 @@ async def test_v2_resolve_rejects_and_records(monkeypatch):
     runtime = make_runtime(checks=[_needs_review_check()])
     server = _patch(monkeypatch, runtime)
     async with _client(server) as client:
-        plan = (await client.post("/api/v2/plan", json={})).json()
+        plan = (await client.post("/api/v2/plan", json={"athlete_key": "v2-guest"})).json()
         review_id = plan["review"]["review_id"]
         resp = await client.post(
             f"/api/v2/reviews/{review_id}/resolve",
@@ -118,7 +118,7 @@ async def test_v2_double_resolve_is_conflict(monkeypatch):
     runtime = make_runtime(checks=[_needs_review_check()])
     server = _patch(monkeypatch, runtime)
     async with _client(server) as client:
-        plan = (await client.post("/api/v2/plan", json={})).json()
+        plan = (await client.post("/api/v2/plan", json={"athlete_key": "v2-guest"})).json()
         review_id = plan["review"]["review_id"]
         first = await client.post(f"/api/v2/reviews/{review_id}/resolve",
                                   json={"decision": "approved"})
@@ -144,7 +144,7 @@ async def test_v2_get_review_shows_artifact_and_resolution(monkeypatch):
     runtime = make_runtime(checks=[_needs_review_check()])
     server = _patch(monkeypatch, runtime)
     async with _client(server) as client:
-        plan = (await client.post("/api/v2/plan", json={})).json()
+        plan = (await client.post("/api/v2/plan", json={"athlete_key": "v2-guest"})).json()
         review_id = plan["review"]["review_id"]
 
         before = await client.get(f"/api/v2/reviews/{review_id}")

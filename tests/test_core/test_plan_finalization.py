@@ -308,3 +308,59 @@ def test_missing_checks_still_fail_closed():
 
     assert result["requires_review"] is True
     assert result["_persistence_allowed"] is False
+
+
+class TestDeliveryAndCacheGatesAreSeparate:
+    """「能否缓存」与「能否记住这个用户」是两件事，不能共用一个闸门。
+
+    合并成一道曾造成一个隐蔽后果：LLM 检查器几乎从不返回空的问题清单
+    （见 review_pending_result 的说明），于是 issues_empty 长期为假，
+    **生成计划这条路上的用户画像几乎从不落盘**；而知识问答路径是直接写的。
+    表现就是「问答记住了我，生成计划没记住」——同一件事两条路径不一致。
+    """
+
+    def _result(self, **check_over):
+        check = {"is_safe": True, "issues": [], "requires_human_review": False,
+                 "confidence": 0.9}
+        check.update(check_over)
+        return pf.finalize_result(valid_plan(), [check], 0)
+
+    def test_delivered_plan_with_warnings_still_remembers_the_user(self):
+        """交付但带建议性警告时：画像必须落盘，缓存不动。"""
+        result = self._result(issues=[{"issue": "建议增加后链训练", "severity": "warning"}])
+        assert result["requires_review"] is False
+        assert result["_persistence_allowed"] is False, "带警告不该进缓存"
+        assert result["_delivery_allowed"] is True, "但它是可以交付的"
+
+        cache, conversation, long_term = StoreSpy(), StoreSpy(), StoreSpy()
+        assert pf.persist_if_safe(cache, conversation, long_term,
+                                  {"goal": "增肌"}, "q", result, athlete_key="ak") is True
+        cache.assert_empty()
+        conversation.assert_empty()
+        assert [n for n, _, _ in long_term.calls] == ["save_preference"] * 3
+
+    def test_clean_delivery_still_fills_the_cache(self):
+        """干净交付时缓存照旧写入——放宽画像写入不得顺带放宽缓存。"""
+        result = self._result()
+        assert result["_persistence_allowed"] is True
+        cache, conversation, long_term = StoreSpy(), StoreSpy(), StoreSpy()
+        pf.persist_if_safe(cache, conversation, long_term, {"goal": "增肌"}, "q", result)
+        assert [n for n, _, _ in cache.calls] == ["set"]
+
+    def test_held_plan_still_writes_nothing(self):
+        """被挂起的计划一个字节都不写——失败关闭语义不得被这次改动削弱。"""
+        result = self._result(requires_human_review=True,
+                              issues=[{"issue": "膝盖冲突", "severity": "danger"}])
+        assert result["_delivery_allowed"] is False
+        cache, conversation, long_term = StoreSpy(), StoreSpy(), StoreSpy()
+        assert pf.persist_if_safe(cache, conversation, long_term,
+                                  {"goal": "增肌"}, "q", result) is False
+        cache.assert_empty(); conversation.assert_empty(); long_term.assert_empty()
+
+    def test_unsafe_plan_still_writes_nothing(self):
+        result = self._result(is_safe=False,
+                              issues=[{"issue": "危险", "severity": "danger"}])
+        cache, conversation, long_term = StoreSpy(), StoreSpy(), StoreSpy()
+        assert pf.persist_if_safe(cache, conversation, long_term,
+                                  {"goal": "增肌"}, "q", result) is False
+        cache.assert_empty(); conversation.assert_empty(); long_term.assert_empty()

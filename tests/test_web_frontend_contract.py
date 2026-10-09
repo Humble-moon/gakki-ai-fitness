@@ -4,6 +4,22 @@ from pathlib import Path
 HTML = Path("app/static/index.html").read_text(encoding="utf-8")
 
 
+def _fn_body(name):
+    """取一个顶层函数的函数体。
+
+    必须同时识别 ``function x()`` 与 ``async function x()``——
+    只按 ``\nfunction `` 切会在遇到 async 函数时越界，把下一个函数
+    也吞进来，于是断言读到的是别人的代码（这类切片错误会伪装成
+    "契约通过"，方向相反时则会伪装成"实现有问题"）。
+    """
+    import re
+    start = re.search(rf"^(?:async )?function {re.escape(name)}\(", HTML, re.M)
+    assert start, f"找不到函数 {name}"
+    nxt = re.search(r"^(?:async )?function ", HTML[start.end():], re.M)
+    end = start.end() + nxt.start() if nxt else len(HTML)
+    return HTML[start.start():end]
+
+
 def test_stable_stream_and_qa_containers_exist():
     for element_id in (
         "app-shell", "profile-summary", "profile-editor", "plan-status",
@@ -561,3 +577,124 @@ def test_welcome_library_counts_match_actual_data():
         f"动作库实际有 {exercises} 个，欢迎页上的数字需要同步")
     assert f'<span class="ss-val">{docs}</span> 篇专业文献' in HTML, (
         f"知识库实际有 {docs} 篇，欢迎页上的数字需要同步")
+
+
+def test_generate_plan_request_carries_athlete_key():
+    """生成计划的请求体必须带 athlete_key。
+
+    长期记忆以 athlete_key 为身份。前端若不传，后端就退化成身高体重的 MD5
+    指纹——用户改一次体重就换一个身份，先前存的偏好再也读不回来。问答路径
+    一直传着，只有生成计划这条漏了，于是两条路径写进了两个不同的身份。
+    """
+    import re
+
+    m = re.search(r"const body = \{[^}]*\}", HTML)
+    assert m, "找不到生成计划的请求体构造"
+    assert "athlete_key: athleteKey" in m.group(0), (
+        "生成计划必须带 athlete_key，否则长期记忆会落到随体重漂移的指纹上")
+
+
+def test_habits_input_exists_and_is_collected():
+    """运动习惯要能填写并提交。
+
+    这是新加的一类长期记忆。若输入框存在而 getProfile 不收集它，
+    用户填了等于没填——界面上看得见、后端收不到，是最难自查的一类漏。
+    """
+    assert 'id="habits-input"' in HTML, "档案区缺少运动习惯输入框"
+    assert "function getProfile()" in HTML
+    profile_fn = _fn_body("getProfile")
+    assert "habits" in profile_fn, "getProfile 必须收集 habits，否则填了也不会提交"
+
+
+def test_account_ui_contract():
+    """登录界面必须齐全且不改变游客可用性。
+
+    账号是可选增强：不登录也能用完整功能。若登录表单是必经之路，
+    这个契约就破了。
+    """
+    for element_id in ("account-block", "account-label", "account-hint",
+                       "auth-form", "auth-username", "auth-password",
+                       "auth-status", "btn-login", "btn-register", "btn-logout"):
+        assert f'id="{element_id}"' in HTML, f"缺少登录界面元素 #{element_id}"
+
+    # 表单默认收起，游客直接看到的是主界面而不是登录墙
+    assert 'id="auth-form" hidden' in HTML
+
+    # 密码框必须是 password 类型，否则明文显示在屏幕上
+    assert 'id="auth-password" type="password"' in HTML
+
+    for helper in ("toggleAuthForm", "loadSession", "handleLogin",
+                   "handleRegister", "handleLogout", "renderSession"):
+        assert f"function {helper}(" in HTML, f"缺少函数 {helper}"
+
+
+def test_logout_clears_the_cached_user_even_on_failure():
+    """登出接口失败时也必须把界面切回游客态。
+
+    否则网络一抖，用户就卡在一个假的"已登录"界面里，看到的还是别人的
+    或过期的数据。
+    """
+    fn = _fn_body("handleLogout")
+    assert "currentUser = null" in fn, "登出必须清空本地登录态"
+    assert "catch" in fn, "登出接口失败不能中断状态清理"
+
+
+def test_demo_switch_is_disabled_while_logged_in():
+    """演示数据是共享的固定身份，登录态下切换会让人以为数据丢了。"""
+    fn = _fn_body("loadDemoData")
+    assert "currentUser" in fn, "loadDemoData 必须检查登录态"
+    render = _fn_body("renderSession")
+    assert "btn-load-demo" in render, "登录态下应隐藏演示按钮"
+
+
+def test_claim_ui_contract():
+    """认领入口必须存在，且登录时不自动认领。
+
+    在别人的电脑上登录时自动认领会把对方的游客数据搬进自己账号，
+    因此登录只提示、由用户点按钮决定；注册才自动认领。
+    """
+    assert 'id="claim-offer"' in HTML
+    assert 'id="btn-claim"' in HTML
+    for helper in ("claimLocalGuestData", "maybeOfferClaim", "handleClaim"):
+        assert f"function {helper}(" in HTML
+
+    login_fn = _fn_body("handleLogin")
+    assert "claimLocalGuestData()" not in login_fn, (
+        "登录不应自动认领——可能是在别人的设备上登录")
+
+    register_fn = _fn_body("handleRegister")
+    assert "claimLocalGuestData()" in register_fn, "注册后应自动认领本机数据"
+
+
+def test_claim_never_sends_the_demo_key():
+    """演示身份是共享的，认领它会把公共数据混进个人账号。"""
+    fn = _fn_body("claimLocalGuestData")
+    assert "DEMO_ATHLETE_KEY" in fn, "认领前必须排除演示身份"
+
+
+def test_review_panel_shows_the_actual_risks():
+    """被拦下时必须摊开具体风险，而不是只说一句"检测到伤病风险"。
+
+    安全门已经算出了每条冲突（哪个动作、为什么、怎么替换）。只显示一行
+    reason 会让用户看到一串审核编号却不知道自己做错了什么——实测中
+    这是最像"产品坏了"的一屏。
+    """
+    fn = _fn_body("renderReviewPending")
+    assert "details.issues" in fn or "review.issues" in fn, "审核面板必须渲染 issues"
+    assert "severity" in fn, "风险条目要区分严重级别"
+    assert "exercise" in fn, "风险条目要带动作名"
+
+
+def test_review_panel_does_not_promise_a_human_reviewer():
+    """不得让用户等待一个不存在的人工审核者。"""
+    fn = _fn_body("renderReviewPending")
+    assert "等待专业审核" not in fn
+    assert "不是故障" in fn, "要明确告知这是安全机制生效，而非产品故障"
+    assert "review-pending-id" in fn, "审核编号应弱化后置，而不是当作主要信息"
+
+
+def test_review_panel_renders_issue_children_as_text():
+    """风险文本来自模型输出，必须走 textContent 而非 innerHTML。"""
+    fn = _fn_body("renderReviewPending")
+    assert "innerHTML" not in fn
+    assert "appendText" in fn

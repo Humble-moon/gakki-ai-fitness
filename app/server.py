@@ -27,7 +27,7 @@ from pathlib import Path
 # 将项目根目录加入 Python 模块搜索路径，确保 src.* 导入正常
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import Depends, FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -45,6 +45,17 @@ from src.security.api_guard import (AdminAuthMiddleware, ApiKeyMiddleware,
                                     CostLimitMiddleware, RateLimitMiddleware,
                                     cors_allow_origins)
 from src.security.cost_guard import CostGuard
+from src.security.session import (
+    ANONYMOUS,
+    Principal,
+    resolve_owner_key,
+    user_owner_key,
+)
+from app.auth_api import (
+    get_current_principal,
+    require_owner_key,
+    router as auth_router,
+)
 from src.storage.redis_client import RedisClient
 from src.llm.cost_tracker import cost_tracker
 from langgraph.types import Command
@@ -75,21 +86,18 @@ def health_ready():
     )
 
 # CORS 中间件：白名单由 CORS_ALLOW_ORIGINS 配置（默认仅本机前端来源）。
-# 中间件注册顺序说明：Starlette 中后注册者在外层，因此执行顺序为
-# CORS（预检）→ 限流（先于认证计数，防暴力试探）→ 管理端认证 → 业务认证 → 路由。
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_allow_origins(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_middleware(RateLimitMiddleware,
-                   requests_per_minute=config.RATE_LIMIT_PER_MINUTE)
+#
+# 中间件注册顺序说明：Starlette 中**后注册者在外层**，因此下面这段代码的
+# 书写顺序与真实执行顺序**相反**。按注册顺序从下往上读，实际执行顺序为：
+#     CORS → 限流 → 成本上限 → 管理端认证 → 业务 API Key → 路由
+# CORS 放在最外层是必须的：预检 OPTIONS 不带凭据，若它先撞上认证中间件，
+# 浏览器会收到 401 而不是跨源策略，前端表现为"跨域请求莫名失败"。
+app.add_middleware(ApiKeyMiddleware, token=config.API_AUTH_TOKEN,
+                   # 登录/注册/登出必须能在无凭据时访问，否则形成鸡生蛋
+                   exempt_prefixes=("/api/auth/",))
 app.add_middleware(AdminAuthMiddleware,
                    admin_token=config.ADMIN_TOKEN,
                    api_token=config.API_AUTH_TOKEN)
-app.add_middleware(ApiKeyMiddleware, token=config.API_AUTH_TOKEN)
 
 # 当日成本上限：防"请求不频繁但一天累积花超"。计数存 Redis，
 # 因此重启不会把预算重置回零。接线方式是给 cost_tracker 挂一个 sink，
@@ -98,6 +106,20 @@ cost_guard = CostGuard(redis_client=RedisClient(),
                        daily_limit=config.COST_DAILY_LIMIT_YUAN)
 cost_tracker.add_sink(cost_guard.record)
 app.add_middleware(CostLimitMiddleware, guard=cost_guard)
+
+app.add_middleware(RateLimitMiddleware,
+                   requests_per_minute=config.RATE_LIMIT_PER_MINUTE)
+# CORS 最后注册 → 最外层，先于一切认证处理预检
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_allow_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 账号相关路由（注册/登录/登出/会话查询）
+app.include_router(auth_router)
 
 
 # ============================================================
@@ -124,6 +146,8 @@ class PlanRequest(BaseModel):
     # 每周训练天数，默认 4
     injuries: list[str] = []
     # 伤病史列表，默认空
+    habits: list[str] = []
+    # 运动习惯/爱好列表，默认空。与 injuries 同属用户属性，随画像落盘进长期记忆。
     query: str = ""
     # 自然语言查询，为空时使用默认模板
     session_id: Optional[str] = None
@@ -175,6 +199,8 @@ class QuestionRequest(BaseModel):
     available_equipment: list[str] = ["哑铃"]
     days_per_week: int = 4
     injuries: list[str] = []
+    habits: list[str] = []
+    # 运动习惯/爱好列表，默认空
     question: str = ""
     # 用户提问内容，如 "减脂期应该怎么安排碳水摄入？"
     session_id: Optional[str] = None
@@ -302,7 +328,8 @@ def _stream_events(generator):
 # ============================================================
 
 @app.post("/api/generate-plan")
-def generate_plan(req: PlanRequest):
+def generate_plan(req: PlanRequest,
+                  principal: Principal = Depends(get_current_principal)):
     """
     POST /api/generate-plan - 流式生成训练计划（SSE）
 
@@ -335,11 +362,12 @@ def generate_plan(req: PlanRequest):
     profile = UserProfileInput(
         height=req.height, weight=req.weight, training_years=req.training_years,
         goal=req.goal, available_equipment=req.available_equipment,
-        days_per_week=req.days_per_week, injuries=req.injuries
+        days_per_week=req.days_per_week, injuries=req.injuries, habits=req.habits
     )
+    owner_key = require_owner_key(principal, req.athlete_key)
     return StreamingResponse(
         _stream_events(orch.generate_plan_stream(profile, req.query, req.session_id,
-                                                 athlete_key=req.athlete_key)),
+                                                 athlete_key=owner_key)),
         media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
@@ -384,7 +412,8 @@ def analyze_exercise(req: AnalysisRequest):
 
 
 @app.post("/api/ask-question")
-def ask_question(req: QuestionRequest):
+def ask_question(req: QuestionRequest,
+                 principal: Principal = Depends(get_current_principal)):
     """
     POST /api/ask-question - 流式自由问答（SSE）
 
@@ -415,11 +444,12 @@ def ask_question(req: QuestionRequest):
     profile = UserProfileInput(
         height=req.height, weight=req.weight, training_years=req.training_years,
         goal=req.goal, available_equipment=req.available_equipment,
-        days_per_week=req.days_per_week, injuries=req.injuries
+        days_per_week=req.days_per_week, injuries=req.injuries, habits=req.habits
     )
+    owner_key = require_owner_key(principal, req.athlete_key)
     return StreamingResponse(
         _stream_events(orch.answer_question_stream(req.question, profile, req.session_id,
-                                                   athlete_key=req.athlete_key)),
+                                                   athlete_key=owner_key)),
         media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
@@ -507,7 +537,8 @@ def _storage_unavailable():
 
 
 @app.post("/api/training-logs")
-async def create_training_log(req: TrainingLogRequest):
+async def create_training_log(req: TrainingLogRequest,
+                              principal: Principal = Depends(get_current_principal)):
     """
     POST /api/training-logs - 记录一次训练
 
@@ -517,7 +548,7 @@ async def create_training_log(req: TrainingLogRequest):
     说明：主表与明细在同一事务写入——明细写一半失败会留下一条没有动作的
           空日志，统计时会把完成率的分母撑大、稀释真实完成度。
     """
-    if not req.athlete_key:
+    if not req.athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
             "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
 
@@ -528,7 +559,8 @@ async def create_training_log(req: TrainingLogRequest):
 
     entries = [e.model_dump() for e in req.entries]
     log_id = store.save_log(
-        athlete_key=req.athlete_key, entries=entries, log_date=req.log_date,
+        athlete_key=require_owner_key(principal, req.athlete_key),
+        entries=entries, log_date=req.log_date,
         day_index=req.day_index, focus=req.focus, plan_id=req.plan_id,
         session_rpe=req.session_rpe, duration_min=req.duration_min,
         body_weight=req.body_weight, notes=req.notes,
@@ -545,7 +577,8 @@ async def create_training_log(req: TrainingLogRequest):
 
 @app.get("/api/training-logs")
 async def list_training_logs(athlete_key: str = "", weeks: int = 12,
-                             limit: int = 50, exercise: Optional[str] = None):
+                             limit: int = 50, exercise: Optional[str] = None,
+                             principal: Principal = Depends(get_current_principal)):
     """
     GET /api/training-logs - 查询历史训练日志（含动作明细）
 
@@ -557,7 +590,7 @@ async def list_training_logs(athlete_key: str = "", weeks: int = 12,
 
     返回：JSON {"logs": [...], "count"}
     """
-    if not athlete_key:
+    if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
             "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
 
@@ -566,26 +599,33 @@ async def list_training_logs(athlete_key: str = "", weeks: int = 12,
     if not store.enabled:
         return _storage_unavailable()
 
-    logs = store.get_logs(athlete_key, weeks=max(1, min(weeks, 52)),
+    logs = store.get_logs(require_owner_key(principal, athlete_key),
+                          weeks=max(1, min(weeks, 52)),
                           limit=max(1, min(limit, 100)), exercise=exercise)
     return {"logs": logs, "count": len(logs)}
 
 
 @app.get("/api/user-data/export")
-def export_user_data(athlete_key: str = "", session_id: Optional[str] = None):
-    """导出该 athlete_key 名下的全部个人数据（JSON）。
+def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
+                     principal: Principal = Depends(get_current_principal)):
+    """导出该身份名下的全部个人数据（JSON）。
 
     健康数据属于个人信息，用户有权取回自己产生的全部内容。导出覆盖三处
     存储：训练日志（PostgreSQL）、长期记忆（Redis）、当前会话（Redis）。
     缓存不在导出范围——它是"同一份身体数据 + 同一目标命中同一计划"的
     去重产物，不绑定个人身份。
+
+    登录后 athlete_key 参数被忽略，一律导出登录账号自己的数据。这一点在
+    账号场景下是必须的：否则任何登录用户传别人的 key 就能把他人健康数据
+    整份拉走。
     """
-    if not athlete_key:
+    if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
             "error": "athlete_key_required",
             "message": "必须提供 athlete_key 才能定位你的数据。",
         })
 
+    athlete_key = require_owner_key(principal, athlete_key)
     payload: dict = {
         "athlete_key": athlete_key,
         "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -628,19 +668,22 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None):
 
 @app.delete("/api/user-data")
 def delete_user_data(athlete_key: str = "", confirm: str = "",
-                     session_id: Optional[str] = None):
-    """删除该 athlete_key 名下的全部个人数据。
+                     session_id: Optional[str] = None,
+                     principal: Principal = Depends(get_current_principal)):
+    """删除该身份名下的全部个人数据。
 
     **不可逆操作**，因此要求显式传 ``confirm=DELETE``——一个拼错的请求
     不该把用户几个月的训练记录抹掉。
 
-    无认证场景下 athlete_key 是唯一的"凭证"，而它在浏览器 localStorage 里，
-    因此这里加一条审计日志：真实部署接入账号体系后，这条日志就是追溯依据。
+    账号场景下这是破坏性最强的端点：不校验归属的话，任何登录用户传一个
+    受害者 key 就能删光他人数据。因此登录后一律以登录身份为准，客户端
+    传来的 athlete_key 被忽略。游客模式沿用自证式 key（本机数据本机可见），
+    这条审计日志记录实际删除的主体，便于事后追溯。
 
     删除范围与导出对齐（训练日志 / 长期记忆 / 会话）。**不做部分成功**：
     任一步抛错都如实返回失败与已完成的部分，不谎报"已全部删除"。
     """
-    if not athlete_key:
+    if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
             "error": "athlete_key_required",
             "message": "必须提供 athlete_key 才能定位你的数据。",
@@ -651,7 +694,8 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
             "message": "删除不可恢复。请带上 confirm=DELETE 明确确认。",
         })
 
-    logger.warning("[data-rights] 收到删除请求 athlete_key=%s session_id=%s",
+    athlete_key = require_owner_key(principal, athlete_key)
+    logger.warning("[data-rights] 收到删除请求 subject=%s session_id=%s",
                    athlete_key, session_id or "-")
 
     result: dict = {"athlete_key": athlete_key, "deleted": {}, "errors": {}}
@@ -682,7 +726,8 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
 
 
 @app.get("/api/training-stats")
-async def training_stats(athlete_key: str = "", weeks: int = 12):
+async def training_stats(athlete_key: str = "", weeks: int = 12,
+                         principal: Principal = Depends(get_current_principal)):
     """
     GET /api/training-stats - 训练统计（图表数据源）
 
@@ -693,7 +738,7 @@ async def training_stats(athlete_key: str = "", weeks: int = 12):
     返回：JSON {totals, weekly, exercises}，结构直接对应前端图表的 series。
         无数据时返回结构完整的空壳，前端不必判空。
     """
-    if not athlete_key:
+    if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
             "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
 
@@ -704,6 +749,7 @@ async def training_stats(athlete_key: str = "", weeks: int = 12):
     if not store.enabled:
         return _storage_unavailable()
 
+    athlete_key = require_owner_key(principal, athlete_key)
     logs = store.get_logs(athlete_key, weeks=max(1, min(weeks, 52)))
     stats = compute_stats(logs)
     stats["athlete_key"] = athlete_key
@@ -712,7 +758,8 @@ async def training_stats(athlete_key: str = "", weeks: int = 12):
 
 
 @app.post("/api/training-advice")
-async def create_training_advice(req: TrainingAdviceRequest):
+async def create_training_advice(req: TrainingAdviceRequest,
+                                 principal: Principal = Depends(get_current_principal)):
     """
     POST /api/training-advice - 生成调整建议（**只生成，不生效**）
 
@@ -723,7 +770,7 @@ async def create_training_advice(req: TrainingAdviceRequest):
           不依赖 LLM，模型不可用时依然可用。用户必须在 apply 接口确认勾选
           后才会写入长期记忆。
     """
-    if not req.athlete_key:
+    if not req.athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
             "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
 
@@ -734,12 +781,13 @@ async def create_training_advice(req: TrainingAdviceRequest):
     if not store.enabled:
         return _storage_unavailable()
 
-    return build_advice(req.athlete_key, store,
+    return build_advice(require_owner_key(principal, req.athlete_key), store,
                         weeks=max(1, min(req.weeks, 52)))
 
 
 @app.post("/api/training-advice/apply")
-async def apply_training_advice(req: TrainingAdviceApplyRequest):
+async def apply_training_advice(req: TrainingAdviceApplyRequest,
+                                principal: Principal = Depends(get_current_principal)):
     """
     POST /api/training-advice/apply - 确认采纳所选调整
 
@@ -750,8 +798,19 @@ async def apply_training_advice(req: TrainingAdviceApplyRequest):
           确认后写入长期记忆，在下一次生成计划时注入上下文。
           **用户确认不等于安全审核通过**——若调整与伤病冲突，
           FactChecker 仍会拦下并触发人工审核。
+
+    归属：工件记录了自己属于谁，登录用户只能结算自己的工件。不匹配返回
+          404 而非 403——403 等于告诉对方"这个 id 存在但不属于你"，
+          可被用来枚举有效 advice_id。
     """
-    from src.core.training_advice import resolve_advice
+    from src.core.training_advice import advice_store, resolve_advice
+
+    artifact = advice_store.get(req.advice_id)
+    if (artifact is not None and principal.is_authenticated
+            and artifact.athlete_key != user_owner_key(principal.user_id)):
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "ADVICE_NOT_FOUND",
+                      "message": "该调整建议不存在或已失效，请重新生成"}})
 
     result = resolve_advice(req.advice_id, req.accepted_item_ids)
     if result is None:
@@ -907,12 +966,13 @@ def _profile_from_request(req) -> UserProfileInput:
     return UserProfileInput(
         height=req.height, weight=req.weight, training_years=req.training_years,
         goal=req.goal, available_equipment=req.available_equipment,
-        days_per_week=req.days_per_week, injuries=req.injuries,
+        days_per_week=req.days_per_week, injuries=req.injuries, habits=req.habits,
     )
 
 
 @app.post("/api/v2/plan")
-def generate_plan_v2(req: PlanRequest):
+def generate_plan_v2(req: PlanRequest,
+                     principal: Principal = Depends(get_current_principal)):
     """同步版：走 LangGraph 状态图生成训练计划。
 
     返回三种情况之一：
@@ -924,7 +984,8 @@ def generate_plan_v2(req: PlanRequest):
     thread_id = graph_runtime.new_thread_id()
     config = graph_runtime.config_for(thread_id)
     inputs = build_inputs(profile, query=req.query, session_id=req.session_id,
-                          thread_id=thread_id, athlete_key=req.athlete_key)
+                          thread_id=thread_id,
+                          athlete_key=require_owner_key(principal, req.athlete_key))
     try:
         state = graph_runtime.graph.invoke(inputs, config)
     except GoalConsistencyError as exc:
@@ -941,26 +1002,52 @@ def generate_plan_v2(req: PlanRequest):
 
 
 @app.post("/api/v2/plan/stream")
-def generate_plan_v2_stream(req: PlanRequest):
+def generate_plan_v2_stream(req: PlanRequest,
+                            principal: Principal = Depends(get_current_principal)):
     """流式版（SSE）：复用 _stream_events 与既有事件协议，前端零改动。"""
     profile = _profile_from_request(req)
     thread_id = graph_runtime.new_thread_id()
     config = graph_runtime.config_for(thread_id)
     inputs = build_inputs(profile, query=req.query, session_id=req.session_id,
-                          thread_id=thread_id, athlete_key=req.athlete_key)
+                          thread_id=thread_id,
+                          athlete_key=require_owner_key(principal, req.athlete_key))
     return StreamingResponse(
         _stream_events(graph_stream_events(graph_runtime, inputs, config)),
         media_type="text/event-stream", headers=STREAM_HEADERS,
     )
 
 
+def _review_owned_by(artifact, owner_key: str | None) -> bool:
+    """审核工件是否属于当前身份。
+
+    旧工件（本字段引入前落库）的 owner_key 为空，此时无法判定归属，退回
+    "凭 review_id 访问"——review_id 是 uuid4，靠不可猜性兜底。新工件一律
+    带归属，登录用户只能访问自己的。这是一次有意的取舍：宁可对历史数据
+    保守兼容，也不为了整齐而让旧工件变得完全无法审核。
+    """
+    if not getattr(artifact, "owner_key", ""):
+        return True
+    return artifact.owner_key == owner_key
+
+
+def _review_denied_response():
+    return JSONResponse(status_code=404,
+                        content={"error": {"code": "REVIEW_NOT_FOUND"}})
+
+
 @app.get("/api/v2/reviews/{review_id}")
-def get_review_v2(review_id: str):
+def get_review_v2(review_id: str,
+                  principal: Principal = Depends(get_current_principal)):
     """查询审核工件及其解除结果（若已解除）。"""
     artifact = graph_runtime.deps.review_store.get(review_id)
     if artifact is None:
         return JSONResponse(status_code=404,
                             content={"error": {"code": "REVIEW_NOT_FOUND"}})
+    # 不属于当前身份时返回 404 而非 403：403 等于确认"这个 id 存在但不是你的"，
+    # 可被用来枚举有效 review_id。
+    if principal.is_authenticated and not _review_owned_by(
+            artifact, user_owner_key(principal.user_id)):
+        return _review_denied_response()
     resolution = graph_runtime.resolutions.get(review_id)
     return {
         "review": {
@@ -980,14 +1067,23 @@ def get_review_v2(review_id: str):
 
 @app.post("/api/v2/reviews/{review_id}/resolve")
 def resolve_review_v2(review_id: str, req: ReviewResolveRequest,
-                      thread_id: Optional[str] = None):
+                      thread_id: Optional[str] = None,
+                      principal: Principal = Depends(get_current_principal)):
     """解除人工审核并恢复被暂停的 LangGraph 执行（HITL 闭环的关键一步）。
 
     旧系统只会创建 review_pending 工件、无法对其作出决定；该路由通过
     ``Command(resume=...)`` 恢复 checkpoint 中暂停的图，交付
     review_approved / review_rejected。thread_id 缺省时按 review_id 反查，
     服务重启后也可显式传入 thread_id 恢复。
+
+    归属：解除是改状态的操作，登录用户只能解除自己的工件。不校验的话，
+    任何登录用户拿到 review_id 就能替别人放行一个被安全门拦下的计划。
     """
+    artifact = graph_runtime.deps.review_store.get(review_id)
+    if artifact is not None and principal.is_authenticated and not _review_owned_by(
+            artifact, user_owner_key(principal.user_id)):
+        return _review_denied_response()
+
     resolved_thread = thread_id or graph_runtime.thread_index.thread_for(review_id)
     if not resolved_thread:
         return JSONResponse(status_code=404,

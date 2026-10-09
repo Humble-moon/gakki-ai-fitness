@@ -1597,6 +1597,41 @@ body::after {
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); }
 .profile-panel { min-width: 0; }
 .profile-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; }
+
+/* 账号区块：默认收起，游客也能直接用 */
+.account-block { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.account-state { display: flex; flex-direction: column; gap: 2px; }
+.account-label { color: var(--text-primary); font-size: 14px; font-weight: 600; }
+.account-hint { color: var(--text-muted); font-size: 12px; }
+.account-actions { display: flex; gap: 8px; }
+.account-btn { flex: 1; padding: 7px 10px; background: var(--bg-base); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; transition: border-color .15s, color .15s; }
+.account-btn:hover { border-color: var(--accent); color: var(--accent); }
+.account-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.account-btn-quiet { background: transparent; color: var(--text-muted); }
+
+/* 审核待处理面板：把被拦下的具体风险摊开 */
+.review-pending-lead { margin: 6px 0 12px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
+.review-pending-subtitle { margin: 12px 0 8px; color: var(--text-primary); font-size: 13px; font-weight: 600; }
+.review-issue-list { margin: 0 0 12px; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.review-issue { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 8px 10px; background: var(--bg-base); border-left: 3px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 13px; line-height: 1.65; }
+.review-issue-sev { flex: 0 0 auto; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+.review-issue-sev.is-danger { background: rgba(229, 72, 77, .16); color: #e5484d; }
+.review-issue-sev.is-warn { background: rgba(230, 160, 40, .16); color: #d99420; }
+.review-issue-exercise { flex: 0 0 auto; }
+.review-pending-id { margin-top: 10px; color: var(--text-muted); font-size: 11px; opacity: .7; }
+.auth-form { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.auth-form[hidden] { display: none; }
+.auth-actions { display: flex; gap: 8px; }
+.claim-offer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--bg-base); border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+.claim-offer[hidden] { display: none; }
+.claim-text { color: var(--text-muted); font-size: 11px; }
+.claim-offer .account-btn { flex: 0 0 auto; }
+.auth-status { min-height: 16px; font-size: 12px; color: var(--text-muted); }
+.auth-status[data-kind="error"] { color: var(--danger, #e5484d); }
+.auth-status[data-kind="ok"] { color: var(--accent); }
+.auth-note { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .account-btn { transition: none; } }
+
 .profile-editor { display: flex; }
 .profile-editor[hidden] { display: none; }
 .workspace { width: min(100%, 1120px); margin: 0 auto; padding: 32px clamp(20px, 4vw, 64px) 56px; }
@@ -2057,6 +2092,51 @@ body::after {
       <div class="logo-sub">AI Fitness Coach</div>
     </div>
 
+    <!-- 账号：游客可直接使用，登录后数据归到账号名下 -->
+    <div class="account-block" id="account-block">
+      <div class="account-state" id="account-state" aria-live="polite">
+        <span class="account-label" id="account-label">游客模式</span>
+        <span class="account-hint" id="account-hint">数据只保存在本机浏览器</span>
+      </div>
+
+      <div class="account-actions" id="account-actions">
+        <button class="account-btn" type="button" id="btn-show-login"
+                aria-expanded="false" aria-controls="auth-form"
+                onclick="toggleAuthForm(this)">登录 / 注册</button>
+        <button class="account-btn account-btn-quiet" type="button" id="btn-logout"
+                hidden onclick="handleLogout()">退出登录</button>
+      </div>
+
+      <form class="auth-form" id="auth-form" hidden onsubmit="return false;">
+        <div class="field">
+          <label for="auth-username">用户名</label>
+          <input id="auth-username" type="text" autocomplete="username"
+                 placeholder="2 个字符以上">
+        </div>
+        <div class="field">
+          <label for="auth-password">密码</label>
+          <input id="auth-password" type="password" autocomplete="current-password"
+                 placeholder="至少 8 位">
+        </div>
+        <div class="auth-actions">
+          <button class="account-btn" type="button" id="btn-login"
+                  onclick="handleLogin()">登录</button>
+          <button class="account-btn account-btn-quiet" type="button" id="btn-register"
+                  onclick="handleRegister()">注册新账号</button>
+        </div>
+        <div class="claim-offer" id="claim-offer" hidden>
+          <span class="claim-text">本机还有游客时期的记录</span>
+          <button class="account-btn account-btn-quiet" type="button"
+                  id="btn-claim" onclick="handleClaim()">认领到账号</button>
+        </div>
+        <div class="auth-status" id="auth-status" role="alert"></div>
+        <p class="auth-note">
+          登录后训练档案、长期记忆与训练日志都归到账号名下，
+          换设备也能找回。账号为本机演示级，请勿使用真实密码。
+        </p>
+      </form>
+    </div>
+
     <div class="profile-summary" id="profile-summary" aria-live="polite">
       <span id="profile-summary-text">训练档案</span>
       <button class="profile-toggle" type="button" aria-expanded="false" aria-controls="profile-editor" onclick="toggleProfileEditor(this)">编辑资料</button>
@@ -2107,6 +2187,11 @@ body::after {
     <div class="field">
       <label for="injuries-input">伤病史 Injuries</label>
       <input id="injuries-input" type="text" placeholder="如：下背偶尔酸痛、左肩做过手术...">
+    </div>
+
+    <div class="field">
+      <label for="habits-input">运动习惯与爱好 Habits</label>
+      <input id="habits-input" type="text" placeholder="如：晨练、跑步、瑜伽、每周三次（顿号分隔）">
     </div>
 
     <button class="btn-generate" id="btn-generate" onclick="generatePlan()">
@@ -2578,6 +2663,195 @@ localStorage.setItem(ATHLETE_KEY_STORAGE, athleteKey);
 // 演示数据绑定的运动员标识（seed 脚本写入的固定值）
 const DEMO_ATHLETE_KEY = 'demo-athlete';
 
+// ── 登录态 ──
+// 未登录时 athleteKey 就是身份（游客，数据只在本机）；登录后服务端一律用
+// 账号身份（u:{id}）归属数据，客户端传什么都不作数——所以这里不需要把
+// athleteKey 换掉，只切换界面状态即可。保留本地 athleteKey 还有一个用处：
+// 它是日后把本机游客数据认领到账号名下的凭据。
+let currentUser = null;
+
+function toggleAuthForm(button) {
+  const form = document.getElementById('auth-form');
+  if (!form) return;
+  const opening = form.hidden;
+  form.hidden = !opening;
+  if (button) button.setAttribute('aria-expanded', String(opening));
+  if (opening) document.getElementById('auth-username')?.focus();
+}
+
+function setAuthStatus(message, kind) {
+  const el = document.getElementById('auth-status');
+  if (!el) return;
+  el.textContent = message || '';
+  if (kind) el.dataset.kind = kind; else delete el.dataset.kind;
+}
+
+// 提交期间禁用按钮：登录与注册都会做一次 scrypt（约 80ms）与一次网络往返，
+// 未禁用时用户容易连点，制造并发注册等无谓的错误路径。
+function setAuthBusy(busy) {
+  for (const id of ['btn-login', 'btn-register']) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = busy;
+  }
+}
+
+async function postAuth(path, username, password) {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const detail = data.detail || {};
+    throw new Error(detail.message || `请求失败（${resp.status}）`);
+  }
+  return data;
+}
+
+function renderSession() {
+  const label = document.getElementById('account-label');
+  const hint = document.getElementById('account-hint');
+  const logout = document.getElementById('btn-logout');
+  const showLogin = document.getElementById('btn-show-login');
+  const form = document.getElementById('auth-form');
+
+  if (currentUser) {
+    if (label) label.textContent = `已登录 · ${currentUser.username}`;
+    if (hint) hint.textContent = '档案与记忆已归到账号名下';
+    if (logout) logout.hidden = false;
+    if (showLogin) showLogin.hidden = true;
+    if (form) form.hidden = true;
+  } else {
+    if (label) label.textContent = '游客模式';
+    if (hint) hint.textContent = '数据只保存在本机浏览器';
+    if (logout) logout.hidden = true;
+    if (showLogin) showLogin.hidden = false;
+  }
+  // 演示数据是共享的固定身份，登录态下切换它会让用户以为自己的数据丢了
+  const demoBtn = document.getElementById('btn-load-demo');
+  if (demoBtn) demoBtn.hidden = Boolean(currentUser);
+  maybeOfferClaim();
+}
+
+async function loadSession() {
+  try {
+    const resp = await fetch('/api/auth/session');
+    const data = await resp.json();
+    currentUser = data && data.authenticated ? data : null;
+  } catch (e) {
+    // 拿不到会话就按游客处理：登录态是增强，不是使用前提
+    currentUser = null;
+  }
+  renderSession();
+  return currentUser;
+}
+
+async function handleLogin() {
+  const username = document.getElementById('auth-username')?.value?.trim() || '';
+  const password = document.getElementById('auth-password')?.value || '';
+  if (!username || !password) { setAuthStatus('请填写用户名与密码', 'error'); return; }
+  setAuthBusy(true);
+  setAuthStatus('登录中…');
+  try {
+    await postAuth('/api/auth/login', username, password);
+    await loadSession();
+    setAuthStatus('');
+    document.getElementById('auth-password').value = '';
+    showStatus('log-status', `已登录为 ${currentUser ? currentUser.username : username}，正在刷新数据…`);
+    refreshUserScopedViews();
+  } catch (e) {
+    setAuthStatus(e.message, 'error');
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+async function handleRegister() {
+  const username = document.getElementById('auth-username')?.value?.trim() || '';
+  const password = document.getElementById('auth-password')?.value || '';
+  if (!username || !password) { setAuthStatus('请填写用户名与密码', 'error'); return; }
+  if (password.length < 8) { setAuthStatus('密码至少 8 位', 'error'); return; }
+  setAuthBusy(true);
+  setAuthStatus('注册中…');
+  try {
+    await postAuth('/api/auth/register', username, password);
+    await loadSession();
+    document.getElementById('auth-password').value = '';
+    // 注册时自动认领本机游客数据：此刻"这台设备上攒的数据就是本人的"
+    // 这个前提几乎总成立。登录时不这么做（见 handleLogin）。
+    const claimed = await claimLocalGuestData();
+    setAuthStatus('');
+    showStatus('log-status', claimed
+      ? `已创建并登录为 ${currentUser ? currentUser.username : username}，${claimed}`
+      : `已创建并登录为 ${currentUser ? currentUser.username : username}`);
+    refreshUserScopedViews();
+  } catch (e) {
+    setAuthStatus(e.message, 'error');
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+// 把本机游客身份下的数据挂到当前账号。返回给用户看的一句话，无事可做时返回 ''。
+async function claimLocalGuestData() {
+  const guestKey = localStorage.getItem(ATHLETE_KEY_STORAGE);
+  if (!guestKey || guestKey === DEMO_ATHLETE_KEY) return '';
+  try {
+    const resp = await fetch('/api/auth/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guest_key: guestKey }),
+    });
+    if (!resp.ok) return '';
+    const data = await resp.json();
+    const logs = data.claimed?.training_logs || 0;
+    const mem = (data.claimed?.long_term || 0) + (data.claimed?.long_term_from_profile || 0);
+    if (!logs && !mem) return '';
+    return `已认领本机 ${logs} 条训练日志与 ${mem} 项偏好`;
+  } catch (e) {
+    // 认领失败不该影响注册结果——账号已经建好了
+    return '';
+  }
+}
+
+// 登录时只提示、不自动认领：在别人电脑上登录时，自动认领会把对方的
+// 游客数据搬进自己账号。是否认领交给用户判断。
+function maybeOfferClaim() {
+  const guestKey = localStorage.getItem(ATHLETE_KEY_STORAGE);
+  setClaimOffer(Boolean(currentUser) && Boolean(guestKey) && guestKey !== DEMO_ATHLETE_KEY);
+}
+
+function setClaimOffer(show) {
+  const node = document.getElementById('claim-offer');
+  if (node) node.hidden = !show;
+}
+
+async function handleClaim() {
+  setAuthStatus('认领中…');
+  const note = await claimLocalGuestData();
+  setClaimOffer(false);
+  setAuthStatus(note || '本机没有可认领的游客数据', note ? 'ok' : '');
+  refreshUserScopedViews();
+}
+
+async function handleLogout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch (e) { /* 网络失败也要让界面回到游客态，否则用户被卡在假的登录态里 */ }
+  currentUser = null;
+  renderSession();
+  setAuthStatus('');
+  showStatus('log-status', '已退出登录，回到游客模式');
+  refreshUserScopedViews();
+}
+
+// 身份变化后重新拉取按用户归属的数据（训练日志、图表统计）
+function refreshUserScopedViews() {
+  if (typeof loadLogHistory === 'function') loadLogHistory();
+  if (typeof loadTrainingStats === 'function') loadTrainingStats();
+}
+
 // ── Multi-turn QA session (legacy, kept for qa-specific UI) ──
 let qaSessionId = globalSessionId;  // Q&A shares the global session
 let qaTurnCount = 0;
@@ -2780,6 +3054,9 @@ function getProfile() {
   const equipment = [...new Set(scenes.flatMap(s => SCENE_EQUIPMENT[s] || []))];
   const injuriesRaw = document.getElementById('injuries-input')?.value?.trim() || '';
   const injuries = injuriesRaw ? [injuriesRaw] : [];
+  // 运动习惯：允许多个，按顿号/逗号/空格切分（习惯天然是多值的，不像伤病那样整体描述）
+  const habitsRaw = document.getElementById('habits-input')?.value?.trim() || '';
+  const habits = habitsRaw ? habitsRaw.split(/[、,，\s]+/).filter(Boolean) : [];
 
   return {
     height: parseFloat(document.getElementById('height').value) || 180,
@@ -2789,6 +3066,7 @@ function getProfile() {
     available_equipment: equipment,
     days_per_week: parseInt(document.getElementById('days').value) || 4,
     injuries: injuries,
+    habits: habits,
   };
 }
 
@@ -2991,25 +3269,75 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
 }
 
 // ═══════════════ RENDER PLAN ═══════════════
+/* 计划被安全门拦下时的交付面板。
+   这里要同时做到三件事，缺一样用户就会卡住：
+   ① 说明这是安全机制生效、不是故障——否则用户以为产品坏了；
+   ② 摊开被拦下的**具体风险**（哪些动作、为什么），这是系统已经算出来的，
+      只显示一句"检测到伤病风险"等于把最有用的信息丢掉；
+   ③ 给诚实的下一步——本地版本没有人工审核台，"请等待专业审核"是空头支票。 */
 function renderReviewPending(container, review) {
   if (!container) return;
   container.replaceChildren();
   const details = review || {};
   const panel = el('section', 'review-pending-panel', '');
-  panel.setAttribute('aria-label', '人工审核待处理');
-  panel.appendChild(el('h3', '', '安全审核待处理'));
-  const fields = [
-    ['审核编号', details.review_id || '待分配'],
-    ['风险原因', details.reason || '安全检查需要人工确认'],
-    ['禁止项', Array.isArray(details.prohibited_actions) ? details.prohibited_actions.join('；') : '不要执行或调整训练计划'],
-    ['下一步', details.next_step || '请等待专业审核。'],
-  ];
-  fields.forEach(([label, value]) => {
+  panel.setAttribute('aria-label', '计划已暂缓交付');
+
+  panel.appendChild(el('h3', '', '计划已暂缓交付'));
+  panel.appendChild(el('p', 'review-pending-lead',
+    '系统在你的情况里发现了需要专业人员确认的风险，因此没有给出可以直接执行的计划。这是安全检查生效，不是故障。'));
+
+  // 先给一行结论，再给明细：只有明细会让人不知从何看起，
+  // 只有结论（改动前的样子）则等于把最有用的信息丢掉。
+  const reasonRow = el('div', 'review-pending-row', '');
+  reasonRow.appendChild(el('strong', '', '风险原因：'));
+  appendText(reasonRow, details.reason || '安全检查需要人工确认');
+  panel.appendChild(reasonRow);
+
+  const issues = Array.isArray(details.issues) ? details.issues : [];
+  if (issues.length) {
+    panel.appendChild(el('div', 'review-pending-subtitle', `发现 ${issues.length} 处需要留意的地方`));
+    const list = el('ul', 'review-issue-list', '');
+    issues.forEach(item => {
+      const issue = (item && typeof item === 'object') ? item : { issue: String(item || '') };
+      const li = el('li', 'review-issue', '');
+      const danger = issue.severity === 'danger';
+      li.appendChild(el('span', `review-issue-sev ${danger ? 'is-danger' : 'is-warn'}`,
+                        danger ? '风险' : '留意'));
+      if (issue.exercise) {
+        li.appendChild(el('strong', 'review-issue-exercise', issue.exercise));
+      }
+      appendText(li, issue.issue || '');
+      list.appendChild(li);
+    });
+    panel.appendChild(list);
+  }
+
+  const unknown = Array.isArray(details.unknown_exercises) ? details.unknown_exercises : [];
+  if (unknown.length) {
     const row = el('div', 'review-pending-row', '');
-    row.appendChild(el('strong', '', `${label}：`));
-    appendText(row, value);
+    row.appendChild(el('strong', '', '动作库中未收录：'));
+    appendText(row, unknown.join('、'));
     panel.appendChild(row);
-  });
+  }
+
+  const prohibited = Array.isArray(details.prohibited_actions) ? details.prohibited_actions : [];
+  if (prohibited.length) {
+    const row = el('div', 'review-pending-row', '');
+    row.appendChild(el('strong', '', '禁止项：'));
+    appendText(row, prohibited.join('；'));
+    panel.appendChild(row);
+  }
+
+  const row = el('div', 'review-pending-row', '');
+  row.appendChild(el('strong', '', '下一步：'));
+  appendText(row, details.next_step
+    || '带着上面的明细咨询骨科或运动医学科；在获得专业意见前，不要执行或调整训练计划。');
+  panel.appendChild(row);
+
+  // 审核编号对普通用户没有意义，但演示/排查时需要，因此弱化后置而非删除。
+  if (details.review_id) {
+    panel.appendChild(el('div', 'review-pending-id', `审核编号：${details.review_id}`));
+  }
   container.appendChild(panel);
 }
 
@@ -3275,7 +3603,7 @@ async function generatePlan() {
   document.getElementById('plan-error')?.replaceChildren();
   const profile = getProfile();
   try {
-    const body = { ...profile, query: document.getElementById('plan-query')?.value || '', session_id: globalSessionId };
+    const body = { ...profile, query: document.getElementById('plan-query')?.value || '', session_id: globalSessionId, athlete_key: athleteKey };
     await streamFrom('/api/generate-plan', body, 'plan-output', 'plan', controller.signal, () => activeRequests.plan === controller);
     setRequestState('plan', 'idle', '', controller);
   } catch(e) {
@@ -3670,6 +3998,13 @@ async function loadLogHistory() {
 // seed 脚本按固定的 demo-athlete 写入，而浏览器里的 athlete_key 是随机 UUID，
 // 两者不匹配图表就是空的。这个按钮消除演示前唯一需要人工干预的环节。
 function loadDemoData() {
+  // 登录态下禁用：演示数据挂在共享的 demo-athlete 身份上，登录用户切过去
+  // 会看到"自己的数据全没了"，而实际上是查到了另一个身份。按钮已在
+  // renderSession 里隐藏，这里再兜一次——隐藏不足以阻止程序化调用。
+  if (currentUser) {
+    showStatus('log-status', '演示数据为游客态专用，请先退出登录');
+    return;
+  }
   athleteKey = DEMO_ATHLETE_KEY;
   localStorage.setItem(ATHLETE_KEY_STORAGE, athleteKey);
   showStatus('log-status', '已切换到演示数据，正在刷新…');
@@ -4063,7 +4398,9 @@ function initTrainingTabs() {
   const fillBtn = document.getElementById('btn-fill-from-plan');
   if (fillBtn) fillBtn.hidden = !localStorage.getItem('ironmind_last_plan');
 
-  loadLogHistory();
+  // 先问服务端登录态再拉数据：否则会先用游客身份查一遍训练日志，
+  // 登录用户会看到一瞬间的空图表，再被账号数据替换。
+  loadSession().then(() => loadLogHistory());
 }
 
 // 切到新 tab 时按需加载数据（图表只在可见时才渲染，否则尺寸算不对）

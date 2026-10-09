@@ -58,9 +58,9 @@ async def test_generate_plan_rejects_invalid_goal(client):
 @pytest.mark.parametrize(
     ("path", "payload"),
     [
-        ("/api/generate-plan", {"session_id": "offline"}),
+        ("/api/generate-plan", {"session_id": "offline", "athlete_key": "test-guest"}),
         ("/api/analyze-exercise", {"exercise_name": "深蹲"}),
-        ("/api/ask-question", {"question": "怎么练？"}),
+        ("/api/ask-question", {"question": "怎么练？", "athlete_key": "test-guest"}),
     ],
 )
 async def test_all_sse_routes_apply_stream_headers(client, path, payload):

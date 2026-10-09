@@ -158,6 +158,53 @@ class LongTermMemory:
                 logger.error("[long_term] 删除 key %s 失败：%s", key, exc)
         return deleted
 
+    def rekey(self, old_user_id: int | str, new_user_id: int | str) -> dict:
+        """把旧身份名下的长期记忆迁移到新身份。返回各类计数。
+
+        用于「游客注册后认领本机数据」：用户在未登录时攒下的偏好，不该因为
+        注册而消失。
+
+        **冲突策略是只补缺、不覆盖**：新身份已有的键一律保留。理由是账号侧
+        的数据是用户明确登录后产生的，比本机游客数据更可能是当前意图；
+        反过来覆盖会让"我刚设好的偏好被旧数据冲掉"。
+
+        迁完删旧键，避免同一份数据在两个身份下各存一份——那会让后续的
+        删除请求只清掉一处。
+        """
+        pattern = f"{self.prefix}{old_user_id}:*"
+        prefix_old = f"{self.prefix}{old_user_id}:"
+        prefix_new = f"{self.prefix}{new_user_id}:"
+
+        moved, skipped, failed = 0, 0, []
+        try:
+            keys = [
+                k.decode() if isinstance(k, bytes) else k
+                for k in self.redis.conn.scan_iter(match=pattern, count=50)
+            ]
+        except Exception as exc:  # noqa: BLE001
+            logger.error("[long_term] 认领时扫描 key 失败：%s", exc)
+            raise
+
+        for key in keys:
+            target = prefix_new + key[len(prefix_old):]
+            try:
+                if self.redis.get(target) is not None:
+                    skipped += 1
+                    continue
+                value = self.redis.get(key)
+                if value is None:
+                    continue
+                # 不带 ex：长期记忆本身无 TTL（见 save_preference），
+                # 迁移时补一个过期时间会凭空缩短它的寿命。
+                self.redis.set(target, value)
+                self.redis.delete(key)
+                moved += 1
+            except Exception as exc:  # noqa: BLE001 - 逐键失败不影响其余，
+                logger.error("[long_term] 迁移 key %s 失败：%s", key, exc)  # 但如实计入
+                failed.append(key)
+
+        return {"moved": moved, "skipped": skipped, "failed": failed}
+
     def get_injury_history(self, user_id: int) -> list:
         """
         读取用户的伤病史列表。
@@ -170,17 +217,27 @@ class LongTermMemory:
                             Redis 中没有数据时返回空列表 []
 
         核心逻辑：
-        从固定 key memory:user:{user_id}:pref:injuries 读取，
-        JSON 反序列化为列表。伤病史是硬约束，FactChecker 会据此标记危险动作。
+        先尝试固定 key memory:user:{user_id}:pref:injuries；
+        没有再回退读画像快照 ``pref:profile`` 里的 injuries 字段。
+        伤病史是硬约束，FactChecker 会据此标记危险动作。
+
+        为什么回退而不是补写一份 pref:injuries：伤病本来就随画像整体落盘
+        （``persist_long_term_profile`` 写 pref:profile），再单独存一份副本，
+        两处就会各自漂移——用户改了画像里的伤病，另一份还原封不动。
         """
         raw = self.redis.get(f"{self.prefix}{user_id}:pref:injuries")
-        if not raw:
-            return []
-        data = json.loads(raw)
-        # 兼容新旧格式
-        if isinstance(data, dict) and "v" in data:
-            return data["v"] if isinstance(data["v"], list) else [data["v"]]
-        return data if isinstance(data, list) else []
+        if raw:
+            data = json.loads(raw)
+            # 兼容新旧格式
+            if isinstance(data, dict) and "v" in data:
+                return data["v"] if isinstance(data["v"], list) else [data["v"]]
+            return data if isinstance(data, list) else []
+        profile = self.get_preferences(user_id).get("profile")
+        if isinstance(profile, dict):
+            injuries = profile.get("injuries")
+            if isinstance(injuries, list):
+                return injuries
+        return []
 
     def build_context_for_prompt(self, user_id: int) -> str:
         """
@@ -197,9 +254,10 @@ class LongTermMemory:
 
         核心逻辑：
         1. 调用 get_preferences() 和 get_injury_history() 获取全部用户信息。
-        2. 如果有偏好，添加 "用户偏好：..." 行。
+        2. 如果有偏好，添加 "用户偏好：..." 行（剔除 profile/habits 两个已单独成行的键）。
         3. 如果有伤病史，添加 "伤病史：..." 行。
-        4. 用换行符拼接。
+        4. 如果有运动习惯，添加 "运动习惯：..." 行。
+        5. 用换行符拼接。
 
         使用场景：
         编排引擎在构建 Planner / Writer 的 user message 时，
@@ -209,8 +267,12 @@ class LongTermMemory:
         injuries = self.get_injury_history(user_id)
         ages = self._get_preference_ages(user_id)
         parts = []
-        if prefs:
-            parts.append(f"用户偏好：{prefs}")
+        # profile 是整份画像快照，其 injuries 与 habits 分别由下面的独立行呈现。
+        # 若整字典 dump，同一事实会在提示词里出现两次——既浪费上下文，也容易
+        # 让模型把重复误读为强调。
+        visible = {k: v for k, v in prefs.items() if k not in ("profile", "habits")}
+        if visible:
+            parts.append(f"用户偏好：{visible}")
             # 附加新鲜度信息（超过 30 天的标记为"较早"）
             if ages:
                 stale = [f"{k}({ages[k]})" for k in ages if "天前" in ages[k] and
@@ -219,6 +281,9 @@ class LongTermMemory:
                     parts.append(f"以下偏好记录较旧，可能已过时：{', '.join(stale)}")
         if injuries:
             parts.append(f"伤病史：{injuries}")
+        habits = prefs.get("habits")
+        if habits:
+            parts.append(f"运动习惯：{habits}")
         return "\n".join(parts)
 
     def _get_preference_ages(self, user_id: int) -> dict[str, str]:

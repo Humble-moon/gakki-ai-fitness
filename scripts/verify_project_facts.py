@@ -63,8 +63,17 @@ def collect_facts(repo_root: Path) -> dict[str, Any]:
         "test_counts": test_counts,
         "runtime_contract": {
             "host": "localhost",
-            "mode": "single_user_demo",
+            # 2026-10-09 起定位变更：账号体系上线，不再是纯单用户演示。
+            # 但它也不是多租户公网服务——账号只解决"这台机器上谁是谁"，
+            # 没有注册审核、邮件找回、审计或权限分级。
+            "mode": "local_guest_or_account",
             "http_port": 8503,
+            "auth_endpoints": [
+                "/api/auth/register",
+                "/api/auth/login",
+                "/api/auth/logout",
+                "/api/auth/session",
+            ],
             "sse_endpoints": [
                 "/api/generate-plan",
                 "/api/analyze-exercise",

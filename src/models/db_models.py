@@ -10,7 +10,7 @@ db_models.py - 数据库表结构定义（ORM 模型层）
     - main.py 中的 seed() 函数（初始化表结构和种子数据）
 调用者：SQLAlchemy + pgvector 扩展。
 """
-from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Date, Text, Index, create_engine, text
+from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Date, Text, Index, Boolean, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from pgvector.sqlalchemy import Vector
@@ -69,6 +69,47 @@ class UserProfile(Base):
 
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     # 记录更新时间（UTC），每次 UPDATE 时自动刷新为当前时间
+
+
+# ============================================================
+# 用户账号表 (users)
+# 仅承载登录身份与凭据；健身档案仍存在长期记忆（Redis）里
+# ============================================================
+class User(Base):
+    """登录账号。
+
+    职责边界刻意收窄：只回答「你是谁、凭什么证明」，不回答「你的身高体重」。
+    用户的健身档案本来就落在长期记忆（``memory:user:{key}:pref:profile``），
+    若在这里再存一份，就会多出第三份档案真相——而 ``user_profiles`` 表
+    至今仍是这种"定义了但从未写入"的空表，是这个坑的前车之鉴。
+
+    身份如何接入业务数据：账号的 ``id`` 会被格式化为 ``u:{id}`` 作为
+    ``athlete_key`` 使用，从而直接复用训练日志、长期记忆既有的字符串主体键，
+    无需改动那些表的 schema。
+    """
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # 自增主键，同时是业务侧的稳定身份（格式化为 u:{id} 作为 athlete_key）
+
+    username = Column(String(64), unique=True, nullable=False, index=True)
+    # 登录名，唯一。用 unique=True 而非独立索引，与 Exercise.name 一致。
+    # 长度 64：足够容纳邮箱式用户名，也留出与 athlete_key 上限（64）对齐的余量。
+
+    password_hash = Column(Text, nullable=False)
+    # 自描述哈希串，形如 scrypt$n$r$p$<salt_hex>$<hash_hex>。
+    # 把算法参数写进串里，是为了将来调强度或换算法时能按条目识别旧格式，
+    # 而不必猜"这条是什么年代用什么参数算出来的"。
+
+    is_active = Column(Boolean, default=True, nullable=False)
+    # 停用开关。删除账号会连带个人数据，代价不可逆；停用是可逆的第一步。
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    # 记录创建时间（UTC）
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # 记录更新时间（UTC），每次 UPDATE 时自动刷新
 
 
 # ============================================================

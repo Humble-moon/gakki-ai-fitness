@@ -256,12 +256,20 @@ def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
                    "confidence": confidence if confidence_valid else 0,
                    "rewrite_count": rewrite_count})
     goal_matches = expected_goal is None or plan_goal_matches(result, expected_goal)
-    result["_persistence_allowed"] = bool(schema_valid and is_safe and issues_empty and not requires_review
-        and confidence_valid and goal_matches and not provider_degraded and not result.get("_degraded", False))
+    hard_ok = bool(schema_valid and is_safe and not requires_review
+                   and confidence_valid and goal_matches
+                   and not provider_degraded and not result.get("_degraded", False))
+    # 缓存闸门：在"能交付"之上再要求问题清单干净。缓存是"同一份身体数据命中同一份
+    # 计划"的去重产物，宁可少命中也不缓存带瑕疵的版本——这道额外要求是合理的。
+    result["_persistence_allowed"] = bool(hard_ok and issues_empty)
+    # 交付闸门：只要结果可以安全交付即可。它与缓存闸门只差 issues_empty 一项，
+    # 而那一项衡量的是**计划的完成度**，不是**用户是谁**。
+    result["_delivery_allowed"] = hard_ok
     return result
 
 
-def create_review_artifact(review_store, profile: dict, query: str, result: dict):
+def create_review_artifact(review_store, profile: dict, query: str, result: dict,
+                           owner_key: str = ""):
     """Create and store a pending human-review artifact for an unsafe plan.
 
     The artifact's issue list combines the final check's active issues with the
@@ -290,6 +298,7 @@ def create_review_artifact(review_store, profile: dict, query: str, result: dict
         issues=issues,
         severity=severity,
         prohibited_actions=REVIEW_PROHIBITED_ACTIONS,
+        owner_key=owner_key or "",
     )
 
 
@@ -310,7 +319,11 @@ def build_review_pending_payload(result: dict, artifact, thread_id: str | None =
             "issues": artifact.issues,
             "severity": artifact.severity,
             "prohibited_actions": artifact.prohibited_actions,
-            "next_step": "请等待专业审核；在审核完成前不要执行或调整训练计划。",
+            # 措辞刻意不提"等待审核员"：本版本没有人工审核台（见 5.9 节局限性），
+            # 承诺一个不存在的角色会让用户一直等下去，也让演示时被问"谁来点通过"时无法回答。
+            # 改为把动作交回用户手里——带着上面已经算出来的风险明细去问专业人士。
+            "next_step": "把上面的风险明细带给骨科或运动医学科评估；"
+                         "在获得专业意见前，不要执行或调整训练计划。",
         },
     }
     # 库外动作单独列出：审核者需要直接看到"哪些动作名是模型编造的"，
@@ -327,7 +340,8 @@ def build_review_pending_payload(result: dict, artifact, thread_id: str | None =
     return payload
 
 
-def review_pending_result(review_store, profile: dict, query: str, result: dict) -> dict:
+def review_pending_result(review_store, profile: dict, query: str, result: dict,
+                          owner_key: str = "") -> dict:
     """交付判定：需要人工审核就扣下，否则交付。
 
     这里曾用 _persistence_allowed 作为交付闸门，但它是「能否缓存」的判据，额外要求
@@ -341,7 +355,8 @@ def review_pending_result(review_store, profile: dict, query: str, result: dict)
     计划上带着的建议性提示会以 warnings 形式一并展示，不会静默丢掉。
     """
     if result.get("requires_review"):
-        artifact = create_review_artifact(review_store, profile, query, result)
+        artifact = create_review_artifact(review_store, profile, query, result,
+                                          owner_key=owner_key)
         return build_review_pending_payload(result, artifact)
     delivered = dict(result)
     delivered["delivery_status"] = "safe_delivered"
@@ -392,29 +407,48 @@ def persist_if_safe(cache, conversation, long_term, profile: dict, query: str,
                     athlete_key: str | None = None) -> bool:
     """Persist only a fully safe terminal result.
 
-    长期记忆的身份用 ``athlete_key``（前端 localStorage 的稳定 UUID），
-    缺失时才退回 ``make_user_key(profile)`` 指纹。原因：后者由身高体重哈希
-    而成，而增肌减脂期体重必然变化，等于每换一次体重就换一个身份——
-    用户会读不到自己先前的偏好，删除数据时也无从定位。
+    【两类闸门，不要混淆】
+    这里写三种东西，它们的准入条件本来就不同：
 
-    注意语义缓存**仍然**按 profile 指纹（``cache.set(profile, ...)``）：
-    缓存的语义是"同一份身体数据 + 同一目标命中同一份计划"，用指纹是对的，
-    把它换掉反而会让缓存失效。身份与缓存键是两件事。
+        - **缓存**：要求最严（``_persistence_allowed`` 还要求问题清单干净）。
+          它是"同一份身体数据命中同一份计划"的去重产物，少命中无害，存了带
+          瑕疵的版本反而会长期污染后续请求。
+        - **用户画像**：只要求结果可以安全交付（``_delivery_allowed``）。
+          画像记的是**用户是谁**（身高体重目标伤病习惯），这些是用户自己
+          填的，与计划的完成度无关。
+        - **会话状态**：随缓存一起走。
+
+    合并成一道闸门曾造成一个隐蔽后果：LLM 检查器几乎从不返回空的问题清单
+    （见 ``review_pending_result`` 的说明），于是 ``issues_empty`` 长期为假，
+    **生成计划这条路上的用户画像几乎从不落盘**——而知识问答路径是直接写的。
+    表现就是「问答记住了我，生成计划没记住」，同一件事两条路径行为不一致。
+
+    注意身份键的解析：长期记忆用 ``athlete_key``（前端 localStorage 的稳定
+    UUID），缺失时才退回 ``make_user_key(profile)`` 指纹。后者由身高体重哈希
+    而成，而增肌减脂期体重必然变化，等于每换一次体重就换一个身份。
+
+    语义缓存**仍然**按 profile 指纹（``cache.set(profile, ...)``）：缓存的
+    语义是"同一份身体数据 + 同一目标命中同一份计划"，用指纹是对的。身份与
+    缓存键是两件事。
     """
-    if not isinstance(result, dict) or result.get("_persistence_allowed") is not True:
+    if not isinstance(result, dict):
         return False
-    if not safe_cached_result(result, expected_goal=profile.get("goal")):
+    cache_ok = result.get("_persistence_allowed") is True
+    delivery_ok = result.get("_delivery_allowed") is True
+    if not (cache_ok or delivery_ok):
         return False
-    if session_id:
-        summary = summarize_plan_for_context(result)
-        conversation.set_plan_state(session_id, summary)
-        conversation.add_turn(session_id, "assistant", summary[:500])
-    else:
-        cache.set(profile, query, result)
-    user_key = athlete_key or make_user_key(profile)
-    long_term.save_preference(user_key, "profile", profile)
-    long_term.save_preference(user_key, "goal", profile.get("goal", ""))
-    long_term.save_preference(user_key, "equipment", profile.get("available_equipment", []))
+
+    if cache_ok and safe_cached_result(result, expected_goal=profile.get("goal")):
+        if session_id:
+            summary = summarize_plan_for_context(result)
+            conversation.set_plan_state(session_id, summary)
+            conversation.add_turn(session_id, "assistant", summary[:500])
+        else:
+            cache.set(profile, query, result)
+
+    # 画像在交付闸门下写入，不受缓存闸门牵连。
+    if delivery_ok:
+        persist_long_term_profile(long_term, long_term_user_key(profile, athlete_key), profile)
     return True
 
 
@@ -425,3 +459,21 @@ def long_term_user_key(profile: dict, athlete_key: str | None = None):
     用户永远读不回自己刚存的偏好。
     """
     return athlete_key or make_user_key(profile)
+
+
+def persist_long_term_profile(long_term, user_key, profile: dict) -> None:
+    """把用户画像写入长期记忆。写键集合在此单点定义。
+
+    生成计划（``persist_if_safe``）与知识问答（``Orchestrator`` 问答流）
+    两条路径都调用它。此前两条路径各写各的——计划写 3 个键、问答写 2 个，
+    而问答那份还引用了未定义变量，实际从未落库。
+
+    ``habits``（运动习惯/爱好）仅在非空时写入：它是可独立更新的记忆，
+    若每轮都用空值覆盖，用户填过的习惯会在一次随手问答后被清掉。
+    """
+    long_term.save_preference(user_key, "profile", profile)
+    long_term.save_preference(user_key, "goal", profile.get("goal", ""))
+    long_term.save_preference(user_key, "equipment", profile.get("available_equipment", []))
+    habits = profile.get("habits") or []
+    if habits:
+        long_term.save_preference(user_key, "habits", habits)

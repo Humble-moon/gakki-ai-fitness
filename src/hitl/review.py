@@ -233,6 +233,25 @@ CRITICAL_INJURY_KEYWORDS = [
 ]
 
 
+def injury_profile_label(profile_id: str) -> str:
+    """把伤病档案 ID 换成中文名。
+
+    档案里只存了英文 id（``knee-osteoarthritis``），但这条文案是要给用户看的
+    （会出现在「计划已暂缓交付」面板的风险明细里）。中文界面上冒出一个英文标识，
+    用户既看不懂也无法据此行动；演示时也很突兀。
+
+    中文名取自档案 description 的首句——形如
+    「膝关节骨关节炎、膝盖退化、膝盖磨损。症状包括…」，取第一个别名即可。
+    档案缺失时原样返回 id，而不是抛异常：文案生成不该成为新的故障点。
+    """
+    for profile in INJURY_PROFILES:
+        if profile.get("id") == profile_id:
+            first_sentence = (profile.get("description") or "").split("。")[0]
+            name = first_sentence.split("、")[0].strip()
+            return name or profile_id
+    return profile_id
+
+
 @dataclass
 class ReviewDecision:
     """
@@ -347,8 +366,8 @@ class HITLReview:
             # 取相似度最高的匹配
             best = semantic_matches[0]
             suggestions = [
-                f"[语义匹配] 检测到可能的伤病模式: {best['profile_id']} "
-                f"(相似度 {best['similarity']}, 级别 {best['severity']})",
+                f"[语义匹配] 你的描述与「{injury_profile_label(best['profile_id'])}」"
+                f"的常见症状相似（相似度 {best['similarity']}，级别 {best['severity']}）",
                 f"建议禁止动作: {', '.join(best['banned_exercises'][:5])}",
             ]
             logger.info(

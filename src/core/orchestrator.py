@@ -143,9 +143,16 @@ class Orchestrator:
             provider_degraded=provider_degraded, expected_goal=expected_goal,
             known_exercise_names=self._library_exercise_names())
 
-    def _review_pending_result(self, profile: dict, query: str, result: dict) -> dict:
-        """Deliver only a review summary when the final gate requires human review."""
-        return plan_finalization.review_pending_result(self.review_store, profile, query, result)
+    def _review_pending_result(self, profile: dict, query: str, result: dict,
+                               athlete_key: str | None = None) -> dict:
+        """Deliver only a review summary when the final gate requires human review.
+
+        owner_key 记录工件归属，供审核接口校验——否则任何登录用户只要拿到
+        review_id 就能查看或解除他人的审核。
+        """
+        owner_key = plan_finalization.long_term_user_key(profile, athlete_key)
+        return plan_finalization.review_pending_result(
+            self.review_store, profile, query, result, owner_key=owner_key)
 
     def _persist_if_safe(self, profile: dict, query: str, result: dict,
                          session_id: str | None = None,
@@ -236,7 +243,8 @@ class Orchestrator:
         result["explain"] = build_explanation(plan, retrieved, result)
         self._persist_if_safe(profile_dict, query, result, athlete_key=athlete_key)
         task.complete()
-        return self._review_pending_result(profile_dict, query, result)
+        return self._review_pending_result(profile_dict, query, result,
+                                           athlete_key=athlete_key)
 
     def generate_plan_stream(self, profile: UserProfileInput, query: str = "",
                              session_id: str = None, athlete_key: str | None = None):
@@ -357,7 +365,8 @@ class Orchestrator:
         result["explain"] = build_explanation(plan, retrieved, result)
         self._persist_if_safe(profile_dict, query, result, session_id=session_id,
                               athlete_key=athlete_key)
-        yield ("done", self._review_pending_result(profile_dict, query, result))
+        yield ("done", self._review_pending_result(profile_dict, query, result,
+                                                   athlete_key=athlete_key))
 
     def _normalize_plan(self, result: dict, *, profile: dict | None = None,
                         plan_config: dict | None = None) -> dict:
@@ -722,8 +731,10 @@ class Orchestrator:
         ]
 
         # === 长期记忆：保存用户画像，跨会话复用 ===
-        self.long_term.save_preference(pseudo_uid, "profile", profile_dict)
-        self.long_term.save_preference(pseudo_uid, "goal", profile_dict.get("goal", ""))
+        # 身份键复用上方读取侧的 long_term_key（同为 long_term_user_key 的结果），
+        # 写键集合与计划生成路径共用同一份实现，两条路径不会各写各的。
+        plan_finalization.persist_long_term_profile(
+            self.long_term, long_term_key, profile_dict)
 
         yield ("done", {
             "answer": full_text,

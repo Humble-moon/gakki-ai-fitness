@@ -422,3 +422,55 @@ class TestReviewPayloadSurfacesUnknownExercises:
         artifact = create_review_artifact(_Store(), {}, "", result)
         payload = build_review_pending_payload(result, artifact)
         assert "unknown_exercises" not in payload["review"]
+
+
+class TestReviewPayloadTellsTheTruthAboutReview:
+    """送审载荷不得承诺一个不存在的人工审核者。
+
+    本版本没有审核台（见 5.9 节局限性）。写"请等待专业审核"会让用户
+    一直等下去，演示时被问"谁来点通过"也无法回答。改为把动作交回用户：
+    带着风险明细去问专业人士。
+    """
+
+    def _payload(self, **over):
+        from src.core.plan_finalization import (
+            build_review_pending_payload,
+            create_review_artifact,
+        )
+
+        class _Store:
+            def create(self, **kwargs):
+                class _Artifact:
+                    review_id = "r-copy"
+                    status = "pending"
+                    created_at = "2026-10-09T00:00:00Z"
+                    issues = kwargs.get("issues", [])
+                    severity = kwargs.get("severity", "danger")
+                    prohibited_actions = kwargs.get("prohibited_actions", [])
+                return _Artifact()
+
+        result = {"days": [], "active_issues": [], "review_suggestions": [],
+                  "review_severity": "danger", "review_reason": "检测到伤病风险"}
+        result.update(over)
+        artifact = create_review_artifact(_Store(), {"goal": "减脂"}, "q", result)
+        return build_review_pending_payload(result, artifact)
+
+    def test_next_step_does_not_promise_a_waiting_reviewer(self):
+        step = self._payload()["review"]["next_step"]
+        assert "等待" not in step, f"不得承诺等待审核者：{step}"
+        assert "专业" in step, "仍应把用户导向专业人士"
+
+    def test_payload_carries_issue_details_for_display(self):
+        """issues 必须随载荷下发——前端要摊开给用户看。
+
+        这些明细是安全门已经算出来的（哪些动作冲突、为什么、替换建议），
+        只传一句 reason 等于把最有用的信息丢掉。
+        """
+        payload = self._payload(active_issues=[
+            {"exercise": "深蹲", "issue": "与膝伤冲突", "severity": "danger"},
+            {"exercise": "跳跃", "issue": "高冲击", "severity": "warning"},
+        ])
+        issues = payload["review"]["issues"]
+        assert len(issues) == 2
+        assert {i.get("severity") for i in issues} == {"danger", "warning"}
+        assert any(i.get("exercise") == "深蹲" for i in issues)

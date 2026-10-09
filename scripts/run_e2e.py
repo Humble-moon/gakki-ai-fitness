@@ -15,10 +15,18 @@ if str(ROOT) not in sys.path:
 
 import httpx
 
+# 业务端点要求显式的身份标识（游客用本机 athlete_key，登录用户由服务端
+# 解析为 u:{id}）。这里以固定的游客标识调用——身份来源是显式的，
+# 不再有"没传就按身高体重猜一个"的隐式回退。
+E2E_ATHLETE_KEY = "e2e-offline-athlete"
+
 PAYLOADS = {
-    "training_plan": ("/api/generate-plan", {"session_id": "offline", "query": "增肌"}),
+    "training_plan": ("/api/generate-plan",
+                      {"session_id": "offline", "query": "增肌",
+                       "athlete_key": E2E_ATHLETE_KEY}),
     "exercise_analysis": ("/api/analyze-exercise", {"exercise_name": "深蹲"}),
-    "knowledge_question": ("/api/ask-question", {"question": "怎么练？"}),
+    "knowledge_question": ("/api/ask-question",
+                           {"question": "怎么练？", "athlete_key": E2E_ATHLETE_KEY}),
 }
 
 

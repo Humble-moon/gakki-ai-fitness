@@ -39,9 +39,9 @@ async def client(monkeypatch):
 @pytest.mark.parametrize(
     ("path", "payload"),
     [
-        ("/api/generate-plan", {"query": "增肌"}),
+        ("/api/generate-plan", {"query": "增肌", "athlete_key": "e2e-guest"}),
         ("/api/analyze-exercise", {"exercise_name": "深蹲"}),
-        ("/api/ask-question", {"question": "怎么练？"}),
+        ("/api/ask-question", {"question": "怎么练？", "athlete_key": "e2e-guest"}),
     ],
 )
 async def test_business_flows_require_explicit_done(client, path, payload):
@@ -62,7 +62,8 @@ async def test_eof_without_terminal_is_not_success(client, monkeypatch):
         answer_question_stream = generate_plan_stream
 
     monkeypatch.setattr(server, "orch", Incomplete())
-    response = await client.post("/api/generate-plan", json={})
+    response = await client.post("/api/generate-plan",
+                                 json={"athlete_key": "e2e-guest"})
     events = decode_sse(response.text)
     assert events[-1]["event"] == "error"
     assert events[-1]["data"]["code"] == "STREAM_INCOMPLETE"

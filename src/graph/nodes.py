@@ -208,8 +208,10 @@ def open_review_node(deps, state: dict) -> dict:
     artifacts. This node commits before the interrupt, so it runs exactly once.
     """
     result = state.get("result") or {}
+    # owner_key 记下工件归属，审核接口据此拒绝他人查看/解除。
     artifact = create_review_artifact(
-        deps.review_store, state.get("profile") or {}, state.get("query", ""), result)
+        deps.review_store, state.get("profile") or {}, state.get("query", ""), result,
+        owner_key=state.get("athlete_key") or "")
     thread_id = state.get("thread_id")
     if thread_id:
         deps.thread_index.register(artifact.review_id, thread_id)

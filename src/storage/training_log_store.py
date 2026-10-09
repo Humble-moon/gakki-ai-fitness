@@ -245,6 +245,38 @@ class TrainingLogStore:
                        {"ak": athlete_key})
             return count
 
+    def rekey(self, old_key: str, new_key: str) -> int:
+        """把旧身份名下的训练日志改挂到新身份。返回迁移的主表条数。
+
+        用于「游客注册后认领本机数据」。主从两张表都要改——明细表冗余了
+        athlete_key（避免统计时回表 JOIN），只改主表会让明细留在旧身份下，
+        统计接口按新身份查不到动作明细。
+
+        两张表同事务：只改一半会留下"日志存在但明细为空"的记录，
+        而这个人在统计里就变成了"去了健身房但什么都没做"。
+        """
+        if not self._ready():
+            return 0
+
+        old_key = (old_key or "")[:MAX_ATHLETE_KEY_LEN]
+        new_key = (new_key or "")[:MAX_ATHLETE_KEY_LEN]
+
+        with self.db.transaction() as tx:
+            row = tx.fetch_one(
+                "SELECT COUNT(*) AS cnt FROM training_logs WHERE athlete_key = :ak",
+                {"ak": old_key},
+            )
+            count = int(row.cnt) if row else 0
+            if count == 0:
+                return 0
+            tx.execute(
+                "UPDATE training_log_entries SET athlete_key = :new WHERE athlete_key = :old",
+                {"new": new_key, "old": old_key})
+            tx.execute(
+                "UPDATE training_logs SET athlete_key = :new WHERE athlete_key = :old",
+                {"new": new_key, "old": old_key})
+            return count
+
     # ------------------------------------------------------------------
     # 内部工具
     # ------------------------------------------------------------------

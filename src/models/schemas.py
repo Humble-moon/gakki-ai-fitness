@@ -49,6 +49,10 @@ class UserProfileInput(BaseModel):
     injuries: List[str] = Field(default=[])
     # 伤病史列表，默认空列表，如 ["腰椎间盘突出"]
 
+    habits: List[str] = Field(default=[])
+    # 运动习惯/爱好列表，默认空列表，如 ["晨练", "跑步", "瑜伽"]
+    # 与 injuries 一样属于用户属性：随画像落盘进长期记忆，并注入提示词。
+
     preferences: dict = Field(default={})
     # 用户偏好，灵活的键值对字典
 

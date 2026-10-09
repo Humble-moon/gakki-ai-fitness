@@ -60,12 +60,22 @@ class SqliteReviewArtifactStore(_SqliteBase):
                 query TEXT NOT NULL,
                 issues TEXT NOT NULL,
                 severity TEXT NOT NULL,
-                prohibited_actions TEXT NOT NULL
+                prohibited_actions TEXT NOT NULL,
+                owner_key TEXT NOT NULL DEFAULT ''
             )
         """)
+        # 本次改动之前建的库没有 owner_key 列，而 CREATE TABLE IF NOT EXISTS
+        # 不会给已存在的表补列。项目没有迁移框架，就地加一次 ALTER 是最小代价的
+        # 兼容手段；已有工件该列为空串，读取侧按"无归属"处理。
+        columns = {row[1] for row in conn.execute(
+            "PRAGMA table_info(review_artifacts)").fetchall()}
+        if "owner_key" not in columns:
+            conn.execute(
+                "ALTER TABLE review_artifacts ADD COLUMN owner_key TEXT NOT NULL DEFAULT ''")
 
     def create(self, profile_summary: dict, query: str, issues: list,
-               severity: str, prohibited_actions: list) -> ReviewArtifact:
+               severity: str, prohibited_actions: list,
+               owner_key: str = "") -> ReviewArtifact:
         from datetime import datetime, timezone
         from uuid import uuid4
         artifact = ReviewArtifact(
@@ -77,16 +87,23 @@ class SqliteReviewArtifactStore(_SqliteBase):
             issues=list(issues or []),
             severity=severity or "warning",
             prohibited_actions=list(prohibited_actions or []),
+            owner_key=owner_key or "",
         )
         with self._lock, self._connect() as conn:
+            # 显式列出列名而不是依赖位置：位置式 INSERT 在加列时会静默错位，
+            # 而这次的 owner_key 就加在末尾——正是最容易踩中的那种。
             conn.execute(
-                "INSERT INTO review_artifacts VALUES (?,?,?,?,?,?,?,?)",
+                """INSERT INTO review_artifacts
+                   (review_id, status, created_at, profile_summary, query,
+                    issues, severity, prohibited_actions, owner_key)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
                 (artifact.review_id, artifact.status, artifact.created_at,
                  json.dumps(artifact.profile_summary, ensure_ascii=False),
                  artifact.query,
                  json.dumps(artifact.issues, ensure_ascii=False),
                  artifact.severity,
-                 json.dumps(artifact.prohibited_actions, ensure_ascii=False)),
+                 json.dumps(artifact.prohibited_actions, ensure_ascii=False),
+                 artifact.owner_key),
             )
         return artifact
 
@@ -107,6 +124,9 @@ class SqliteReviewArtifactStore(_SqliteBase):
             issues=json.loads(row["issues"]),
             severity=row["severity"],
             prohibited_actions=json.loads(row["prohibited_actions"]),
+            # 旧库在 ALTER 之前写入的行该列为空；sqlite3.Row 无 .get()，
+            # 用 keys() 判断以兼容"列不存在"的极端情况。
+            owner_key=(row["owner_key"] if "owner_key" in row.keys() else ""),
         )
 
     def list_pending(self) -> list[ReviewArtifact]:
