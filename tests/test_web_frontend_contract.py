@@ -721,3 +721,108 @@ def test_plan_request_still_carries_identity():
     fn = _fn_body("generatePlan")
     assert "athlete_key: athleteKey" in fn
     assert "session_id" in fn
+
+
+def test_exercise_demo_images_are_opt_in_and_verified_only():
+    """图示默认收起、按需加载，且只显示清单里有的动作。
+
+    未收录的动作不显示图，而不是拿一张对不上的图充数——健身场景里
+    照着错的图练会受伤。清单本身只含逐张目视核对过的条目。
+    """
+    for helper in ("loadExerciseImages", "buildExerciseDemo"):
+        assert f"function {helper}(" in HTML, f"缺少 {helper}"
+
+    fn = _fn_body("buildExerciseDemo")
+    assert "panel.hidden" in fn, "图片面板默认应隐藏"
+    assert "loading = 'lazy'" in fn, "图片应懒加载，否则一屏十几个动作会并发请求"
+    assert "innerHTML" not in fn, "图片节点必须用 DOM API 构造"
+    # 清单里没有就返回 null（不渲染），而不是渲染占位
+    assert "return null" in fn
+
+
+def test_exercise_image_manifest_only_contains_verified_entries():
+    """清单里的每个动作都要有真实的图片文件存在。
+
+    清单是构建脚本产出、人工核对后的结果；文件被误删而清单没同步时，
+    前端会显示裂图。
+    """
+    import json
+
+    root = Path(__file__).resolve().parent.parent
+    manifest = json.loads((root / "data/exercise_images.json").read_text(encoding="utf-8"))
+    assert manifest, "清单不应为空"
+
+    for cn, entry in manifest.items():
+        assert entry.get("images"), f"{cn} 没有图片条目"
+        for rel in entry["images"]:
+            assert (root / "app/static" / rel).exists(), f"{cn} 的图片缺失：{rel}"
+
+
+def test_auth_gate_exists_with_a_visible_guest_exit():
+    """首屏是登录页，但必须提供明写的游客入口。
+
+    游客入口藏着不写，用户就会以为必须先注册——而「不登录也能完整使用」
+    是这个项目一直坚持的边界，不该被一次 UI 改动悄悄取消。
+    """
+    for element_id in ("auth-gate", "gate-username", "gate-password",
+                       "gate-login", "gate-register", "gate-guest", "gate-status"):
+        assert f'id="{element_id}"' in HTML, f"缺少登录页元素 #{element_id}"
+
+    assert 'id="auth-gate" hidden' in HTML, "登录页初始应隐藏，由脚本按登录态决定"
+    assert 'id="gate-password" type="password"' in HTML, "密码框必须是 password 类型"
+    assert "先随便看看" in HTML, "游客入口的文案要说明这是可以随便逛的"
+
+    for helper in ("showAuthGate", "hideAuthGate", "enterAsGuest", "gateAuth"):
+        assert f"function {helper}(" in HTML, f"缺少 {helper}"
+
+
+def test_guest_pass_is_remembered_locally():
+    """选过游客之后刷新不该反复弹登录页——那等于把游客挡在门外。"""
+    fn = _fn_body("enterAsGuest")
+    assert "localStorage" in fn, "游客放行要记在本机"
+
+    init = HTML[HTML.index("loadSession().then("):]
+    init = init[:init.index("});") + 3]
+    assert "GUEST_PASS_KEY" in init, "初始化时应读游客放行标记"
+    assert "currentUser" in init, "已登录会话应直接放行"
+
+
+def test_gate_does_not_duplicate_auth_logic():
+    """登录页与侧栏共用同一套登录/注册请求，不各写一份。"""
+    gate = _fn_body("gateAuth")
+    assert "postAuth(" in gate, "登录页应复用 postAuth，而不是自己拼 fetch"
+    assert "/api/auth/login" not in gate and "/api/auth/register" not in gate, \
+        "端点拼接应收敛在 postAuth 里"
+
+
+def test_saved_plans_panel_and_save_action_exist():
+    """计划要能存到服务端并在界面上找回。"""
+    for element_id in ("saved-plans", "saved-plans-list"):
+        assert f'id="{element_id}"' in HTML
+    for helper in ("savePlanToServer", "loadSavedPlans", "openSavedPlan", "deleteSavedPlan"):
+        assert f"function {helper}(" in HTML, f"缺少 {helper}"
+
+    fn = _fn_body("savePlanToServer")
+    # 失败必须让按钮回到可重试状态，不能假装存好了
+    assert "button.disabled = false" in fn
+    assert "catch" in fn
+
+
+def test_saved_plan_view_does_not_offer_saving_again():
+    """从历史打开的计划已在库里，不该再显示"保存这份计划"。"""
+    fn = _fn_body("openSavedPlan")
+    assert "showPlanSaveBarHidden" in fn
+
+
+def test_exercise_demo_uses_the_static_mount():
+    """图片路径必须与后端挂载点一致。
+
+    项目原本没有静态目录挂载（首页是单独 FileResponse 返回的），
+    所以"图片放进 app/static 就能被取到"这个假设不成立——
+    路径对不上时前端只会看到一片裂图。
+    """
+    server_py = (Path(__file__).resolve().parent.parent / "app/server.py").read_text(encoding="utf-8")
+    assert 'app.mount("/static"' in server_py, "后端需要挂载静态目录"
+
+    fn = _fn_body("buildExerciseDemo")
+    assert "'/static/'" in fn, "图片 URL 必须带 /static 前缀以匹配挂载点"

@@ -1,0 +1,464 @@
+{
+ "哑铃卧推": {
+  "en": "Dumbbell Bench Press",
+  "images": [
+   "exercises/dumbbell-bench-press/0.jpg",
+   "exercises/dumbbell-bench-press/1.jpg"
+  ]
+ },
+ "上斜哑铃卧推": {
+  "en": "Incline Dumbbell Press",
+  "images": [
+   "exercises/incline-dumbbell-press/0.jpg",
+   "exercises/incline-dumbbell-press/1.jpg"
+  ]
+ },
+ "下斜哑铃卧推": {
+  "en": "Decline Dumbbell Bench Press",
+  "images": [
+   "exercises/decline-dumbbell-bench-press/0.jpg",
+   "exercises/decline-dumbbell-bench-press/1.jpg"
+  ]
+ },
+ "杠铃卧推": {
+  "en": "Barbell Bench Press - Medium Grip",
+  "images": [
+   "exercises/barbell-bench-press-medium-grip/0.jpg",
+   "exercises/barbell-bench-press-medium-grip/1.jpg"
+  ]
+ },
+ "上斜杠铃卧推": {
+  "en": "Barbell Incline Bench Press - Medium Grip",
+  "images": [
+   "exercises/barbell-incline-bench-press-medium-grip/0.jpg",
+   "exercises/barbell-incline-bench-press-medium-grip/1.jpg"
+  ]
+ },
+ "下斜杠铃卧推": {
+  "en": "Decline Barbell Bench Press",
+  "images": [
+   "exercises/decline-barbell-bench-press/0.jpg",
+   "exercises/decline-barbell-bench-press/1.jpg"
+  ]
+ },
+ "窄距杠铃卧推": {
+  "en": "Close-Grip Barbell Bench Press",
+  "images": [
+   "exercises/close-grip-barbell-bench-press/0.jpg",
+   "exercises/close-grip-barbell-bench-press/1.jpg"
+  ]
+ },
+ "宽距杠铃卧推": {
+  "en": "Wide-Grip Barbell Bench Press",
+  "images": [
+   "exercises/wide-grip-barbell-bench-press/0.jpg",
+   "exercises/wide-grip-barbell-bench-press/1.jpg"
+  ]
+ },
+ "哑铃飞鸟": {
+  "en": "Dumbbell Flyes",
+  "images": [
+   "exercises/dumbbell-flyes/0.jpg",
+   "exercises/dumbbell-flyes/1.jpg"
+  ]
+ },
+ "上斜哑铃飞鸟": {
+  "en": "Incline Dumbbell Flyes",
+  "images": [
+   "exercises/incline-dumbbell-flyes/0.jpg",
+   "exercises/incline-dumbbell-flyes/1.jpg"
+  ]
+ },
+ "俯卧撑": {
+  "en": "Pushups",
+  "images": [
+   "exercises/pushups/0.jpg",
+   "exercises/pushups/1.jpg"
+  ]
+ },
+ "宽距俯卧撑": {
+  "en": "Pushups (Close and Wide Hand Positions)",
+  "images": [
+   "exercises/pushups-close-and-wide-hand-positions/0.jpg",
+   "exercises/pushups-close-and-wide-hand-positions/1.jpg"
+  ]
+ },
+ "双杠臂屈伸": {
+  "en": "Dips - Triceps Version",
+  "images": [
+   "exercises/dips-triceps-version/0.jpg",
+   "exercises/dips-triceps-version/1.jpg"
+  ]
+ },
+ "杠铃划船": {
+  "en": "Bent Over Barbell Row",
+  "images": [
+   "exercises/bent-over-barbell-row/0.jpg",
+   "exercises/bent-over-barbell-row/1.jpg"
+  ]
+ },
+ "俯身哑铃划船": {
+  "en": "Bent Over Two-Dumbbell Row",
+  "images": [
+   "exercises/bent-over-two-dumbbell-row/0.jpg",
+   "exercises/bent-over-two-dumbbell-row/1.jpg"
+  ]
+ },
+ "哑铃单臂划船": {
+  "en": "One-Arm Dumbbell Row",
+  "images": [
+   "exercises/one-arm-dumbbell-row/0.jpg",
+   "exercises/one-arm-dumbbell-row/1.jpg"
+  ]
+ },
+ "坐姿绳索划船": {
+  "en": "Seated Cable Rows",
+  "images": [
+   "exercises/seated-cable-rows/0.jpg",
+   "exercises/seated-cable-rows/1.jpg"
+  ]
+ },
+ "高位下拉": {
+  "en": "Wide-Grip Lat Pulldown",
+  "images": [
+   "exercises/wide-grip-lat-pulldown/0.jpg",
+   "exercises/wide-grip-lat-pulldown/1.jpg"
+  ]
+ },
+ "窄距下拉": {
+  "en": "Close-Grip Front Lat Pulldown",
+  "images": [
+   "exercises/close-grip-front-lat-pulldown/0.jpg",
+   "exercises/close-grip-front-lat-pulldown/1.jpg"
+  ]
+ },
+ "引体向上": {
+  "en": "Pullups",
+  "images": [
+   "exercises/pullups/0.jpg",
+   "exercises/pullups/1.jpg"
+  ]
+ },
+ "直臂下压": {
+  "en": "Straight-Arm Pulldown",
+  "images": [
+   "exercises/straight-arm-pulldown/0.jpg",
+   "exercises/straight-arm-pulldown/1.jpg"
+  ]
+ },
+ "杠铃耸肩": {
+  "en": "Barbell Shrug",
+  "images": [
+   "exercises/barbell-shrug/0.jpg",
+   "exercises/barbell-shrug/1.jpg"
+  ]
+ },
+ "哑铃耸肩": {
+  "en": "Dumbbell Shrug",
+  "images": [
+   "exercises/dumbbell-shrug/0.jpg",
+   "exercises/dumbbell-shrug/1.jpg"
+  ]
+ },
+ "哑铃推举": {
+  "en": "Dumbbell Shoulder Press",
+  "images": [
+   "exercises/dumbbell-shoulder-press/0.jpg",
+   "exercises/dumbbell-shoulder-press/1.jpg"
+  ]
+ },
+ "杠铃推举": {
+  "en": "Standing Military Press",
+  "images": [
+   "exercises/standing-military-press/0.jpg",
+   "exercises/standing-military-press/1.jpg"
+  ]
+ },
+ "哑铃侧平举": {
+  "en": "Side Lateral Raise",
+  "images": [
+   "exercises/side-lateral-raise/0.jpg",
+   "exercises/side-lateral-raise/1.jpg"
+  ]
+ },
+ "哑铃前平举": {
+  "en": "Front Dumbbell Raise",
+  "images": [
+   "exercises/front-dumbbell-raise/0.jpg",
+   "exercises/front-dumbbell-raise/1.jpg"
+  ]
+ },
+ "俯身哑铃飞鸟": {
+  "en": "Reverse Flyes",
+  "images": [
+   "exercises/reverse-flyes/0.jpg",
+   "exercises/reverse-flyes/1.jpg"
+  ]
+ },
+ "绳索面拉": {
+  "en": "Face Pull",
+  "images": [
+   "exercises/face-pull/0.jpg",
+   "exercises/face-pull/1.jpg"
+  ]
+ },
+ "阿诺德推举": {
+  "en": "Arnold Dumbbell Press",
+  "images": [
+   "exercises/arnold-dumbbell-press/0.jpg",
+   "exercises/arnold-dumbbell-press/1.jpg"
+  ]
+ },
+ "杠铃弯举": {
+  "en": "Barbell Curl",
+  "images": [
+   "exercises/barbell-curl/0.jpg",
+   "exercises/barbell-curl/1.jpg"
+  ]
+ },
+ "哑铃弯举": {
+  "en": "Dumbbell Bicep Curl",
+  "images": [
+   "exercises/dumbbell-bicep-curl/0.jpg",
+   "exercises/dumbbell-bicep-curl/1.jpg"
+  ]
+ },
+ "锤式弯举": {
+  "en": "Hammer Curls",
+  "images": [
+   "exercises/hammer-curls/0.jpg",
+   "exercises/hammer-curls/1.jpg"
+  ]
+ },
+ "集中弯举": {
+  "en": "Concentration Curls",
+  "images": [
+   "exercises/concentration-curls/0.jpg",
+   "exercises/concentration-curls/1.jpg"
+  ]
+ },
+ "绳索下压": {
+  "en": "Triceps Pushdown",
+  "images": [
+   "exercises/triceps-pushdown/0.jpg",
+   "exercises/triceps-pushdown/1.jpg"
+  ]
+ },
+ "绳索下压（绳）": {
+  "en": "Triceps Pushdown - Rope Attachment",
+  "images": [
+   "exercises/triceps-pushdown-rope-attachment/0.jpg",
+   "exercises/triceps-pushdown-rope-attachment/1.jpg"
+  ]
+ },
+ "哑铃颈后臂屈伸": {
+  "en": "Seated Triceps Press",
+  "images": [
+   "exercises/seated-triceps-press/0.jpg",
+   "exercises/seated-triceps-press/1.jpg"
+  ]
+ },
+ "仰卧杠铃臂屈伸": {
+  "en": "EZ-Bar Skullcrusher",
+  "images": [
+   "exercises/ez-bar-skullcrusher/0.jpg",
+   "exercises/ez-bar-skullcrusher/1.jpg"
+  ]
+ },
+ "窄距俯卧撑": {
+  "en": "Close-Grip Push-Up off of a Dumbbell",
+  "images": [
+   "exercises/close-grip-push-up-off-of-a-dumbbell/0.jpg",
+   "exercises/close-grip-push-up-off-of-a-dumbbell/1.jpg"
+  ]
+ },
+ "杠铃深蹲": {
+  "en": "Barbell Squat",
+  "images": [
+   "exercises/barbell-squat/0.jpg",
+   "exercises/barbell-squat/1.jpg"
+  ]
+ },
+ "前蹲": {
+  "en": "Front Barbell Squat",
+  "images": [
+   "exercises/front-barbell-squat/0.jpg",
+   "exercises/front-barbell-squat/1.jpg"
+  ]
+ },
+ "高脚杯深蹲": {
+  "en": "Goblet Squat",
+  "images": [
+   "exercises/goblet-squat/0.jpg",
+   "exercises/goblet-squat/1.jpg"
+  ]
+ },
+ "宽距深蹲": {
+  "en": "Wide Stance Barbell Squat",
+  "images": [
+   "exercises/wide-stance-barbell-squat/0.jpg",
+   "exercises/wide-stance-barbell-squat/1.jpg"
+  ]
+ },
+ "杠铃硬拉": {
+  "en": "Barbell Deadlift",
+  "images": [
+   "exercises/barbell-deadlift/0.jpg",
+   "exercises/barbell-deadlift/1.jpg"
+  ]
+ },
+ "哑铃罗马尼亚硬拉": {
+  "en": "Stiff-Legged Dumbbell Deadlift",
+  "images": [
+   "exercises/stiff-legged-dumbbell-deadlift/0.jpg",
+   "exercises/stiff-legged-dumbbell-deadlift/1.jpg"
+  ]
+ },
+ "罗马尼亚硬拉": {
+  "en": "Romanian Deadlift",
+  "images": [
+   "exercises/romanian-deadlift/0.jpg",
+   "exercises/romanian-deadlift/1.jpg"
+  ]
+ },
+ "直腿硬拉": {
+  "en": "Stiff-Legged Barbell Deadlift",
+  "images": [
+   "exercises/stiff-legged-barbell-deadlift/0.jpg",
+   "exercises/stiff-legged-barbell-deadlift/1.jpg"
+  ]
+ },
+ "腿举": {
+  "en": "Leg Press",
+  "images": [
+   "exercises/leg-press/0.jpg",
+   "exercises/leg-press/1.jpg"
+  ]
+ },
+ "窄距腿举": {
+  "en": "Narrow Stance Leg Press",
+  "images": [
+   "exercises/narrow-stance-leg-press/0.jpg",
+   "exercises/narrow-stance-leg-press/1.jpg"
+  ]
+ },
+ "腿屈伸": {
+  "en": "Leg Extensions",
+  "images": [
+   "exercises/leg-extensions/0.jpg",
+   "exercises/leg-extensions/1.jpg"
+  ]
+ },
+ "腿弯举": {
+  "en": "Lying Leg Curls",
+  "images": [
+   "exercises/lying-leg-curls/0.jpg",
+   "exercises/lying-leg-curls/1.jpg"
+  ]
+ },
+ "坐姿腿弯举": {
+  "en": "Seated Leg Curl",
+  "images": [
+   "exercises/seated-leg-curl/0.jpg",
+   "exercises/seated-leg-curl/1.jpg"
+  ]
+ },
+ "站姿提踵": {
+  "en": "Standing Calf Raises",
+  "images": [
+   "exercises/standing-calf-raises/0.jpg",
+   "exercises/standing-calf-raises/1.jpg"
+  ]
+ },
+ "坐姿提踵": {
+  "en": "Seated Calf Raise",
+  "images": [
+   "exercises/seated-calf-raise/0.jpg",
+   "exercises/seated-calf-raise/1.jpg"
+  ]
+ },
+ "哑铃箭步蹲": {
+  "en": "Dumbbell Lunges",
+  "images": [
+   "exercises/dumbbell-lunges/0.jpg",
+   "exercises/dumbbell-lunges/1.jpg"
+  ]
+ },
+ "杠铃箭步蹲": {
+  "en": "Barbell Lunge",
+  "images": [
+   "exercises/barbell-lunge/0.jpg",
+   "exercises/barbell-lunge/1.jpg"
+  ]
+ },
+ "杠铃臀推": {
+  "en": "Barbell Hip Thrust",
+  "images": [
+   "exercises/barbell-hip-thrust/0.jpg",
+   "exercises/barbell-hip-thrust/1.jpg"
+  ]
+ },
+ "臀桥": {
+  "en": "Barbell Glute Bridge",
+  "images": [
+   "exercises/barbell-glute-bridge/0.jpg",
+   "exercises/barbell-glute-bridge/1.jpg"
+  ]
+ },
+ "单腿臀桥": {
+  "en": "Single Leg Glute Bridge",
+  "images": [
+   "exercises/single-leg-glute-bridge/0.jpg",
+   "exercises/single-leg-glute-bridge/1.jpg"
+  ]
+ },
+ "平板支撑": {
+  "en": "Plank",
+  "images": [
+   "exercises/plank/0.jpg",
+   "exercises/plank/1.jpg"
+  ]
+ },
+ "侧平板支撑": {
+  "en": "Side Bridge",
+  "images": [
+   "exercises/side-bridge/0.jpg",
+   "exercises/side-bridge/1.jpg"
+  ]
+ },
+ "卷腹": {
+  "en": "Crunches",
+  "images": [
+   "exercises/crunches/0.jpg",
+   "exercises/crunches/1.jpg"
+  ]
+ },
+ "仰卧举腿": {
+  "en": "Flat Bench Lying Leg Raise",
+  "images": [
+   "exercises/flat-bench-lying-leg-raise/0.jpg",
+   "exercises/flat-bench-lying-leg-raise/1.jpg"
+  ]
+ },
+ "俄罗斯转体": {
+  "en": "Russian Twist",
+  "images": [
+   "exercises/russian-twist/0.jpg",
+   "exercises/russian-twist/1.jpg"
+  ]
+ },
+ "登山者": {
+  "en": "Mountain Climbers",
+  "images": [
+   "exercises/mountain-climbers/0.jpg",
+   "exercises/mountain-climbers/1.jpg"
+  ]
+ },
+ "悬垂举腿": {
+  "en": "Hanging Leg Raise",
+  "images": [
+   "exercises/hanging-leg-raise/0.jpg",
+   "exercises/hanging-leg-raise/1.jpg"
+  ]
+ }
+}

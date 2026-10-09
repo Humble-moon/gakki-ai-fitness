@@ -1619,6 +1619,48 @@ body::after {
 .review-issue-sev.is-warn { background: rgba(230, 160, 40, .16); color: #d99420; }
 .review-issue-exercise { flex: 0 0 auto; }
 .review-pending-id { margin-top: 10px; color: var(--text-muted); font-size: 11px; opacity: .7; }
+
+/* 登录页：整屏盖住应用，进去之前不加载业务界面 */
+.auth-gate { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg-deep, #0b0b0d); overflow-y: auto; }
+.auth-gate[hidden] { display: none; }
+.auth-gate-card { width: min(100%, 380px); display: flex; flex-direction: column; gap: 12px; padding: 28px 26px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.auth-gate-brand { color: var(--text-primary); font-family: var(--font-heading); font-size: 30px; letter-spacing: 3px; }
+.auth-gate-sub { margin-top: -8px; color: var(--text-muted); font-size: 11px; letter-spacing: 3px; }
+.auth-gate-lead { margin: 6px 0 4px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
+.auth-gate-actions { display: flex; gap: 8px; }
+.auth-gate-actions .btn-generate { flex: 1; }
+.auth-gate-actions .account-btn { flex: 0 0 auto; }
+.auth-gate-status { min-height: 16px; font-size: 12px; color: var(--text-muted); }
+.auth-gate-status[data-kind="error"] { color: var(--danger, #e5484d); }
+.auth-gate-status[data-kind="ok"] { color: var(--accent); }
+.auth-gate-guest { margin-top: 4px; padding: 10px; background: transparent; color: var(--text-muted); border: 1px dashed var(--border); border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; }
+.auth-gate-guest:hover { color: var(--accent); border-color: var(--accent); }
+.auth-gate-guest:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.auth-gate-note { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.6; opacity: .8; }
+.workspace, .sidebar { transition: none; }
+
+/* 已保存的计划 */
+.plan-save-bar { margin-top: 14px; display: flex; justify-content: flex-end; }
+.plan-save-bar .account-btn { flex: 0 0 auto; padding: 8px 16px; font-size: 13px; }
+.saved-plans { margin-top: 16px; padding: 14px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.saved-plans[hidden] { display: none; }
+.saved-plans h3 { margin: 0 0 10px; color: var(--text-primary); font-size: 14px; }
+.saved-plan-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.saved-plan-row:first-child { border-top: none; }
+.saved-plan-title { flex: 1; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-plan-meta { color: var(--text-muted); font-size: 12px; flex: 0 0 auto; }
+.saved-plan-row .account-btn { flex: 0 0 auto; padding: 4px 10px; font-size: 12px; }
+
+/* 动作图示：默认只给一个入口，点开才加载图片 */
+.plan-ex-demo { grid-column: 1 / -1; margin-top: 6px; }
+.plan-ex-demo-toggle { padding: 2px 8px; background: transparent; color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; }
+.plan-ex-demo-toggle:hover { border-color: var(--accent); }
+.plan-ex-demo-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plan-ex-demo-panel { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.plan-ex-demo-panel[hidden] { display: none; }
+.plan-ex-demo-figure { margin: 0; flex: 1 1 180px; max-width: 260px; }
+.plan-ex-demo-figure img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-base); display: block; }
+.plan-ex-demo-figure figcaption { margin-top: 4px; color: var(--text-muted); font-size: 11px; text-align: center; }
 .auth-form { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .auth-form[hidden] { display: none; }
 .auth-actions { display: flex; gap: 8px; }
@@ -2083,6 +2125,39 @@ body::after {
   <div class="ember"></div>
 </div>
 
+<!-- ═══════════════ 登录页 ═══════════════
+     进来先看到它：登录后计划与记忆跟着账号走。也可以选择以游客身份直接进入，
+     那个入口是明写的，而不是藏起来——否则"免登录可用"这件事就没人知道。 -->
+<div class="auth-gate" id="auth-gate" hidden>
+  <div class="auth-gate-card">
+    <div class="auth-gate-brand">IRON<span class="logo-accent">MIND</span></div>
+    <div class="auth-gate-sub">AI FITNESS COACH</div>
+    <p class="auth-gate-lead">登录后，训练计划、长期记忆与训练日志都跟着账号走，换设备也能找回。</p>
+
+    <div class="field">
+      <label for="gate-username">用户名</label>
+      <input id="gate-username" type="text" autocomplete="username" placeholder="2 个字符以上">
+    </div>
+    <div class="field">
+      <label for="gate-password">密码</label>
+      <input id="gate-password" type="password" autocomplete="current-password" placeholder="至少 8 位">
+    </div>
+
+    <div class="auth-gate-actions">
+      <button class="btn-generate" type="button" id="gate-login" onclick="gateAuth('login')">登录</button>
+      <button class="account-btn" type="button" id="gate-register" onclick="gateAuth('register')">注册新账号</button>
+    </div>
+    <div class="auth-gate-status" id="gate-status" role="alert"></div>
+
+    <button class="auth-gate-guest" type="button" id="gate-guest" onclick="enterAsGuest()">
+      先随便看看（游客模式）
+    </button>
+    <p class="auth-gate-note">
+      游客模式的数据只保存在本机浏览器，清缓存会丢。账号为本机演示级，请勿使用真实密码。
+    </p>
+  </div>
+</div>
+
 <div class="app app-shell" id="app-shell">
 
   <!-- ═══════════════ SIDEBAR ═══════════════ -->
@@ -2197,6 +2272,11 @@ body::after {
     <button class="btn-generate" id="btn-generate" onclick="generatePlan()">
       ▸ 生成计划
     </button>
+
+    <section class="saved-plans" id="saved-plans" hidden aria-label="已保存的计划">
+      <h3>已保存的计划</h3>
+      <div id="saved-plans-list"></div>
+    </section>
   </aside>
 
   <!-- ═══════════════ MAIN ═══════════════ -->
@@ -2709,6 +2789,67 @@ async function postAuth(path, username, password) {
   return data;
 }
 
+/* ── 登录页门禁 ──
+   进去之前先问一次身份。三条出口必须都在：
+   ① 登录；② 注册；③ 以游客身份继续。
+   第三条尤其不能省——它是"不登录也能用"这件事的唯一可见入口，
+   藏起来用户就会以为必须先注册。 */
+const GUEST_PASS_KEY = 'ironmind_guest_pass';
+
+function showAuthGate() {
+  const gate = document.getElementById('auth-gate');
+  if (gate) gate.hidden = false;
+  document.getElementById('gate-username')?.focus();
+}
+
+function hideAuthGate() {
+  const gate = document.getElementById('auth-gate');
+  if (gate) gate.hidden = true;
+}
+
+function setGateStatus(message, kind) {
+  const el = document.getElementById('gate-status');
+  if (!el) return;
+  el.textContent = message || '';
+  if (kind) el.dataset.kind = kind; else delete el.dataset.kind;
+}
+
+// 游客放行记在本机：刷新不该反复弹登录页，否则等于把游客挡住了
+function enterAsGuest() {
+  try { localStorage.setItem(GUEST_PASS_KEY, '1'); } catch (e) {}
+  hideAuthGate();
+}
+
+// 登录页与侧栏共用同一套登录/注册逻辑，只是字段与状态行不同
+async function gateAuth(mode) {
+  const username = document.getElementById('gate-username')?.value?.trim() || '';
+  const password = document.getElementById('gate-password')?.value || '';
+  if (!username || !password) { setGateStatus('请填写用户名与密码', 'error'); return; }
+  if (mode === 'register' && password.length < 8) {
+    setGateStatus('密码至少 8 位', 'error'); return;
+  }
+  const buttons = ['gate-login', 'gate-register'].map(id => document.getElementById(id));
+  buttons.forEach(b => { if (b) b.disabled = true; });
+  setGateStatus(mode === 'register' ? '注册中…' : '登录中…');
+  try {
+    await postAuth(`/api/auth/${mode}`, username, password);
+    await loadSession();
+    document.getElementById('gate-password').value = '';
+    setGateStatus('');
+    hideAuthGate();
+    // 注册时顺手认领本机数据，与侧栏注册走同一条路径
+    const claimed = mode === 'register' ? await claimLocalGuestData() : '';
+    showStatus('log-status', claimed
+      ? `已登录为 ${currentUser ? currentUser.username : username}，${claimed}`
+      : `已登录为 ${currentUser ? currentUser.username : username}`);
+    refreshUserScopedViews();
+  } catch (e) {
+    setGateStatus(e.message, 'error');
+  } finally {
+    buttons.forEach(b => { if (b) b.disabled = false; });
+  }
+}
+
 function renderSession() {
   const label = document.getElementById('account-label');
   const hint = document.getElementById('account-hint');
@@ -2973,6 +3114,93 @@ function updatePlanStage(eventData) {
 }
 
 // ── History ──
+/* 保存到服务端。失败时如实告知并保留按钮可重试——不能因为一次网络抖动
+   就让用户以为计划已经存好了。 */
+async function savePlanToServer(planData, button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = '保存中…';
+  try {
+    const resp = await fetch('/api/plans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: planData, athlete_key: athleteKey }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const detail = data.error || data.detail || {};
+      throw new Error(detail.message || `保存失败（${resp.status}）`);
+    }
+    button.textContent = '已保存 ✓';
+    loadSavedPlans();
+    return true;
+  } catch (e) {
+    button.textContent = original;
+    button.disabled = false;
+    showStatus('log-status', `计划保存失败：${e.message}`);
+    return false;
+  }
+}
+
+async function loadSavedPlans() {
+  const panel = document.getElementById('saved-plans');
+  const list = document.getElementById('saved-plans-list');
+  if (!panel || !list) return;
+  try {
+    const resp = await fetch(`/api/plans?athlete_key=${encodeURIComponent(athleteKey)}&limit=20`);
+    if (!resp.ok) { panel.hidden = true; return; }
+    const data = await resp.json();
+    const plans = data.plans || [];
+    list.replaceChildren();
+    if (!plans.length) { panel.hidden = true; return; }
+    plans.forEach(p => {
+      const row = el('div', 'saved-plan-row', '');
+      row.appendChild(el('span', 'saved-plan-title', p.title || '训练计划'));
+      row.appendChild(el('span', 'saved-plan-meta', `${p.day_count} 天 · ${(p.created_at || '').slice(0, 10)}`));
+      const open = el('button', 'account-btn account-btn-quiet', '查看');
+      open.type = 'button'; open.onclick = () => openSavedPlan(p.plan_id);
+      const del = el('button', 'account-btn account-btn-quiet', '删除');
+      del.type = 'button'; del.onclick = () => deleteSavedPlan(p.plan_id);
+      row.appendChild(open); row.appendChild(del);
+      list.appendChild(row);
+    });
+    panel.hidden = false;
+  } catch (e) {
+    panel.hidden = true;
+  }
+}
+
+async function openSavedPlan(planId) {
+  try {
+    const resp = await fetch(`/api/plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`);
+    if (!resp.ok) { showStatus('log-status', '计划读取失败'); return; }
+    const plan = await resp.json();
+    const area = document.getElementById('plan-result');
+    if (!area) return;
+    showPlanSaveBarHidden();
+    renderPlanResult(area, plan);
+    area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    showStatus('log-status', `计划读取失败：${e.message}`);
+  }
+}
+
+// 查看历史计划时不再显示"保存这份计划"——它已经在库里了
+function showPlanSaveBarHidden() {
+  document.querySelectorAll('.plan-save-bar').forEach(n => n.remove());
+}
+
+async function deleteSavedPlan(planId) {
+  try {
+    const resp = await fetch(`/api/plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`,
+                             { method: 'DELETE' });
+    if (!resp.ok) { showStatus('log-status', '删除失败'); return; }
+    loadSavedPlans();
+  } catch (e) {
+    showStatus('log-status', `删除失败：${e.message}`);
+  }
+}
+
 function savePlanToHistory(profile, planData) {
   try {
     const history = JSON.parse(localStorage.getItem('ironmind_history') || '[]');
@@ -3260,6 +3488,16 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
           button.type = 'button'; button.onclick = () => iteratePlan(action); iterBar.appendChild(button);
         });
         resultArea.appendChild(iterBar);
+
+        // 保存到服务端：登录后跟账号走、换设备能找回；游客存在本机标识下。
+        // 本机 localStorage 那份仍保留——它不依赖网络，离线演示时是唯一的记录。
+        const saveBar = el('div', 'plan-save-bar', '');
+        const saveBtn = el('button', 'account-btn', '保存这份计划');
+        saveBtn.type = 'button';
+        saveBtn.onclick = () => savePlanToServer(data, saveBtn);
+        saveBar.appendChild(saveBtn);
+        resultArea.appendChild(saveBar);
+
         savePlanToHistory(getProfile(), data);
         loadHistory();
       }
@@ -3432,6 +3670,56 @@ function renderPlanExplanation(container, explain) {
 
 /* 计划卡片网格。抽出来给「正式结果」与「流式草稿」共用——
    两处各写一份的话，改了一边另一边就会漂移。 */
+/* ── 动作图示 ──
+   只显示经过逐张核对的动作；未收录的不显示，而不是拿一张对不上的图充数。
+   起止位两张图在展开后才加载（loading="lazy"），否则一屏十几个动作会
+   同时发几十个图片请求。 */
+let exerciseImages = {};
+
+async function loadExerciseImages() {
+  try {
+    const resp = await fetch('/api/exercise-images');
+    if (resp.ok) exerciseImages = await resp.json();
+  } catch (e) {
+    exerciseImages = {};   // 取不到就当作没有图示，不影响计划渲染
+  }
+}
+
+function buildExerciseDemo(name) {
+  const entry = name && exerciseImages[name];
+  if (!entry || !Array.isArray(entry.images) || !entry.images.length) return null;
+
+  const wrap = el('div', 'plan-ex-demo', '');
+  const toggle = el('button', 'plan-ex-demo-toggle', '图示');
+  toggle.type = 'button';
+  toggle.setAttribute('aria-expanded', 'false');
+  const panel = el('div', 'plan-ex-demo-panel', '');
+  panel.hidden = true;
+
+  entry.images.slice(0, 2).forEach((src, i) => {
+    const figure = el('figure', 'plan-ex-demo-figure', '');
+    const img = document.createElement('img');
+    // 清单里是相对 static 的路径，服务端把该目录挂在 /static 下
+    img.src = '/static/' + src.replace(/^\/+/, '');
+    img.alt = `${name} 动作示范${i === 0 ? '起始位' : '结束位'}`;
+    img.loading = 'lazy';
+    figure.appendChild(img);
+    figure.appendChild(el('figcaption', '', i === 0 ? '起始位' : '结束位'));
+    panel.appendChild(figure);
+  });
+
+  toggle.addEventListener('click', () => {
+    const open = panel.hidden;
+    panel.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.textContent = open ? '收起' : '图示';
+  });
+
+  wrap.appendChild(toggle);
+  wrap.appendChild(panel);
+  return wrap;
+}
+
 function renderPlanDays(container, days) {
   if (!container || !Array.isArray(days) || !days.length) return;
   const grid = el('div', 'plan-result-grid', '');
@@ -3453,6 +3741,8 @@ function renderPlanDays(container, days) {
       const repsCell = el('span', 'plan-ex-reps', `${exercise?.reps ?? '?'} 次`); repsCell.dataset.planColumn = '次数'; row.appendChild(repsCell);
       const restCell = el('span', 'plan-ex-rest', `休息 ${exercise?.rest || '60 秒'}`); restCell.dataset.planColumn = '休息'; row.appendChild(restCell);
       if (exercise?.notes) row.appendChild(el('div', 'plan-ex-notes', exercise.notes));
+      const demo = buildExerciseDemo(exercise?.name);
+      if (demo) row.appendChild(demo);
       body.appendChild(row);
     });
     card.appendChild(body);
@@ -4401,9 +4691,20 @@ function initTrainingTabs() {
   const fillBtn = document.getElementById('btn-fill-from-plan');
   if (fillBtn) fillBtn.hidden = !localStorage.getItem('ironmind_last_plan');
 
+  // 图示清单与登录态并行预取：它只是一份静态映射，不依赖身份。
+  loadExerciseImages();
   // 先问服务端登录态再拉数据：否则会先用游客身份查一遍训练日志，
   // 登录用户会看到一瞬间的空图表，再被账号数据替换。
-  loadSession().then(() => loadLogHistory());
+  loadSession().then(() => {
+    // 已登录（会话 Cookie 有效）直接进；否则先过登录页。
+    // 游客放行的标记存在本机，刷新不会再弹——否则等于把游客挡在门外。
+    let passed = false;
+    try { passed = localStorage.getItem(GUEST_PASS_KEY) === '1'; } catch (e) {}
+    if (!currentUser && !passed) showAuthGate();
+    else hideAuthGate();
+    loadLogHistory();
+    loadSavedPlans();
+  });
 }
 
 // 切到新 tab 时按需加载数据（图表只在可见时才渲染，否则尺寸算不对）

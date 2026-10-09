@@ -121,6 +121,11 @@ app.add_middleware(
 # 账号相关路由（注册/登录/登出/会话查询）
 app.include_router(auth_router)
 
+# 静态资源。此前项目没有这个挂载——首页是单独用 FileResponse 返回的，
+# 所以只有 index.html 一个文件能被取到；动作图示这类资源需要真正的目录服务。
+# 挂在整个 static 目录上（而不是只挂 exercises），后续新增静态资源不用再改这里。
+app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+
 
 # ============================================================
 # 请求体数据模型（在 server.py 内部重新定义，方便独立部署）
@@ -516,6 +521,7 @@ async def upload_document(
 #      勾选确认）本就不需要逐字输出。
 
 _training_log_store = None
+_plan_store = None
 
 
 def _get_training_log_store():
@@ -525,6 +531,15 @@ def _get_training_log_store():
         from src.storage.training_log_store import TrainingLogStore
         _training_log_store = TrainingLogStore()
     return _training_log_store
+
+
+def _get_plan_store():
+    """惰性构造计划存储——同 _get_training_log_store，避免导入时连库。"""
+    global _plan_store
+    if _plan_store is None:
+        from src.storage.plan_store import PlanStore
+        _plan_store = PlanStore()
+    return _plan_store
 
 
 def _storage_unavailable():
@@ -723,6 +738,116 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     if not result["ok"]:
         result["message"] = "部分数据删除失败，详见 errors。请重试或联系支持。"
     return JSONResponse(status_code=200 if result["ok"] else 500, content=result)
+
+
+@app.get("/api/plans")
+def list_plans(limit: int = 20,
+               principal: Principal = Depends(get_current_principal),
+               athlete_key: str = ""):
+    """列出当前身份下已保存的训练计划。
+
+    游客用自己的本机标识、登录用户用账号身份——与训练日志、长期记忆同一套
+    归属规则，客户端伪造的 key 在登录态下会被忽略。
+    """
+    store = _get_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "STORAGE_UNAVAILABLE",
+                      "message": "计划存储暂不可用，请确认数据库已启动"}})
+    owner = require_owner_key(principal, athlete_key or None)
+    plans = store.list_plans(owner, limit=limit)
+    return {"plans": plans, "count": len(plans)}
+
+
+@app.get("/api/plans/{plan_id}")
+def get_plan(plan_id: int,
+             principal: Principal = Depends(get_current_principal),
+             athlete_key: str = ""):
+    """取一份计划的完整正文。不属于当前身份时返回 404。"""
+    store = _get_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划存储暂不可用"}})
+    owner = require_owner_key(principal, athlete_key or None)
+    plan = store.get_plan(owner, plan_id)
+    if plan is None:
+        # 用 404 而不是 403：403 等于确认"这个 id 存在但不是你的"
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "PLAN_NOT_FOUND", "message": "计划不存在。"}})
+    return plan
+
+
+class PlanSaveRequest(BaseModel):
+    """保存计划请求体。plan 是模型产出的计划对象原文。"""
+    plan: dict = {}
+    athlete_key: Optional[str] = None
+
+
+@app.post("/api/plans")
+def save_plan(req: PlanSaveRequest,
+              principal: Principal = Depends(get_current_principal)):
+    """保存一份训练计划。
+
+    只接受**可交付**的计划：被安全门扣下的、或在生成中途的草稿不该进历史，
+    否则用户翻历史时会看到一份从未被批准执行的计划，而历史列表并不显示
+    "这份被拦下过"。
+    """
+    store = _get_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划存储暂不可用"}})
+
+    plan = req.plan or {}
+    status = plan.get("delivery_status")
+    if status not in ("safe_delivered", "review_approved"):
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "PLAN_NOT_DELIVERED",
+                      "message": "只能保存已交付的计划。"}})
+
+    owner = require_owner_key(principal, req.athlete_key)
+    plan_id = store.save(owner, plan)
+    if plan_id is None:
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划保存失败"}})
+    return {"plan_id": plan_id, "saved": True}
+
+
+@app.delete("/api/plans/{plan_id}")
+def delete_plan(plan_id: int,
+                principal: Principal = Depends(get_current_principal),
+                athlete_key: str = ""):
+    """删除一份已保存的计划。"""
+    store = _get_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划存储暂不可用"}})
+    owner = require_owner_key(principal, athlete_key or None)
+    if not store.delete_plan(owner, plan_id):
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "PLAN_NOT_FOUND", "message": "计划不存在。"}})
+    return {"deleted": True, "plan_id": plan_id}
+
+
+@app.get("/api/exercise-images")
+def exercise_images():
+    """动作图示清单：中文动作名 → 起止位两张图的静态路径。
+
+    只有经过逐张目视核对、确认与动作是同一个的条目才在清单里。未收录的
+    动作在前端显示「暂无图示」——健身场景里照着错的图练会受伤，宁可没有。
+    清单来自 data/exercise_images.json，由 data/ 下的构建脚本产出。
+
+    返回空对象而不是报错：图示是增强，取不到不该让计划渲染不出来。
+    """
+    path = Path(__file__).resolve().parent.parent / "data" / "exercise_images.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[exercise-images] 清单读取失败：%s", exc)
+        return {}
 
 
 @app.get("/api/training-stats")

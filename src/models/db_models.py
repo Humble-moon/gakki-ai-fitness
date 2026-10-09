@@ -195,9 +195,15 @@ class TrainingPlan(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     # 自增主键
 
-    user_id = Column(Integer, nullable=False)
-    # 关联的用户 ID，对应 user_profiles.id
-    # 注意：当前未设置外键约束，仅做逻辑关联
+    owner_key = Column(String(64), nullable=False, index=True)
+    # 计划归属的业务身份键：游客为本机 UUID，登录用户为 u:{id}。
+    # 与 training_logs.athlete_key 同一约定——身份是一个字符串，不是一个整数。
+    # 建表时的 user_id 是整数且从未被写入过任何一行，因此改用这个字段承载归属；
+    # 下面的 user_id 保留只为兼容旧库结构，不再参与任何逻辑。
+
+    user_id = Column(Integer, nullable=True)
+    # 【已弃用】原设计指向 user_profiles.id，但该表从未被写入，
+    # 且整数 ID 与本项目基于字符串的身份体系不兼容。仅为旧库结构保留。
 
     goal = Column(String(20))
     # 该计划对应的训练目标（"增肌" 或 "减脂"）

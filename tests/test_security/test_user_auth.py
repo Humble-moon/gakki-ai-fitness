@@ -416,6 +416,7 @@ PUBLIC_API_ROUTES = {
     "/api/auth/session": "查询登录态，未登录时返回 未登录",
     "/api/analyze-exercise": "按请求体里的画像即时分析，不读写任何用户级持久化数据",
     "/api/upload-document": "上传文件按 session_id 归属（会话级，非账号级），未接入账号身份",
+    "/api/exercise-images": "动作名到静态图片路径的固定映射，不含任何用户数据",
 }
 
 
