@@ -22,11 +22,112 @@ from src.core.goal_contract import (
 )
 
 # Prohibited actions surfaced whenever a plan is held for human review.
+#: 伤病类拦截的禁止事项。这类问题用户无法自行判断，因此连"替换动作"也一并禁止——
+#: 换掉的替代动作同样可能与伤病冲突，而用户没有能力判断。
 REVIEW_PROHIBITED_ACTIONS = [
     "不要开始训练计划",
     "不要加大训练强度",
     "不要自行替换或增加动作",
 ]
+
+#: 非伤病类拦截（器械不满足、动作名有误等）的禁止事项。
+#: 刻意**去掉**「不要自行替换或增加动作」：这类问题的解法恰恰就是替换——
+#: 明细里已经给了替代动作，再禁止替换等于自相矛盾。实测中就出现过
+#: 同一屏上「建议替换为俯身哑铃划船」与「不要自行替换或增加动作」并存。
+REVIEW_PROHIBITED_ACTIONS_FIXABLE = [
+    "不要按原样执行这份计划",
+]
+
+#: **确定性**的伤病信号。这三类都由规则引擎或语义匹配产生，文案固定、不含歧义。
+#: 只要命中就一定是伤病问题，优先级最高。
+_INJURY_STRONG = (
+    "[语义匹配]",            # 语义匹配到伤病档案
+    "[规则引擎] 伤病",        # 规则引擎的伤病—动作冲突
+    "禁止动作:",             # 档案里的 banned_exercises
+    "用户查询含伤病",         # 高危关键词命中
+)
+
+#: 非伤病类的确定性信号。
+_FIXABLE_MARKERS = (
+    ("equipment", ("器械约束", "未包含", "器械清单", "需要平凳", "需要可调",
+                   "需要上斜凳", "需要TRX", "未列出")),
+    ("naming", ("不在动作库", "未收录", "确认动作名称", "动作库中不存在")),
+)
+
+#: **宽松**的伤病词。只在没有更强信号时兜底。
+_INJURY_LOOSE = ("伤病", "疼痛", "损伤", "急症", "冲突")
+
+
+def _hold_texts(result: dict) -> str:
+    """把这次送审的所有问题文本拼成一整块，供分类扫描。"""
+    texts = []
+    for issue in (result.get("active_issues") or []):
+        texts.append(str(issue.get("issue", "")) if isinstance(issue, dict) else str(issue))
+    for item in (result.get("review_suggestions") or []):
+        texts.append(str(item.get("issue", "")) if isinstance(item, dict) else str(item))
+    texts.append(str(result.get("review_reason") or ""))
+    return " ".join(texts)
+
+
+def classify_hold(result: dict) -> str:
+    """判断这次扣下计划的主要原因属于哪一类。
+
+    分类决定两件事：下一步该把用户引向哪里（看医生？补器械？改动作名？），
+    以及禁止事项该说多严。写死一套文案的后果实测过——用户因为计划里
+    用了一根他没有的 TRX 弹力带，被告知"去骨科或运动医学科评估"。
+
+    **判定顺序是有讲究的，不能简单地"伤病优先"**：器械与动作名那两类问题的
+    文案由大模型生成（检查器按提示词检查器械约束），措辞不受控，句子里
+    顺带出现"伤病"两个字完全可能。若把宽松的伤病词排在前面，一条
+    「器械约束不满足」的提示只要提到伤病就会被判成医疗问题，
+    于是又回到"缺根带子去看骨科"。
+
+    所以顺序是：确定性的伤病信号 → 可自行修复类 → 宽松伤病词兜底。
+    真实的伤病问题一定带确定性信号（规则引擎与语义匹配都会打固定前缀），
+    因此这样排不会漏判；而模糊时落到宽松词，仍然偏保守。
+    """
+    blob = _hold_texts(result)
+
+    if any(m in blob for m in _INJURY_STRONG):
+        return "injury"
+    for category, markers in _FIXABLE_MARKERS:
+        if any(m in blob for m in markers):
+            return category
+    if result.get("unknown_exercises"):
+        return "naming"
+    if any(m in blob for m in _INJURY_LOOSE):
+        return "injury"
+    return "other"
+
+
+def hold_guidance(result: dict) -> tuple[list[str], str]:
+    """按拦截原因给出（禁止事项, 下一步）。
+
+    分开返回而不是各写各的，是为了让两者永远指向同一件事——
+    一个说"去就医"、另一个说"自行替换即可"是最伤信任的组合。
+    """
+    category = classify_hold(result)
+
+    if category == "injury":
+        return REVIEW_PROHIBITED_ACTIONS, (
+            "把上面的风险明细带给骨科或运动医学科评估；"
+            "在获得专业意见前，不要执行或调整训练计划。")
+
+    if category == "equipment":
+        return REVIEW_PROHIBITED_ACTIONS_FIXABLE, (
+            "这份计划用到了你的器械清单里没有的器械。"
+            "在「编辑资料」里把器械补全（例如是否有平凳、TRX、可调卧推凳），"
+            "或直接重新生成一份——系统会按你实际有的器械重新编排。")
+
+    if category == "naming":
+        return REVIEW_PROHIBITED_ACTIONS_FIXABLE, (
+            "计划里有几个动作名不在动作库中，可能是模型自造的变体。"
+            "可以重新生成一份；若你认识这些动作，也可以手动把它们换成"
+            "名称规范、你熟悉的同类动作。")
+
+    return REVIEW_PROHIBITED_ACTIONS_FIXABLE, (
+        "请先查看上面的问题明细；确认无误后重新生成一份计划。"
+        "若反复出现同类问题，可以补充你的训练条件（器械、伤病、时间）后重试。")
 
 
 def safe_cached_result(result: dict | None, expected_goal: str | None = None) -> dict | None:
@@ -292,12 +393,13 @@ def create_review_artifact(review_store, profile: dict, query: str, result: dict
         (issue.get("severity") for issue in issues if issue.get("severity")),
         "warning",
     )
+    prohibited, _ = hold_guidance(result)
     return review_store.create(
         profile_summary={key: profile.get(key) for key in ("goal", "injuries", "training_years") if key in profile},
         query=query,
         issues=issues,
         severity=severity,
-        prohibited_actions=REVIEW_PROHIBITED_ACTIONS,
+        prohibited_actions=prohibited,
         owner_key=owner_key or "",
     )
 
@@ -319,11 +421,14 @@ def build_review_pending_payload(result: dict, artifact, thread_id: str | None =
             "issues": artifact.issues,
             "severity": artifact.severity,
             "prohibited_actions": artifact.prohibited_actions,
-            # 措辞刻意不提"等待审核员"：本版本没有人工审核台（见 5.9 节局限性），
-            # 承诺一个不存在的角色会让用户一直等下去，也让演示时被问"谁来点通过"时无法回答。
-            # 改为把动作交回用户手里——带着上面已经算出来的风险明细去问专业人士。
-            "next_step": "把上面的风险明细带给骨科或运动医学科评估；"
-                         "在获得专业意见前，不要执行或调整训练计划。",
+            # 下一步按**拦截原因**给，而不是写死一句。
+            # 写死那版实测出过事：用户因计划用了一根他没有的 TRX 弹力带，
+            # 被告知"去骨科或运动医学科评估"——因为缺根带子去看医生，
+            # 既浪费对方时间，也让整套安全机制显得没在理解问题。
+            # 措辞也刻意不提"等待审核员"：本版本没有人工审核台（见 5.9 节局限性），
+            # 承诺一个不存在的角色会让用户一直等下去。
+            "next_step": hold_guidance(result)[1],
+            "hold_reason": classify_hold(result),
         },
     }
     # 库外动作单独列出：审核者需要直接看到"哪些动作名是模型编造的"，

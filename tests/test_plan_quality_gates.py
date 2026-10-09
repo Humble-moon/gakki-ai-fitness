@@ -474,3 +474,148 @@ class TestReviewPayloadTellsTheTruthAboutReview:
         assert len(issues) == 2
         assert {i.get("severity") for i in issues} == {"danger", "warning"}
         assert any(i.get("exercise") == "深蹲" for i in issues)
+
+
+class TestHoldGuidanceMatchesTheReason:
+    """拦截后的指引必须与**拦截原因**一致。
+
+    这组测试来自一次实测事故：用户没有伤病，计划因为用了一根他没有的
+    TRX 弹力带被扣下，而界面告诉他"去骨科或运动医学科评估"——
+    因为缺根带子去看医生。原因是 next_step 当时写死成了伤病场景。
+    """
+
+    def _guidance(self, **result):
+        from src.core.plan_finalization import hold_guidance
+        return hold_guidance(result)
+
+    # ---- 截图里的真实载荷，逐字照抄 ----
+    EQUIPMENT_CASE = {
+        "review_reason": "器械约束不满足：用户可用器械为哑铃、自重、弹力带，未包含TRX/悬挂训练带",
+        "active_issues": [
+            {"exercise": "TRX双手划船",
+             "issue": "器械约束不满足：用户可用器械为哑铃、自重、弹力带，未包含TRX/悬挂训练带；建议替换为俯身哑铃划船或弹力带划船。",
+             "severity": "warning"},
+        ],
+    }
+
+    def test_equipment_hold_does_not_send_the_user_to_a_doctor(self):
+        prohibitions, next_step = self._guidance(**self.EQUIPMENT_CASE)
+        assert "骨科" not in next_step and "就医" not in next_step, (
+            f"器械问题不该让人去看医生：{next_step}")
+        assert "器械" in next_step, "应当指向器械清单"
+
+    def test_equipment_hold_allows_replacing_exercises(self):
+        """器械问题的解法就是替换动作，此时禁止替换是自相矛盾的。
+
+        实测中同一屏上出现过「建议替换为俯身哑铃划船」与
+        「不要自行替换或增加动作」并存。
+        """
+        prohibitions, _ = self._guidance(**self.EQUIPMENT_CASE)
+        assert not any("替换" in p for p in prohibitions), (
+            f"器械问题不应禁止替换动作：{prohibitions}")
+        assert any("不要按原样执行" in p for p in prohibitions), "仍要提醒别照原样练"
+
+    def test_injury_hold_still_sends_the_user_to_a_doctor(self):
+        prohibitions, next_step = self._guidance(
+            review_reason="语义匹配检测到伤病风险 (置信度 0.76)",
+            active_issues=[{"issue": "[语义匹配] 你的描述与「膝关节骨关节炎」的常见症状相似",
+                            "severity": "danger"}])
+        assert "骨科" in next_step or "运动医学" in next_step
+        assert any("替换" in p for p in prohibitions), "伤病问题必须禁止自行替换"
+
+    def test_equipment_wording_mentioning_injury_is_still_equipment(self):
+        """器械类文案由大模型生成，句中出现"伤病"二字不能把它判成医疗问题。
+
+        否则又回到"缺根带子去看骨科"。真实的伤病问题一定带确定性信号
+        （规则引擎与语义匹配都有固定前缀），因此不会因此漏判。
+        """
+        from src.core.plan_finalization import classify_hold
+        assert classify_hold({
+            "review_reason": "器械约束不满足：计划需要TRX，考虑到你的伤病情况建议改用弹力带",
+            "active_issues": [{"issue": "器械约束不满足：未包含TRX；该动作与你的伤病无关"}],
+        }) == "equipment"
+
+    def test_strong_injury_signals_win_over_equipment_wording(self):
+        """真的伤病不能被器械字样盖过去——那才是会让人受伤的方向。"""
+        from src.core.plan_finalization import classify_hold
+        assert classify_hold({
+            "review_reason": "规则引擎检测到 1 个伤病-动作冲突",
+            "active_issues": [
+                {"issue": "[规则引擎] 伤病「腰突」与动作「硬拉」存在冲突", "severity": "danger"},
+                {"issue": "器械约束不满足：未包含TRX"},
+            ],
+        }) == "injury"
+
+    def test_unknown_exercises_map_to_naming(self):
+        from src.core.plan_finalization import classify_hold
+        assert classify_hold({
+            "review_reason": "计划包含动作库中不存在的动作",
+            "unknown_exercises": ["幽灵动作"],
+        }) == "naming"
+
+
+class TestPayloadActuallyUsesTheGuidance:
+    """载荷必须真的用上分类结果——只测分类函数是不够的。
+
+    第一版测试直接调 hold_guidance()，因此把 build_review_pending_payload
+    改回写死文案时它们依然全绿：测了零件，没测接线。下面这几条从载荷
+    入口进去断言，才真正锁住"用户看到的那句话与拦截原因一致"。
+    """
+
+    def _payload(self, result_extra):
+        from src.core.plan_finalization import (
+            build_review_pending_payload,
+            create_review_artifact,
+        )
+
+        class _Store:
+            def create(self, **kwargs):
+                class _A:
+                    review_id = "r-wire"
+                    status = "pending"
+                    created_at = "2026-10-09T00:00:00Z"
+                    issues = kwargs.get("issues", [])
+                    severity = kwargs.get("severity", "warning")
+                    prohibited_actions = kwargs.get("prohibited_actions", [])
+                return _A()
+
+        result = {"days": [], "active_issues": [], "review_suggestions": [],
+                  "review_severity": "warning", "review_reason": ""}
+        result.update(result_extra)
+        artifact = create_review_artifact(_Store(), {"goal": "增肌"}, "q", result)
+        return build_review_pending_payload(result, artifact)
+
+    def test_equipment_payload_next_step_is_about_equipment(self):
+        payload = self._payload({
+            "review_reason": "器械约束不满足：未包含TRX/悬挂训练带",
+            "active_issues": [{"exercise": "TRX双手划船",
+                               "issue": "器械约束不满足：未包含TRX/悬挂训练带",
+                               "severity": "warning"}],
+        })
+        step = payload["review"]["next_step"]
+        assert "骨科" not in step, f"器械问题不该让人看医生：{step}"
+        assert "器械" in step
+
+    def test_equipment_payload_prohibitions_allow_replacement(self):
+        payload = self._payload({
+            "review_reason": "器械约束不满足：未包含TRX",
+            "active_issues": [{"issue": "器械约束不满足：未包含TRX", "severity": "warning"}],
+        })
+        assert not any("替换" in p for p in payload["review"]["prohibited_actions"])
+
+    def test_injury_payload_next_step_is_medical(self):
+        payload = self._payload({
+            "review_reason": "语义匹配检测到伤病风险 (置信度 0.76)",
+            "active_issues": [{"issue": "[语义匹配] 与「膝关节骨关节炎」症状相似",
+                               "severity": "danger"}],
+        })
+        assert "骨科" in payload["review"]["next_step"] or "运动医学" in payload["review"]["next_step"]
+        assert any("替换" in p for p in payload["review"]["prohibited_actions"])
+
+    def test_payload_reports_the_hold_category(self):
+        """载荷带上分类，便于前端或排查时直接看出是哪一类。"""
+        payload = self._payload({
+            "review_reason": "器械约束不满足：未包含TRX",
+            "active_issues": [{"issue": "器械约束不满足：未包含TRX"}],
+        })
+        assert payload["review"]["hold_reason"] == "equipment"
