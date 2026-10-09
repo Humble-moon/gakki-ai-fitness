@@ -32,8 +32,14 @@ def route_after_check(state: dict) -> str:
 
 
 def route_after_finalize(state: dict) -> str:
-    """Escalate to human review when the final gate is not fully safe."""
+    """Escalate to human review when the final gate is not fully safe.
+
+    判据只看 ``requires_review``。原先附带 ``_persistence_allowed is not True``，
+    但那个标志是缓存闸门、额外要求问题清单干净，与"该不该送审"无关；
+    两个条件在最终归一化里本就互斥（可缓存必然蕴含不需要审核），
+    附带条件因此从未生效——留着只会让人误以为送审还与缓存有关。
+    """
     result = state.get("result") or {}
-    if result.get("requires_review") and result.get("_persistence_allowed") is not True:
+    if result.get("requires_review"):
         return "open_review"
     return "deliver"

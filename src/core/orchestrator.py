@@ -38,6 +38,7 @@ from src.agents.output_validation import validate_training_plan, OutputValidatio
 from src.core import plan_finalization
 from src.core.goal_contract import GoalConsistencyError, plan_goal_issue, plan_goal_matches, validate_requested_goal
 from src.core.plan_explanation import build_explanation
+from src.llm.prompts.advice import build_advice_messages
 from src.core.qa_agent import answer_with_agent_loop
 from src.core.qa_safety import (
     EMERGENCY_NOTE,
@@ -275,15 +276,15 @@ class Orchestrator:
         training_context = self._training_context(athlete_key)
 
         yield ("stage", "[分析] 正在分析你的情况...")
-        advice_context = ""
-        if long_term_context:
-            advice_context += f"\n\n[这个用户之前来过，他的历史画像]：\n{long_term_context}"
-        if plan_context:
-            advice_context += f"\n\n用户之前已经有了一个训练计划：\n{plan_context}\n用户现在说：{query}\n请结合这个上下文给出建议。"
+        # 提示词与上下文拼装抽到了 src/llm/prompts/advice.py，状态图那一侧共用同一份，
+        # 两条编排路径的暖场话术因此不会各自漂移。
         provider_degraded = False
         advice_text = ""
         advice_stream = self.writer.llm.chat_stream(
-            [{"role": "user", "content": self._build_advice_prompt(profile_dict, query) + advice_context}], temperature=0.5
+            build_advice_messages(profile_dict, query,
+                                  long_term_context=long_term_context,
+                                  plan_context=plan_context),
+            temperature=0.5,
         )
         provider_degraded = bool(getattr(advice_stream, "metadata", None) and advice_stream.metadata.degraded)
         for chunk in advice_stream:
@@ -372,40 +373,6 @@ class Orchestrator:
                         plan_config: dict | None = None) -> dict:
         """Normalize model keys and add only deterministic request metadata."""
         return plan_finalization.normalize_plan(result, profile=profile, plan_config=plan_config)
-
-    def _build_advice_prompt(self, profile: dict, query: str) -> str:
-        """【私有方法】构建"教练口头建议"的 LLM 提示词。
-
-        输入：
-            profile: dict — 用户画像字典（已通过 model_dump() 转换）
-            query: str — 用户补充描述
-        输出：
-            str — 一段精心设计的提示词，引导 LLM 以健身教练的口吻
-                  对用户数据做初步分析（BMI、训练阶段、伤病关注、训练原则），
-                  并给出 2-3 条实用建议。用于流式版生成前的"暖场"阶段。
-        """
-        eq = "、".join(profile.get("available_equipment", []))
-        injuries_raw = profile.get("injuries", [])
-        injuries = injuries_raw[0] if injuries_raw else "无"
-        return f"""你是一位经验丰富的健身教练。用户刚刚输入了以下信息，请先给一个简短、友好、专业的初步分析。
-
-用户信息：
-- 身高 {profile.get('height')}cm，体重 {profile.get('weight')}kg
-- 训练 {profile.get('training_years')} 年
-- 目标：{profile.get('goal')}
-- 训练场景对应的可用器械：{eq}
-- 每周 {profile.get('days_per_week')} 练
-- 伤病情况：{injuries}
-- 补充说明：{query or '无'}
-
-要求：
-1. 先打招呼，认可用户的基础和目标
-2. 点评用户的数据（BMI是否合理、训练年限处于什么阶段、器械是否够用）
-3. 如果用户有伤病，认真分析并给出规避建议；如果没有伤病也要提一下注意预防
-4. 给 2-3 条针对该场景的实用训练原则
-5. 最后用一句"接下来我为你生成具体的训练计划"过渡
-6. 总共 150-200 字，用口语化、有温度的语气，像一个真正的教练在对话
-7. 用中文回复，不要用 markdown 格式，就是纯文字段落"""
 
     def analyze_exercise(self, exercise_name: str, user_desc: str,
                          profile: UserProfileInput) -> dict:

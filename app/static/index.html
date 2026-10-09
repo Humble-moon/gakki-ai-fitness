@@ -3604,7 +3604,10 @@ async function generatePlan() {
   const profile = getProfile();
   try {
     const body = { ...profile, query: document.getElementById('plan-query')?.value || '', session_id: globalSessionId, athlete_key: athleteKey };
-    await streamFrom('/api/generate-plan', body, 'plan-output', 'plan', controller.signal, () => activeRequests.plan === controller);
+    // 走状态图（v2）而非命令式编排：计划被安全门拦下时，只有状态图这一侧
+    // 具备可恢复的中断点——审核解除后能接着跑完，服务重启也不丢。
+    // 命令式那一侧创建的审核工件没有线程标识，等于把计划扣下就再也拿不回来。
+    await streamFrom('/api/v2/plan/stream', body, 'plan-output', 'plan', controller.signal, () => activeRequests.plan === controller);
     setRequestState('plan', 'idle', '', controller);
   } catch(e) {
     setRequestState('plan', e.name === 'AbortError' ? 'cancelled' : 'error', e.name === 'AbortError' ? '请求已取消' : `请求失败: ${e.message}`, controller);

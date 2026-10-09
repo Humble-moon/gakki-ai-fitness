@@ -51,7 +51,9 @@ def test_response_validation_precedes_reader():
     assert ".ok" in segment and ".body" in segment and "getReader" in segment
     assert segment.index(".ok") < segment.index("getReader")
     assert "text/event-stream" in segment
-    for marker in ("/api/generate-plan", "/api/analyze-exercise", "/api/ask-question"):
+    # 计划生成走状态图接口（见 test_plan_generation_uses_the_state_graph_endpoint），
+    # 其余两条仍由命令式编排提供。
+    for marker in ("/api/v2/plan/stream", "/api/analyze-exercise", "/api/ask-question"):
         assert marker in HTML
 
 
@@ -698,3 +700,24 @@ def test_review_panel_renders_issue_children_as_text():
     fn = _fn_body("renderReviewPending")
     assert "innerHTML" not in fn
     assert "appendText" in fn
+
+
+def test_plan_generation_uses_the_state_graph_endpoint():
+    """计划生成必须走 v2（状态图），而不是命令式编排。
+
+    差别不在"哪个更快"，而在**被安全门拦下之后还能不能救回来**：
+    v2 的图带检查点，审核解除后能从中断处接着跑完、服务重启也不丢；
+    命令式那一侧创建的审核工件不带线程标识，计划被扣下就再也拿不回来。
+
+    这条契约把"界面走哪条编排路径"钉死，避免它悄悄退回 v1。
+    """
+    fn = _fn_body("generatePlan")
+    assert "/api/v2/plan/stream" in fn, "计划生成应走状态图接口"
+    assert "'/api/generate-plan'" not in fn, "不应再退回命令式接口"
+
+
+def test_plan_request_still_carries_identity():
+    """换端点不得弄丢身份字段——长期记忆靠它定归属。"""
+    fn = _fn_body("generatePlan")
+    assert "athlete_key: athleteKey" in fn
+    assert "session_id" in fn

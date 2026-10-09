@@ -28,10 +28,11 @@ class CoachState(TypedDict, total=False):
     thread_id: str                # LangGraph thread id, echoed into review payloads
     athlete_key: str | None       # stable athlete id; drives training-history lookup
 
-    # ---- Context (populated by ``ingest`` when a session is active) ----
+    # ---- Context (populated by ``ingest``) ----
     conv_context: str             # sliding-window + summarized conversation context
     plan_context: str             # summary of a previously delivered plan
     training_context: str         # training execution history + confirmed adjustments
+    long_term_context: str        # cross-session profile memory (goal/injuries/habits/equipment)
 
     # ---- Pipeline artifacts ----
     cache_hit: dict | None        # safe cached plan, or None on miss
