@@ -1642,6 +1642,7 @@ body::after {
 /* 已保存的计划 */
 .plan-save-bar { margin-top: 14px; display: flex; justify-content: flex-end; }
 .plan-save-bar .account-btn { flex: 0 0 auto; padding: 8px 16px; font-size: 13px; }
+.plan-title { margin: 0 0 12px; color: var(--text-primary); font-family: var(--font-heading); font-size: 20px; letter-spacing: 1px; }
 .saved-plans { margin-top: 16px; padding: 14px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .saved-plans[hidden] { display: none; }
 .saved-plans h3 { margin: 0 0 10px; color: var(--text-primary); font-size: 14px; }
@@ -2814,6 +2815,22 @@ function setGateStatus(message, kind) {
   if (kind) el.dataset.kind = kind; else delete el.dataset.kind;
 }
 
+/* 回车提交。
+   登录页不是 <form>（侧栏那份虽然是 form，但配了 onsubmit="return false"
+   且按钮是 type="button"），所以两处都不响应回车。用户输完密码按回车
+   却毫无反应，是很自然的挫败点，显式补上。 */
+function bindEnterToSubmit(pairs) {
+  pairs.forEach(([id, submit]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();   // 防止隐式提交触发页面刷新
+      submit();
+    });
+  });
+}
+
 // 游客放行记在本机：刷新不该反复弹登录页，否则等于把游客挡住了
 function enterAsGuest() {
   try { localStorage.setItem(GUEST_PASS_KEY, '1'); } catch (e) {}
@@ -3795,6 +3812,12 @@ function renderPlanDraft(container, rawText) {
 function renderPlanResult(container, data) {
   if (!container) return;
   const plan = data || {};
+  // 计划名此前算了却从不显示——模型会给计划起一个描述性的名字
+  // （如「3天低冲击减脂循环计划（膝盖友好版）」），而用户从没看到过。
+  // 从历史里打开某一份时，没有它就分不清打开的是哪一份。
+  if (plan.plan_name) {
+    container.appendChild(el('h2', 'plan-title', plan.plan_name));
+  }
   const stats = el('div', 'result-header', '');
   const pill = (text, dotClass='') => {
     const node = el('div', 'stat-pill', '');
@@ -4690,6 +4713,14 @@ function initTrainingTabs() {
 
   const fillBtn = document.getElementById('btn-fill-from-plan');
   if (fillBtn) fillBtn.hidden = !localStorage.getItem('ironmind_last_plan');
+
+  // 登录页与侧栏的输入框都支持回车提交
+  bindEnterToSubmit([
+    ['gate-username', () => gateAuth('login')],
+    ['gate-password', () => gateAuth('login')],
+    ['auth-username', () => handleLogin()],
+    ['auth-password', () => handleLogin()],
+  ]);
 
   // 图示清单与登录态并行预取：它只是一份静态映射，不依赖身份。
   loadExerciseImages();

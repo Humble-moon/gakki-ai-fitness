@@ -124,7 +124,25 @@ app.include_router(auth_router)
 # 静态资源。此前项目没有这个挂载——首页是单独用 FileResponse 返回的，
 # 所以只有 index.html 一个文件能被取到；动作图示这类资源需要真正的目录服务。
 # 挂在整个 static 目录上（而不是只挂 exercises），后续新增静态资源不用再改这里。
-app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+class _CacheableStatic(StaticFiles):
+    """给静态资源加 Cache-Control。
+
+    默认只有 ETag/Last-Modified，浏览器每次仍要发一次条件请求；动作图示是
+    内容不变的图片，让浏览器直接跳过请求更省事。前端页面本身不缓存
+    （max-age 只加在图片上），避免改动后用户拿到旧界面。
+    """
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200 and path.lower().endswith(
+                (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg")):
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+
+
+app.mount("/static",
+          _CacheableStatic(directory=str(Path(__file__).parent / "static")),
+          name="static")
 
 
 # ============================================================
@@ -806,6 +824,13 @@ def save_plan(req: PlanSaveRequest,
         return JSONResponse(status_code=400, content={
             "error": {"code": "PLAN_NOT_DELIVERED",
                       "message": "只能保存已交付的计划。"}})
+    # 没有训练日的计划没有保存价值。这里先拦是因为 store.save 对这种情况也返回
+    # None，而路由把 None 一律当成"存储不可用"报 503——那会让调用方以为该稍后
+    # 重试，实际重试多少次都一样：问题在请求，不在存储。
+    if not plan.get("days"):
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "PLAN_EMPTY",
+                      "message": "该计划没有训练日内容，无需保存。"}})
 
     owner = require_owner_key(principal, req.athlete_key)
     plan_id = store.save(owner, plan)
@@ -957,7 +982,11 @@ async def index():
     说明：前端为单页应用（SPA），所有页面路由由前端 JavaScript 处理，
           后端只需返回 index.html 即可。
     """
-    return FileResponse(str(Path(__file__).parent / "static" / "index.html"))
+    # no-cache 不是"不缓存"，而是"每次都要先校验"：内容没变时仍走 304，
+    # 变了就拿到新版。不加它时浏览器会对 HTML 做启发式缓存，于是**改了前端
+    # 刷新却看不到新版本**——实测中被绊过一次，演示前改一版然后刷新风险很大。
+    return FileResponse(str(Path(__file__).parent / "static" / "index.html"),
+                        headers={"Cache-Control": "no-cache"})
 
 
 # ============================================================

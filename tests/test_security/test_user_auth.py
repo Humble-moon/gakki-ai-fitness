@@ -602,3 +602,17 @@ def test_claim_is_idempotent(claim_client):
     second = client.post("/api/auth/claim",
                          json={"guest_key": "guest-dev-1", "include_profile_fingerprint": False})
     assert first.status_code == second.status_code == 200
+
+
+def test_rate_limit_exempts_static_assets():
+    """静态图片不能计入限流。
+
+    这道限制防的是刷模型调用与写操作，而静态资源是本地文件、零外部开销。
+    把它们计进去的后果是正常浏览被拦：一个 14 个动作的计划展开全部图示
+    就是 28 次请求，两次翻页即触顶——实测中确实吃到过 429。
+    """
+    from src.security.api_guard import RateLimitMiddleware
+
+    mw = RateLimitMiddleware(app=None, requests_per_minute=60)
+    assert any(p.startswith("/static") for p in mw.exempt_prefixes), \
+        "静态资源必须豁免限流"

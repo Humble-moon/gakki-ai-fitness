@@ -150,10 +150,16 @@ class AdminAuthMiddleware:
 
 
 class RateLimitMiddleware:
-    """Per-client-IP sliding window rate limiter."""
+    """Per-client-IP sliding window rate limiter.
+
+    ``/static`` 必须豁免。这道限制的目的是防刷模型调用与写操作，而静态资源
+    是本地文件、不产生任何外部开销；把它们计进去的后果是**正常浏览也会被拦**：
+    一个 14 个动作的计划展开全部图示就是 28 个图片请求，两次翻页即触顶。
+    实测中就因此吃到过一次 429。
+    """
 
     def __init__(self, app, requests_per_minute: int = 60,
-                 exempt_prefixes: tuple = ("/health",)):
+                 exempt_prefixes: tuple = ("/health", "/static")):
         self.app = app
         self.capacity = max(1, requests_per_minute)
         self.window = 60.0

@@ -826,3 +826,29 @@ def test_exercise_demo_uses_the_static_mount():
 
     fn = _fn_body("buildExerciseDemo")
     assert "'/static/'" in fn, "图片 URL 必须带 /static 前缀以匹配挂载点"
+
+
+def test_plan_title_is_rendered():
+    """计划名必须显示出来。
+
+    模型会给计划起描述性的名字（如「3天低冲击减脂循环计划（膝盖友好版）」），
+    但这个字段此前算完就丢——用户从没看到过，从历史里打开某一份时
+    也分不清打开的是哪一份。
+    """
+    fn = _fn_body("renderPlanResult")
+    assert "plan_name" in fn, "计划名要渲染"
+
+
+def test_enter_key_submits_login_forms():
+    """登录页与侧栏都要支持回车提交。
+
+    登录页不是 <form>，侧栏那份虽用了 form 但配的是 onsubmit="return false"
+    且按钮 type="button"——两处原本都不响应回车，用户输完密码按回车没反应。
+    """
+    assert "bindEnterToSubmit" in HTML
+    init = HTML[HTML.index("bindEnterToSubmit(["):]
+    init = init[:init.index("]);") + 3]
+    for field in ("gate-username", "gate-password", "auth-username", "auth-password"):
+        assert f"'{field}'" in init, f"{field} 应绑定回车提交"
+    fn = _fn_body("bindEnterToSubmit")
+    assert "preventDefault" in fn, "要阻止隐式提交导致页面刷新"
