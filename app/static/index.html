@@ -7,7 +7,15 @@
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<!--
+  字体用「media=print + onload 切换」的方式异步加载。
+  直接写 rel="stylesheet" 会阻塞首屏渲染：实测在 fonts.googleapis.com
+  不可达的网络里（国内常见），浏览器要等它超时，加载从 32ms 变成 3265ms。
+  异步化之后首屏立刻用系统字体渲染，字体到位再替换——字体栈本身有
+  sans-serif/monospace 兜底，加载失败只是视觉降级，不影响功能。
+-->
+<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"></noscript>
 <style>
 /* ============================================================
    IRON MIND — Industrial Forge Aesthetic v3
@@ -543,7 +551,11 @@ body::after {
 }
 
 .plan-ex-row {
-  gap: 0;
+  /* 这里原本是 gap: 0，本意只想清掉行间距，却把共享规则里的
+     column-gap: 12px 一并清零了。表头行保留了 12px、数据行没有，
+     两边分到的列宽因此不同——实测表头第 4 列比数值列偏左 8px，
+     「组数/次数/休息」压不到自己的数据正上方。只清行间距即可。 */
+  row-gap: 0;
   padding: 10px 0;
   border-bottom: 1px solid var(--steel);
   font-size: 13px;
@@ -1657,10 +1669,16 @@ body::after {
 .plan-ex-demo-toggle { padding: 2px 8px; background: transparent; color: var(--accent); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; }
 .plan-ex-demo-toggle:hover { border-color: var(--accent); }
 .plan-ex-demo-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.plan-ex-demo-panel { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+/* 两张图示必须一样大。
+   原来是 flex: 1 1 180px + max-width: 260px，宽度取决于「这一行放下了几张」：
+   实测同一个容器里，860px 宽时图片 260px、400px 时 195px、330px 时又回到 260px
+   —— 一次 65px 的跳变，同一组图忽大忽小。
+   改成两列等宽网格后，宽度只由容器决定、与图片张数无关；再把高度按源图的
+   3:2（600×400）固定下来，懒加载期间也能占住位置，不会加载完才撑开跳版。 */
+.plan-ex-demo-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
 .plan-ex-demo-panel[hidden] { display: none; }
-.plan-ex-demo-figure { margin: 0; flex: 1 1 180px; max-width: 260px; }
-.plan-ex-demo-figure img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-base); display: block; }
+.plan-ex-demo-figure { margin: 0; min-width: 0; }
+.plan-ex-demo-figure img { width: 100%; aspect-ratio: 3 / 2; object-fit: contain; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-base); display: block; }
 .plan-ex-demo-figure figcaption { margin-top: 4px; color: var(--text-muted); font-size: 11px; text-align: center; }
 .auth-form { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .auth-form[hidden] { display: none; }
@@ -1710,16 +1728,34 @@ body::after {
 @media (max-width: 767px) {
   .main { min-width: 0; }
   .workspace-header h1 { font-size: 26px; }
-  .tabs { scrollbar-width: none; }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab-btn { min-height: 44px; padding: 10px 16px; }
+  /* 五个入口在窄屏一行放不下：实测 359px 视口需要 516px，溢出 189px。
+     原来靠横向滚动 + 隐藏滚动条兜底，结果是「训练日志」「训练分析」
+     两个标签完全在屏幕外，而且没有任何提示说右边还有内容——用户根本
+     不知道它们存在。改成自动换行网格：入口全部直接可见，不再依赖
+     "发现式滚动"。列宽 minmax(96px,1fr) 保证在 320px 窄机上也不会挤爆。 */
+  .feature-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 6px;
+    overflow: visible;
+    border-bottom: none;
+  }
+  .tab-btn { min-height: 44px; padding: 10px 6px; font-size: 12px; letter-spacing: 1px; border-radius: var(--radius-sm); }
+  /* 换行之后，「贴着标签栏底边」的下划线不再指向任何东西（第一行按钮的
+     下划线会横在栏中间），选中态改用填充块表达。 */
+  .tab-btn::after { display: none; }
+  .tab-btn.active { background: var(--forge-amber-dim); box-shadow: inset 0 0 0 1px var(--forge-amber); }
   .plan-result-grid { grid-template-columns: 1fr; }
   .plan-day-header { padding: 12px 14px; }
   .plan-day-body { padding: 8px 14px 12px; }
   .plan-ex-heading { display: none; }
   .plan-ex-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    /* 每一行都是**独立的 grid 容器**，所以 auto 列会按本行内容宽度各自解算：
+       「4 组」和「12 组」宽度不同，后面的「次数」「休息」就跟着左右漂，
+       纵向看不成一列。改成按比例分列——同一容器宽度下解算结果一致，
+       各行的列边界才能对齐。第三列给宽一点容纳「休息 120 秒」。 */
+    grid-template-columns: minmax(0, 1fr) minmax(0, .9fr) minmax(0, 1.25fr);
     gap: 6px 10px;
     padding: 12px 0;
     align-items: baseline;

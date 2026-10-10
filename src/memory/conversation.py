@@ -26,6 +26,7 @@ Redis 存储结构：
 
 import json
 import logging
+import re
 import threading
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
@@ -34,6 +35,23 @@ from src.storage.redis_client import RedisClient
 from src.llm.provider import LLMProvider
 
 logger = logging.getLogger(__name__)
+
+# session_id 会直接拼进 Redis 键名（conv:{session_id}:turns 等），
+# 而 purge() 用的是 SCAN MATCH 前缀匹配——它的参数是 **glob**。
+# 不校验就等于允许 session_id="*" 匹配到 conv:*:*，一次请求删掉
+# 所有用户的会话；session_id="?" 之类的通配符同理。
+# 这里只放行安全字符集：字母数字加 . _ : -，足够覆盖前端 randomUUID()
+# 与测试里用的短标识（"s1" / "offline"）。
+_SAFE_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+def is_safe_session_id(session_id: str | None) -> bool:
+    """会话 ID 是否可安全地进入 Redis 键名。
+
+    注意这**不是**格式洁癖：Redis 的 SCAN MATCH 参数是 glob 模式，
+    而本模块的 purge() 正是用前缀 + 通配符来枚举待删键的。
+    """
+    return bool(session_id) and bool(_SAFE_SESSION_ID_RE.match(session_id.strip()))
 
 # WINDOW_SIZE: 滑动窗口中保留的完整对话轮数。
 # 为什么是 3：3 轮足够覆盖典型的指代消解场景（"换一个""上面那个"），
@@ -227,7 +245,15 @@ class ConversationManager:
         用于"删除我的数据"。用 SCAN 前缀匹配而不是逐个删已知字段——
         会话的 key 种类会随功能增加（当前有 turns / summary / plan），
         逐个枚举将来必漏。
+
+        正因为它按前缀 + 通配符扫，session_id 必须先过安全校验：
+        传进来的如果是 "*"，pattern 就变成 conv:*:*，一次调用清空
+        所有人的会话。这里返回 0 而不是抛异常——上层是"删除我的数据"
+        接口，非法标识应当等价于"没有这样的会话"，不该变成 500。
         """
+        if not is_safe_session_id(session_id):
+            logger.warning("[conversation] 拒绝非法 session_id 的 purge：%r", session_id)
+            return 0
         pattern = f"conv:{session_id}:*"
         deleted = 0
         try:

@@ -7,9 +7,20 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def redis():
+    """只清理本测试自己写过的键。
+
+    这里曾经调用 client.flushdb()——那会清空整个 Redis，把当天的 LLM
+    成本计数、语义缓存和登录会话一起抹掉（开发机上跑一次 integration
+    就等于重置一次生产数据）。RedisClient.flushdb 后来加了 confirmed=True
+    的护栏，正好把这个隐患暴露出来。改成定向删除后，测试不再有副作用。
+    """
     client = RedisClient()
     yield client
-    client.flushdb()
+    for key in ("test_key", "cache:plan:1", "temp", "vec:test"):
+        try:
+            client.delete(key)
+        except Exception:  # noqa: BLE001 — 清理失败不该让测试本身报错
+            pass
     client.close()
 
 class TestRedisClient:

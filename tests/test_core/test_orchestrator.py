@@ -57,12 +57,19 @@ class TestStreamingContracts:
             return iter([("chunk", '{"days": [{"exercises": []}]}'), ("done", {"days": [{"exercises": []}], "_degraded": False})])
         orch.writer.write_plan_stream = fake_writer_stream
         orch.fact_checker.check = lambda *args: {"is_safe": True, "issues": [], "confidence": 0.9}
-        persisted = []
-        orch._persist_if_safe = lambda *args, **kwargs: persisted.append(True)
+        persist_calls = []
+        # 这里不要 mock 掉整个 _persist_if_safe——真正的写入判定在
+        # plan_finalization.persist_if_safe 内部（看 result 的闸门标记，
+        # 由 test_plan_finalization 单独覆盖）。把入口整个换掉就等于绕过
+        # 了那道闸门，于是"没有写入"这个断言永远为假，测试反而失真。
+        # 只做记录，断言传进去的结果确实被标记成不可持久化。
+        orch._persist_if_safe = lambda profile, query, result, **kw: (
+            persist_calls.append(result) or False)
 
         events = list(orch.generate_plan_stream(profile, "修改第二天", session_id="s1"))
         final = events[-1][1]
         assert final["_persistence_allowed"] is False
-        assert not persisted
+        assert persist_calls, "降级结果仍会经过持久化入口，由内部闸门拒绝写入"
+        assert persist_calls[0].get("_persistence_allowed") is not True
         assert writer_kwargs["plan_context"] == "旧计划"
         assert writer_kwargs["user_query"] == "修改第二天"

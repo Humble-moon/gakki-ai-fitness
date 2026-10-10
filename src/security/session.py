@@ -41,6 +41,21 @@ from src.storage.training_log_store import MAX_ATHLETE_KEY_LEN as _MAX_KEY_LEN
 _GUEST_KEY_RE = re.compile(rf"^[A-Za-z0-9._-]{{1,{_MAX_KEY_LEN}}}$")
 
 
+def is_safe_guest_key(key: str | None) -> bool:
+    """游客身份键是否可安全进入存储路径。
+
+    不要绕过这个函数直接把客户端传来的 key 拼进 Redis 键名或 SCAN 的
+    match 模式：长期记忆的认领（``LongTermMemory.rekey``）正是按
+    ``{prefix}{key}:*`` 做前缀扫描的，一旦放行 ``*``、``?``、``[``
+    这类 glob 字符，一次请求就能匹配并搬走/删除**所有**用户的记忆。
+    校验规则与 ``resolve_owner_key`` 保持同一份正则，避免两处漂移。
+    """
+    if not key:
+        return False
+    stripped = key.strip()
+    return bool(stripped) and bool(_GUEST_KEY_RE.match(stripped))
+
+
 class GuestKeyError(ValueError):
     """游客身份键不合法。"""
 

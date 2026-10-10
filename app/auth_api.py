@@ -28,6 +28,7 @@ from src.security.session import (
     GuestKeyError,
     Principal,
     SessionStore,
+    is_safe_guest_key,
     resolve_owner_key,
     user_owner_key,
 )
@@ -278,14 +279,22 @@ DEMO_ATHLETE_KEY = "demo-athlete"
 
 
 def _is_claimable(guest_key: str, current_owner: str) -> tuple[bool, str]:
-    """判断一个来源身份是否可以被认领。返回 (可否, 拒绝原因)。"""
+    """判断一个来源身份是否可以被认领。返回 (可否, 拒绝原因)。
+
+    字符集校验不能省：认领会把 guest_key 拼进长期记忆的 SCAN 前缀
+    （``LongTermMemory.rekey`` → ``{prefix}{key}:*``）。只挡 ``u:`` 前缀
+    挡不住 ``*``——``guest_key="*"`` 会匹配到每一个用户的键，然后把它们
+    搬到错位的新键名上并删掉原键，等于一次请求毁掉所有人的长期记忆。
+    """
     key = (guest_key or "").strip()
     if not key:
         return False, "未提供 guest_key"
-    if key == current_owner:
-        return False, "来源身份与当前账号相同"
     if key.startswith("u:"):
         return False, "不能认领其他账号的数据"
+    if not is_safe_guest_key(key):
+        return False, "来源身份格式不合法"
+    if key == current_owner:
+        return False, "来源身份与当前账号相同"
     if key == DEMO_ATHLETE_KEY:
         return False, "演示数据为共享内容，不能认领到个人账号"
     return True, ""

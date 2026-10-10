@@ -31,7 +31,7 @@ from fastapi import Depends, FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from src.core.orchestrator import Orchestrator
 from src.core.goal_contract import GoalConsistencyError
@@ -155,26 +155,32 @@ class PlanRequest(BaseModel):
     说明：与 schemas.py 中的 PlanRequest 不同，这里直接展开字段而非嵌套。
          这样设计是为了让前端直接提交扁平 JSON，无需嵌套结构。
     """
-    height: float = 180
-    # 身高（cm），默认 180
-    weight: float = 80
-    # 体重（kg），默认 80
-    training_years: float = 1.0
-    # 训练年限，默认 1.0
+    height: float = Field(180, ge=100, le=250)
+    # 身高（cm），默认 180，合法范围 100~250cm。范围与 src/models/schemas.py
+    # 对齐——这里曾是复制出来的第二个模型，漏掉约束后让 height=0 /
+    # days_per_week=0 这类值穿透到下游抛 500，而不是在入口被拒。
+    weight: float = Field(80, ge=30, le=200)
+    # 体重（kg），默认 80，合法范围 30~200kg
+    training_years: float = Field(1.0, ge=0, le=30)
+    # 训练年限，默认 1.0，合法范围 0~30 年
     goal: TrainingGoal = "增肌"
     # 训练目标，默认 "增肌"
     available_equipment: list[str] = ["哑铃", "杠铃"]
-    # 可用器械列表，默认 ["哑铃", "杠铃"]
-    days_per_week: int = 4
-    # 每周训练天数，默认 4
+    # 可用器械列表，默认 ["哑铃", "杠铃"]。
+    # 有意不加 min_length：徒手/零器械是合法场景，必须能生成计划。
+    days_per_week: int = Field(4, ge=1, le=7)
+    # 每周训练天数，默认 4，合法范围 1~7
     injuries: list[str] = []
     # 伤病史列表，默认空
     habits: list[str] = []
     # 运动习惯/爱好列表，默认空。与 injuries 同属用户属性，随画像落盘进长期记忆。
-    query: str = ""
-    # 自然语言查询，为空时使用默认模板
-    session_id: Optional[str] = None
-    # 会话 ID，用于多轮对话（修改计划时说"把第二天改成哑铃动作"）
+    query: str = Field("", max_length=2000)
+    # 自然语言查询，为空时使用默认模板。上限 2000 字符：再长也撑不进
+    # 提示词预算，只会白烧 token。
+    session_id: Optional[str] = Field(None, pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    # 会话 ID，用于多轮对话（修改计划时说"把第二天改成哑铃动作"）。
+    # pattern 不是洁癖：session_id 直接拼进 Redis 键名，而会话清理用的是
+    # SCAN 前缀匹配（glob），放进 "*" 就能匹配并删掉所有人的会话。
     athlete_key: Optional[str] = None
     # 稳定运动员标识（前端 localStorage 生成的 UUID）。提供时会读取该运动员的
     # 训练历史与已确认调整注入生成上下文，让新计划承接实际执行情况。
@@ -187,26 +193,27 @@ class AnalysisRequest(BaseModel):
 
     说明：包含用户档案和动作分析所需的所有字段。
     """
-    height: float = 180
-    # 身高（cm）
-    weight: float = 80
-    # 体重（kg）
-    training_years: float = 1.0
-    # 训练年限
+    height: float = Field(180, ge=100, le=250)
+    # 身高（cm），合法范围 100~250cm
+    weight: float = Field(80, ge=30, le=200)
+    # 体重（kg），合法范围 30~200kg
+    training_years: float = Field(1.0, ge=0, le=30)
+    # 训练年限，合法范围 0~30 年
     goal: TrainingGoal = "增肌"
     # 训练目标
     available_equipment: list[str] = ["哑铃"]
     # 可用器械
-    days_per_week: int = 4
-    # 每周训练天数
+    days_per_week: int = Field(4, ge=1, le=7)
+    # 每周训练天数，合法范围 1~7
     injuries: list[str] = []
     # 伤病史
-    exercise_name: str = ""
-    # 要分析的动作名称，如 "杠铃深蹲"
-    user_description: str = ""
+    exercise_name: str = Field(..., min_length=1, max_length=200)
+    # 要分析的动作名称，如 "杠铃深蹲"。必填：没有动作名就无从分析，
+    # 空值过去会一路跑到检索阶段白烧一次 LLM 调用。
+    user_description: str = Field("", max_length=2000)
     # 用户对自己做动作时的感受描述
-    session_id: Optional[str] = None
-    # 会话 ID，用于多轮对话上下文
+    session_id: Optional[str] = Field(None, pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    # 会话 ID，用于多轮对话上下文（同样要挡住 glob 通配符）
 
 
 class QuestionRequest(BaseModel):
@@ -215,20 +222,25 @@ class QuestionRequest(BaseModel):
 
     说明：支持用户自由提问健身相关问题，session_id 用于多轮对话上下文管理。
     """
-    height: float = 180
-    weight: float = 80
-    training_years: float = 1.0
+    height: float = Field(180, ge=100, le=250)
+    # 身高（cm），合法范围 100~250cm
+    weight: float = Field(80, ge=30, le=200)
+    # 体重（kg），合法范围 30~200kg
+    training_years: float = Field(1.0, ge=0, le=30)
+    # 训练年限，合法范围 0~30 年
     goal: TrainingGoal = "增肌"
     available_equipment: list[str] = ["哑铃"]
-    days_per_week: int = 4
+    days_per_week: int = Field(4, ge=1, le=7)
+    # 每周训练天数，合法范围 1~7
     injuries: list[str] = []
     habits: list[str] = []
     # 运动习惯/爱好列表，默认空
-    question: str = ""
-    # 用户提问内容，如 "减脂期应该怎么安排碳水摄入？"
-    session_id: Optional[str] = None
+    question: str = Field(..., min_length=1, max_length=2000)
+    # 用户提问内容，如 "减脂期应该怎么安排碳水摄入？"。必填且限长：
+    # 空问题无意义，超长问题（曾实测 10 万字符）会直接撑爆提示词。
+    session_id: Optional[str] = Field(None, pattern=r"^[A-Za-z0-9._:-]{1,128}$")
     # 会话 ID，用于多轮对话上下文追踪
-    # None 时系统自动创建新会话
+    # None 时系统自动创建新会话（同样要挡住 glob 通配符）
     athlete_key: Optional[str] = None
     # 稳定运动员标识（前端 localStorage）。用于读取跨会话长期记忆——
     # 与训练日志共用同一个身份，用户改体重后仍能读回自己的偏好。
@@ -241,15 +253,19 @@ class TrainingLogEntryInput(BaseModel):
     说明：reps 用整数而非计划里的 "8-12" 区间——计划是处方（范围），
          日志是事实（点值），这样才能直接算容量与估算 1RM。
     """
-    exercise_name: str = ""
+    exercise_name: str = Field("", max_length=200)
     # 动作名称，需与动作库/计划中的名称对齐
-    sets: int = 0
+    sets: int = Field(0, ge=0, le=100)
     # 实际完成组数
-    reps: int = 0
+    reps: int = Field(0, ge=0, le=1000)
     # 每组实际次数（代表值）
-    weight: float = 0.0
-    # 使用重量（kg）；自重动作填 0
-    rpe: Optional[float] = None
+    weight: float = Field(0.0, ge=0, le=2000, allow_inf_nan=False)
+    # 使用重量（kg）；自重动作填 0。
+    # allow_inf_nan=False 是必须的：JSON 允许裸 NaN/Infinity 字面量，
+    # pydantic 的 float 默认放行，而 NaN 会一路写进 Postgres 并在
+    # JSONResponse 序列化时抛 ValueError——结果是这个运动员之后的
+    # 统计类接口全部持续 500，且无法自愈。
+    rpe: Optional[float] = Field(None, ge=0, le=10, allow_inf_nan=False)
     # 该动作主观疲劳度 1~10
     completed: bool = True
     # 是否按计划完成
@@ -265,17 +281,17 @@ class TrainingLogRequest(BaseModel):
     # 稳定运动员标识（前端 localStorage）
     log_date: Optional[str] = None
     # 训练日期 "YYYY-MM-DD"；缺省为今天（本地日历日）
-    day_index: int = 0
+    day_index: int = Field(0, ge=0, le=60)
     # 对应训练计划第几个训练日；0 表示自由训练
-    focus: str = ""
+    focus: str = Field("", max_length=100)
     # 当日训练重点，如 "胸+三头"
-    plan_id: str = ""
+    plan_id: str = Field("", max_length=64)
     # 该次训练依据的计划 ID
-    session_rpe: Optional[float] = None
+    session_rpe: Optional[float] = Field(None, ge=0, le=10, allow_inf_nan=False)
     # 整节课主观疲劳度 1~10
-    duration_min: int = 0
+    duration_min: int = Field(0, ge=0, le=1440)
     # 训练时长（分钟）
-    body_weight: Optional[float] = None
+    body_weight: Optional[float] = Field(None, ge=20, le=400, allow_inf_nan=False)
     # 当日体重（kg）
     notes: str = ""
     # 自由备注

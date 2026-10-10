@@ -40,8 +40,13 @@ class UserProfileInput(BaseModel):
     goal: TrainingGoal
     # 训练目标，正则约束只能为 "增肌" 或 "减脂"
 
-    available_equipment: List[str] = Field(..., min_length=1)
-    # 可用器械列表，至少包含一项，如 ["哑铃", "杠铃"]
+    available_equipment: List[str] = Field(default=[])
+    # 可用器械列表，如 ["哑铃", "杠铃"]。
+    #
+    # 允许为空：徒手/零器械训练是真实场景，前端也确实允许一个器械都不选。
+    # 这里曾经要求 min_length=1，后果是**徒手用户生成计划直接 500**——
+    # 入口的 PlanRequest（app/server.py）放行了空列表，转成 UserProfileInput
+    # 时才在这里炸掉，异常还没人接。校验要松就松在入口，不能靠下游兜底。
 
     days_per_week: int = Field(..., ge=1, le=7)
     # 每周训练天数，合法范围 1~7

@@ -58,3 +58,35 @@ for _var in (
     )
 
 del _var
+
+
+# --------------------------------------------------------------------------
+# 每个测试重置限流窗口
+# --------------------------------------------------------------------------
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """清空 RateLimitMiddleware 的滑动窗口。
+
+    限流是 per-IP 的（默认 60 请求/分钟），而整套测试都从同一个 TestClient
+    地址发请求。跑到文件末尾时窗口早已填满，于是 test_user_auth 里的
+    claim 那组测试会拿到 429——那不是被测行为，是测试之间共享了状态。
+    单独跑该文件能过、跑全量就挂，正是这类耦合的典型症状。
+    """
+    try:
+        from app import server as _server
+        from src.security.api_guard import RateLimitMiddleware
+
+        node = getattr(_server.app, "middleware_stack", None)
+        seen: set[int] = set()
+        while node is not None and id(node) not in seen:
+            seen.add(id(node))
+            if isinstance(node, RateLimitMiddleware):
+                with node._lock:
+                    node._hits.clear()
+            node = getattr(node, "app", None)
+    except Exception:  # noqa: BLE001 — 重置失败不该让测试本身报错
+        pass
+    yield
