@@ -177,7 +177,14 @@ class TestFinalizeHandlesUnknownExercises:
     生成的计划本来就用不全库内动作名——强制送审等于 100% 的计划都交付
     不出去，叠加 HITL 未定义"审核人"，形成死锁。
 
-    保留的核心价值是：库外动作仍要**被记录并展示给用户**，只是不再阻断。
+    保留的核心价值是：库外动作仍要**被记录**（`unknown_exercises` 结构化清单 +
+    `warnings` 原文），只是不再阻断。
+
+    2026-10-10 修正：**记录 ≠ 展示给用户**。这条文案反映的是我们词表的覆盖
+    缺口（库里有 8 个俯卧撑变式却没有通用的「标准俯卧撑」），不是用户写错了
+    名字——用户既无从"确认"，看到也只会觉得产品不认识俯卧撑。前端 `splitWarnings`
+    会把它过滤掉，不再渲染。因此断言保留（字段必须还在，供自查覆盖率），
+    但不再声称它是给用户看的。
     """
 
     def _safe_check(self):
@@ -189,7 +196,7 @@ class TestFinalizeHandlesUnknownExercises:
             result, self._safe_check(), 3, known_exercise_names={"哑铃卧推"}
         )
         assert final["unknown_exercises"] == ["帕洛夫推"]
-        assert any("不在动作库" in w for w in final["warnings"]), "信息必须给到用户"
+        assert any("不在动作库" in w for w in final["warnings"]), "原文必须保留在 warnings 里供自查"
 
     def test_unknown_exercise_does_not_block_delivery(self):
         """关键断言：库外动作不得阻断交付。"""

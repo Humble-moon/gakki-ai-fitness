@@ -1415,9 +1415,17 @@ body::after {
 }
 .plan-notice-chip.is-injury { background: rgba(217,108,104,0.18); color: var(--danger); }
 .plan-notice-hint { color: var(--text-muted); font-size: 11px; }
-.plan-notice-items { margin: 0; padding: 4px 14px 10px; list-style: none; display: flex; flex-direction: column; gap: 5px; }
-.plan-notice-item { padding: 6px 10px; background: var(--bg-base); border-left: 3px solid var(--steel-light); border-radius: var(--radius-sm); }
-.plan-notice-item.is-injury { border-left-color: var(--danger); }
+.plan-notice-items { margin: 0; padding: 2px 14px 12px; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+/* 普通条目只留一条细竖线归组。短句再套「填充块 + 左侧色条」，叠在外框和分组
+   之上就是三层边框，视觉重量远超它承载的那点信息。 */
+.plan-notice-item { padding: 0 0 0 11px; border-left: 2px solid rgba(216,160,95,0.22); }
+/* 伤病条目反过来要压得住场：它是这一块里唯一真正紧急的东西，值得占一个盒子 */
+.plan-notice-item.is-injury {
+  padding: 7px 11px;
+  background: rgba(217,108,104,0.07);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+}
 .plan-notice-body { margin: 0; color: var(--text-primary); font-size: 12.5px; line-height: 1.6; }
 .plan-notice-problem { color: var(--text-primary); }
 .plan-notice-advice { color: var(--warn); }
@@ -4103,11 +4111,39 @@ const NOTICE_TOPICS = [
     re: /\[语义匹配\]|\[规则引擎\]\s*伤病|禁止动作:|用户查询含伤病/ },
   { key: 'equipment', label: '器械不匹配', hint: '计划里的动作需要你没有的器械',
     re: /器械|上斜凳|可调凳|平凳|长凳|卧推凳|TRX|未列出|未包含/ },
+  // internal：仍然归类，但不摆到用户眼前。
+  //
+  // 这条提示的真相是**词表覆盖缺口**，不是用户写错了名字。动作库收了 8 个
+  // 俯卧撑变式（窄距/上斜/俄式…）却没有通用的「标准俯卧撑」，收了 3 个分腿蹲
+  // 变式却没有「原地分腿蹲」——精确匹配必然落空。用户看到「标准俯卧撑」被说成
+  // "不在动作库中，请确认动作名称是否正确"，只会觉得这个产品不认识俯卧撑；
+  // 而他能做的"确认"根本不存在。
+  //
+  // 后端照常产出（`warnings` 保留原文、`unknown_exercises` 是结构化清单），
+  // 自查覆盖率时照看不误，只是不再展示。
   { key: 'naming', label: '动作名待确认', hint: '这些名字不在动作库里，可能只是写法不同',
+    internal: true,
     re: /不在动作库|未收录|确认动作名称|动作库中不存在/ },
 ];
 const NOTICE_ORDER = ['injury', 'equipment', 'naming', 'other'];
 const NOTICE_LOOSE_INJURY = /伤病|疼痛|损伤|急症/;
+
+/* 该类别是否只对内部有意义。判定与渲染共用 NOTICE_TOPICS，避免正则或名单
+   在两处各写一份、慢慢走样。 */
+function isInternalNotice(key) {
+  const topic = NOTICE_TOPICS.find(t => t.key === key);
+  return !!(topic && topic.internal);
+}
+
+/* 把后端产出的 warnings 分成「该给用户看的」与「只对内部有意义的」。
+   计数和渲染都必须走这里——否则顶部会写着"3 条提示"，点开却一条都没有。 */
+function splitWarnings(warnings) {
+  const visible = [], internal = [];
+  (Array.isArray(warnings) ? warnings : []).forEach(raw => {
+    (isInternalNotice(classifyNotice(raw)) ? internal : visible).push(raw);
+  });
+  return { visible, internal };
+}
 
 function classifyNotice(text) {
   const s = String(text || '');
@@ -4130,9 +4166,14 @@ function splitNotice(text) {
   };
 }
 
+/* 渲染面向用户的提示。传入的应当是 splitWarnings 过滤后的 visible 列表。
+   没有可展示的内容时返回 null——连外框都不该出现，否则用户点开一个写着
+   「计划提示」的框却什么也看不到。 */
 function renderPlanNotice(warnings) {
+  const items = Array.isArray(warnings) ? warnings : [];
+  if (!items.length) return null;
   const buckets = new Map();
-  warnings.forEach(raw => {
+  items.forEach(raw => {
     const key = classifyNotice(raw);
     if (!buckets.has(key)) buckets.set(key, []);
     // 去掉「[规则引擎]」「[语义匹配]」这类内部分类标记——它们是判据的来源，
@@ -4158,7 +4199,7 @@ function renderPlanNotice(warnings) {
   head.setAttribute('aria-expanded', 'false');
   head.appendChild(el('span', 'plan-notice-title', '⚠ 计划提示'));
   head.appendChild(el('span', 'plan-notice-topics', summary));
-  head.appendChild(el('span', 'plan-notice-count', `${warnings.length} 条`));
+  head.appendChild(el('span', 'plan-notice-count', `${items.length} 条`));
   head.appendChild(el('span', 'plan-notice-chevron', '▼'));
   box.appendChild(head);
 
@@ -4181,8 +4222,9 @@ function renderPlanNotice(warnings) {
     const group = el('div', 'plan-notice-group', '');
     const groupHead = el('div', 'plan-notice-grouphead', '');
     groupHead.appendChild(el('span', `plan-notice-chip${isInjury ? ' is-injury' : ''}`, label));
-    const hint = topic && topic.hint ? `${items.length} 条 · ${topic.hint}` : `${items.length} 条`;
-    groupHead.appendChild(el('span', 'plan-notice-hint', hint));
+    // 不再重复条数：顶部摘要行已经写了「器械不匹配 6」，这里再写一遍「6 条」
+    // 是同一条信息的第二次出现。
+    if (topic && topic.hint) groupHead.appendChild(el('span', 'plan-notice-hint', topic.hint));
     group.appendChild(groupHead);
 
     const list = el('ul', 'plan-notice-items', '');
@@ -4224,17 +4266,19 @@ function renderPlanResult(container, data) {
     return node;
   };
   const confidence = Number(plan.confidence) || 0;
+  // 只数给用户看的那部分：内部条目（动作名词表缺口）不渲染，若计进条数，
+  // 顶部就会写着"3 条提示"而点开一条都没有。
+  const planWarnings = splitWarnings(plan.warnings).visible;
   stats.appendChild(pill(plan.requires_review ? '建议留意' : (confidence >= .85 ? 'AI 可信度高' : 'AI 可信度良好'), plan.requires_review ? 'amber' : 'green'));
-  // 不叫「安全提示」：多数条目是器械缺件、动作名写法差异这类配置问题，
-  // 用「安全」二字会把它们和真正的伤病风险混为一谈，反而稀释后者的分量。
-  if (Array.isArray(plan.warnings) && plan.warnings.length) stats.appendChild(pill(`${plan.warnings.length} 条提示`, 'amber'));
+  // 不叫「安全提示」：多数条目是器械缺件这类配置问题，用「安全」二字会把它们
+  // 和真正的伤病风险混为一谈，反而稀释后者的分量。
+  if (planWarnings.length) stats.appendChild(pill(`${planWarnings.length} 条提示`, 'amber'));
   if (plan.requires_review) stats.appendChild(pill('建议咨询专业教练', 'red'));
   stats.appendChild(pill(`${Array.isArray(plan.days) ? plan.days.length : 0} 天计划`));
   container.appendChild(stats);
 
-  if (Array.isArray(plan.warnings) && plan.warnings.length) {
-    container.appendChild(renderPlanNotice(plan.warnings));
-  }
+  const notice = renderPlanNotice(planWarnings);
+  if (notice) container.appendChild(notice);
   // 放在计划卡片之前：用户正是读到这里时会产生「我凭什么信它」的疑问
   renderPlanExplanation(container, plan.explain);
   const days = Array.isArray(plan.days) ? plan.days : [];

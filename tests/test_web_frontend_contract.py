@@ -325,6 +325,47 @@ def test_saved_plans_can_be_renamed_in_place():
     assert ".saved-plan-rename-input {" in HTML
 
 
+def test_internal_notices_are_classified_but_never_rendered():
+    """库外动作名只归类、不展示。
+
+    这条提示反映的是词表覆盖缺口，不是用户写错了名字：动作库收了 8 个俯卧撑
+    变式却没有通用的「标准俯卧撑」，精确匹配必然落空。用户看到「标准俯卧撑」
+    被说成"不在动作库中，请确认动作名称是否正确"，既无从确认，也只会觉得
+    这个产品不认识俯卧撑。
+    """
+    assert "internal: true" in HTML
+    start = HTML.index("function isInternalNotice")
+    end = HTML.find("function renderPlanNotice", start)
+    body = HTML[start:end]
+    # 判定必须复用 NOTICE_TOPICS，而不是在别处再抄一份名单
+    assert "NOTICE_TOPICS.find" in body
+    assert "topic.internal" in body
+    # 分流同时给出 visible 与 internal 两侧
+    assert "visible" in body and "internal" in body
+
+
+def test_warning_count_only_counts_what_is_shown():
+    """顶部条数必须只数给用户看的那部分。
+
+    否则会出现"3 条提示"点开却是空的——内部条目被过滤掉了，计数却没跟着过滤。
+    """
+    start = HTML.index("function renderPlanResult")
+    end = HTML.find("const notice = renderPlanNotice", start)
+    body = HTML[start:end]
+    assert "splitWarnings(plan.warnings).visible" in body
+    assert "planWarnings.length" in body
+    assert "plan.warnings.length" not in body, "计数不能再直接用原始列表长度"
+
+
+def test_notice_panel_is_absent_when_nothing_is_showable():
+    """没有可展示内容时连外框都不该出现，否则是个点开为空的面板。"""
+    start = HTML.index("function renderPlanNotice")
+    body = HTML[start:HTML.find("function renderPlanResult", start)]
+    assert "if (!items.length) return null;" in body
+    assert "const notice = renderPlanNotice(planWarnings);" in HTML
+    assert "if (notice) container.appendChild(notice);" in HTML
+
+
 def test_rename_failure_notice_stays_on_the_saved_tab():
     """重命名失败的提示要落在「我的计划」这一屏。
 
