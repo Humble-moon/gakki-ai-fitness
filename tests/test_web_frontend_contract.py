@@ -303,6 +303,42 @@ def test_plan_mobile_card_copy_is_readable():
     assert "${exercise?.reps ?? '?'} 次" in HTML
 
 
+def test_saved_plans_can_be_renamed_in_place():
+    """已保存的计划能在列表里就地改名。
+
+    锁三件事：入口在（每行一个「重命名」）、请求打对地址（PATCH /api/plans/{id}）、
+    以及编辑是原地替换而不是原生弹窗——prompt() 会打断整页且样式无法统一。
+    """
+    start = HTML.index("function startRenamePlan")
+    end = HTML.find("function savePlanToHistory", start)
+    body = HTML[start:end]
+    assert "saved-plan-rename-input" in body
+    assert "replaceWith" in body, "应原地替换标题，而不是另开一处编辑"
+    assert "Escape" in body and "Enter" in body
+    assert "maxLength = 40" in body
+    assert "prompt(" not in body, "不应使用原生 prompt 弹窗"
+
+    assert "function renameSavedPlan" in HTML
+    assert "method: 'PATCH'" in HTML
+    assert "startRenamePlan(row, info, p)" in HTML
+    assert "'重命名'" in HTML
+    assert ".saved-plan-rename-input {" in HTML
+
+
+def test_rename_failure_notice_stays_on_the_saved_tab():
+    """重命名失败的提示要落在「我的计划」这一屏。
+
+    用全局的 showStatus 会写进训练日志那一屏——用户正站在「我的计划」上，
+    等于什么都没看见。
+    """
+    start = HTML.index("function showSavedPlanNotice")
+    end = HTML.find("\n}", start)
+    body = HTML[start:end]
+    assert "saved-plans-head" in body
+    assert "log-status" not in body
+    assert ".saved-plan-notice {" in HTML
+
+
 
 
 def test_plan_backend_json_stream_is_not_rendered_to_users():
@@ -796,8 +832,12 @@ def test_gate_does_not_duplicate_auth_logic():
 
 
 def test_saved_plans_panel_and_save_action_exist():
-    """计划要能存到服务端并在界面上找回。"""
-    for element_id in ("saved-plans", "saved-plans-list"):
+    """计划要能存到服务端并在界面上找回。
+
+    已保存列表原先挂在侧栏底部（id="saved-plans"），位置在折叠线以下，
+    用户存完计划找不到入口；现在它是「我的计划」tab 里的一个面板。
+    """
+    for element_id in ("panel-saved", "saved-plans-list", "saved-plans-empty"):
         assert f'id="{element_id}"' in HTML
     for helper in ("savePlanToServer", "loadSavedPlans", "openSavedPlan", "deleteSavedPlan"):
         assert f"function {helper}(" in HTML, f"缺少 {helper}"
@@ -806,6 +846,20 @@ def test_saved_plans_panel_and_save_action_exist():
     # 失败必须让按钮回到可重试状态，不能假装存好了
     assert "button.disabled = false" in fn
     assert "catch" in fn
+
+
+def test_saved_plan_view_switches_back_to_the_plan_tab():
+    """点「查看」必须切回「训练计划」tab。
+
+    计划渲染进的是 panel-plan 里的 #plan-result。若只渲染不切 tab，
+    内容是写进了一个隐藏面板，随后的 scrollIntoView 作用在隐藏元素上
+    也不会滚动——用户看到的是"点了查看，什么都没发生"。
+    """
+    fn = _fn_body("openSavedPlan")
+    assert "activateTab('tab-plan')" in fn, "查看已保存计划后必须切回训练计划 tab"
+    # 切换必须发生在滚动之前，否则滚的还是隐藏元素
+    assert fn.index("activateTab('tab-plan')") < fn.index("scrollIntoView"), \
+        "先切 tab 再滚动"
 
 
 def test_saved_plan_view_does_not_offer_saving_again():

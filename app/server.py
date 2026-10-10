@@ -856,6 +856,49 @@ def save_plan(req: PlanSaveRequest,
     return {"plan_id": plan_id, "saved": True}
 
 
+#: 计划名长度上限。够放"周四下肢·深蹲强化"这类描述性名字，又不至于
+#: 长到在「我的计划」列表里把日期挤成省略号。
+MAX_PLAN_TITLE_LEN = 40
+
+
+class PlanRenameRequest(BaseModel):
+    """计划重命名请求体。"""
+    title: str = ""
+    athlete_key: Optional[str] = None
+
+
+@app.patch("/api/plans/{plan_id}")
+def rename_plan(plan_id: int,
+                req: PlanRenameRequest,
+                principal: Principal = Depends(get_current_principal)):
+    """给已保存的计划改名字。不属于当前身份时返回 404。
+
+    校验放在路由而不是存储层：存储层的 False 只有一个含义——"没这行"，
+    路由要把它翻成 404。若把"名字非法"也塞进同一个 False，用户会收到
+    "计划不存在"这种驴唇不对马嘴的提示。
+    """
+    store = _get_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划存储暂不可用"}})
+
+    title = (req.title or "").strip()
+    if not title:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "PLAN_TITLE_EMPTY", "message": "计划名称不能为空。"}})
+    if len(title) > MAX_PLAN_TITLE_LEN:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "PLAN_TITLE_TOO_LONG",
+                      "message": f"计划名称不能超过 {MAX_PLAN_TITLE_LEN} 个字符。"}})
+
+    owner = require_owner_key(principal, req.athlete_key)
+    if not store.rename_plan(owner, plan_id, title):
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "PLAN_NOT_FOUND", "message": "计划不存在。"}})
+    return {"renamed": True, "plan_id": plan_id, "title": title}
+
+
 @app.delete("/api/plans/{plan_id}")
 def delete_plan(plan_id: int,
                 principal: Principal = Depends(get_current_principal),

@@ -38,6 +38,10 @@
   --bg-card-hover: #1d2a35;
   --steel: var(--border);
   --steel-light: #3a4b59;
+  /* --accent 被 9 处引用却一直没定义：var() 取不到值时整条声明在计算期失效，
+     颜色静默回退成继承值（那些按钮/链接本来该是橙色，实际显示成普通正文色）。
+     这里补上别名，与 --forge-amber 指向同一个值。 */
+  --accent: var(--accent-orange);
   --forge-amber: var(--accent-orange);
   --forge-amber-dim: rgba(242,118,74,0.16);
   --forge-amber-glow: rgba(242,118,74,0.30);
@@ -568,6 +572,29 @@ body::after {
 .plan-ex-sets { font-family: var(--font-mono); color: var(--cool-blue); }
 .plan-ex-reps { font-family: var(--font-mono); color: var(--chalk-dim); }
 .plan-ex-rest { font-family: var(--font-mono); font-size: 11px; color: var(--chalk-faint); }
+
+/* 动作说明：桌面下必须自己跨满整行，且默认收起为一行。
+   之前它没有 grid-column，被自动摆进「动作」那一列——实测只有 186px，
+   是卡片的 38%（移动端反倒有 grid-column: 1 / -1，桌面漏了）。
+   结果一段 60 字的说明折成 4-5 行、占 74px，整份 4 天计划要滚 3.7 屏。
+   跨满行 + 默认一行，同一份计划降到 2 屏左右；要读全文点一下即可。 */
+.plan-ex-notes {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--chalk-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 只有真的被截断的说明才可点。短说明本来就一行，给它手型和提示
+   反而让人以为点了会有变化。 */
+.plan-ex-notes.is-expandable { cursor: pointer; }
+.plan-ex-notes.is-expandable:not(.is-open)::after { content: ' ⋯'; opacity: .55; }
+.plan-ex-notes:hover { color: var(--chalk); }
+.plan-ex-notes.is-open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.plan-ex-notes.is-open:hover { color: var(--chalk-dim); }
 
 /* ── Tabs: Industrial Gauge Style ── */
 .tabs {
@@ -1335,29 +1362,66 @@ body::after {
 .dot.amber { background: var(--warn); }
 .dot.red   { background: var(--danger); box-shadow: 0 0 8px rgba(240,67,67,0.3); }
 
-/* ── Warning List ── */
-.warning-list {
-  background: rgba(240,160,64,0.06);
-  border: 1px solid rgba(240,160,64,0.12);
-  padding: 14px 18px;
-  border-radius: var(--radius-sm);
+/* ── 计划提示（交付时附带）──
+   这里曾经是「· 句子」平铺的文本墙：实测一次交付 8 条，其中 5 条都在说
+   「没有可调凳」，用户读到第三条就不看了，真正要紧的那条反而被淹没；
+   标题还叫「安全提示」，把器械缺一根带子和伤病风险混成同一件事。
+   现在按主题归类、每条拆成「问题 / 建议」两行，让人能扫读而不是通读。
+   配色刻意比扣下计划的面板轻——这是交付的计划，不该看起来像出事了。 */
+.plan-notice {
   margin-bottom: 20px;
-  font-size: 12px;
-  line-height: 1.8;
-  color: var(--warn);
+  border: 1px solid rgba(216,160,95,0.20);
+  border-radius: var(--radius-sm);
+  background: rgba(216,160,95,0.04);
+  overflow: hidden;
 }
-
-.warning-list::before {
-  content: '⚠ 安全提示';
-  display: block;
+.plan-notice-head {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(216,160,95,0.05);
+  border: none;
+  color: inherit; font: inherit; text-align: left;
+  cursor: pointer;
+}
+.plan-notice.is-open .plan-notice-head { border-bottom: 1px solid rgba(216,160,95,0.16); }
+.plan-notice-head:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.plan-notice-title {
   font-family: var(--font-heading);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  margin-bottom: 8px;
-  color: var(--warn);
-  text-transform: uppercase;
+  font-size: 13px; font-weight: 700; letter-spacing: 2px;
+  color: var(--warn); text-transform: uppercase;
+  flex: 0 0 auto;
 }
+/* 收起时把「哪几类问题」摆在标题后面：8 条明细压成一行摘要，
+   既省掉一屏，又不会让用户以为只有一条提示。 */
+.plan-notice-topics {
+  flex: 1; min-width: 0;
+  color: var(--text-muted); font-size: 11px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.plan-notice-count { flex: 0 0 auto; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.plan-notice-chevron { flex: 0 0 auto; color: var(--warn); font-size: 10px; transition: transform .2s var(--ease-out); }
+.plan-notice.is-open .plan-notice-chevron { transform: rotate(180deg); }
+/* 明细默认收起。实测 8 条明细平铺占 418px——和整排天数卡片一样高，
+   而其中 6 条是同一个问题（缺凳）。收起后只留一行摘要。 */
+.plan-notice-groups { display: none; }
+.plan-notice.is-open .plan-notice-groups { display: block; }
+.plan-notice-group + .plan-notice-group { border-top: 1px solid rgba(216,160,95,0.12); }
+.plan-notice-grouphead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 10px 14px 2px; }
+.plan-notice-chip {
+  flex: 0 0 auto; padding: 1px 7px; border-radius: 3px;
+  background: rgba(216,160,95,0.16); color: var(--warn);
+  font-size: 11px; font-weight: 600;
+}
+.plan-notice-chip.is-injury { background: rgba(217,108,104,0.18); color: var(--danger); }
+.plan-notice-hint { color: var(--text-muted); font-size: 11px; }
+.plan-notice-items { margin: 0; padding: 4px 14px 10px; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.plan-notice-item { padding: 6px 10px; background: var(--bg-base); border-left: 3px solid var(--steel-light); border-radius: var(--radius-sm); }
+.plan-notice-item.is-injury { border-left-color: var(--danger); }
+.plan-notice-body { margin: 0; color: var(--text-primary); font-size: 12.5px; line-height: 1.6; }
+.plan-notice-problem { color: var(--text-primary); }
+.plan-notice-advice { color: var(--warn); }
+.plan-notice-advice::before { content: ' → '; opacity: .75; }
 
 /* ── Plan Draft：安全检查完成前的前置预览 ──
    草稿必须一眼看出「还没检查完」。本项目的前提是"不安全不交付"，
@@ -1652,17 +1716,74 @@ body::after {
 .workspace, .sidebar { transition: none; }
 
 /* 已保存的计划 */
-.plan-save-bar { margin-top: 14px; display: flex; justify-content: flex-end; }
-.plan-save-bar .account-btn { flex: 0 0 auto; padding: 8px 16px; font-size: 13px; }
+.plan-save-bar { margin-top: 14px; display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.plan-save-hint { color: var(--text-muted); font-size: 12px; }
+
+/* 保存计划的主按钮。
+   原来这里用的是 account-btn——和「退出登录」「删除」同一档的次级样式，
+   但它是生成计划之后最该被看到的一步动作，藏在这一档里等于没提示。 */
+.btn-primary {
+  padding: 11px 22px;
+  background: var(--accent);
+  color: #12181e;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  transition: filter .15s, transform .1s, background .2s;
+}
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-primary:active { transform: scale(.98); }
+.btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+.btn-primary.is-saved { background: var(--status-safe); color: #0c1410; }
+
 .plan-title { margin: 0 0 12px; color: var(--text-primary); font-family: var(--font-heading); font-size: 20px; letter-spacing: 1px; }
-.saved-plans { margin-top: 16px; padding: 14px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.saved-plans[hidden] { display: none; }
-.saved-plans h3 { margin: 0 0 10px; color: var(--text-primary); font-size: 14px; }
-.saved-plan-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13px; }
-.saved-plan-row:first-child { border-top: none; }
-.saved-plan-title { flex: 1; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.saved-plan-meta { color: var(--text-muted); font-size: 12px; flex: 0 0 auto; }
-.saved-plan-row .account-btn { flex: 0 0 auto; padding: 4px 10px; font-size: 12px; }
+.saved-plans-head { margin-bottom: 16px; }
+.saved-plans-head h3 { margin: 0 0 4px; color: var(--text-primary); font-family: var(--font-heading); font-size: 20px; letter-spacing: 1px; }
+.saved-plans-head p { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.saved-plans-list { display: flex; flex-direction: column; gap: 10px; }
+.saved-plans-list[hidden] { display: none; }
+.saved-plan-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--steel-light);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+.saved-plan-row:hover { border-left-color: var(--accent); }
+.saved-plan-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.saved-plan-title { color: var(--text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-plan-meta { color: var(--text-muted); font-size: 12px; }
+.saved-plan-row .account-btn { flex: 0 0 auto; padding: 6px 14px; font-size: 13px; }
+/* 就地重命名：输入框顶替标题的位置，不弹窗、不跳页 */
+.saved-plan-rename-input {
+  width: 100%;
+  padding: 3px 8px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-base, rgba(0, 0, 0, .25));
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xs, 4px);
+  outline: none;
+}
+.saved-plan-rename-input:disabled { opacity: .6; }
+.saved-plan-notice { margin: 10px 0 0; color: var(--danger, #f87171); font-size: 13px; }
+.saved-plans-empty { padding: 40px 20px; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius-md); }
+.saved-plans-empty[hidden] { display: none; }
+.saved-plans-empty-title { margin: 0 0 6px; color: var(--text-primary); font-size: 15px; }
+.saved-plans-empty-hint { margin: 0; color: var(--text-muted); font-size: 13px; }
+.link-btn {
+  padding: 0; background: none; border: none;
+  color: var(--accent); font-size: 12px; font-family: inherit;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.link-btn:hover { filter: brightness(1.15); }
 
 /* 动作图示：默认只给一个入口，点开才加载图片 */
 .plan-ex-demo { grid-column: 1 / -1; margin-top: 6px; }
@@ -2309,11 +2430,6 @@ body::after {
     <button class="btn-generate" id="btn-generate" onclick="generatePlan()">
       ▸ 生成计划
     </button>
-
-    <section class="saved-plans" id="saved-plans" hidden aria-label="已保存的计划">
-      <h3>已保存的计划</h3>
-      <div id="saved-plans-list"></div>
-    </section>
   </aside>
 
   <!-- ═══════════════ MAIN ═══════════════ -->
@@ -2328,6 +2444,7 @@ body::after {
     </header>
     <div class="tabs feature-tabs" role="tablist" aria-label="教练功能">
       <button id="tab-plan" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-plan" tabindex="0" type="button">训练计划</button>
+      <button id="tab-saved" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-saved" tabindex="-1" type="button">我的计划</button>
       <button id="tab-analysis" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-analysis" tabindex="-1" type="button">动作分析</button>
       <button id="tab-qa" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-qa" tabindex="-1" type="button">知识问答</button>
       <button id="tab-log" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-log" tabindex="-1" type="button">训练日志</button>
@@ -2393,6 +2510,19 @@ body::after {
         </div>
         <div id="plan-error" class="error-panel" role="alert" hidden></div>
       </section>
+    </section>
+
+    <!-- Saved Plans Tab -->
+    <section class="tab-content feature-panel" id="panel-saved" role="tabpanel" aria-labelledby="tab-saved">
+      <div class="saved-plans-head">
+        <h3>我的计划</h3>
+        <p>保存过的训练计划都在这里。登录后跟账号走，换设备也能找回。</p>
+      </div>
+      <div id="saved-plans-list" class="saved-plans-list"></div>
+      <div id="saved-plans-empty" class="saved-plans-empty" hidden>
+        <p class="saved-plans-empty-title">还没有保存的计划</p>
+        <p class="saved-plans-empty-hint">到「训练计划」生成一份，然后点「保存这份计划」，它就会出现在这里。</p>
+      </div>
     </section>
 
     <!-- Analysis Tab -->
@@ -2639,6 +2769,9 @@ function activateTab(tabId, { focus = false } = {}) {
     }
   });
   if (focus) tab.focus();
+  // 切进「我的计划」时重新拉一次：列表可能在别处被改过（另存、删除、
+  // 或换设备登录后），进 tab 现拉比依赖初始化时那一份更不容易过期。
+  if (tabId === 'tab-saved') loadSavedPlans();
 }
 
 function switchTab(name) { activateTab(`tab-${name}`); }
@@ -3169,7 +3302,7 @@ function updatePlanStage(eventData) {
 // ── History ──
 /* 保存到服务端。失败时如实告知并保留按钮可重试——不能因为一次网络抖动
    就让用户以为计划已经存好了。 */
-async function savePlanToServer(planData, button) {
+async function savePlanToServer(planData, button, hint) {
   const original = button.textContent;
   button.disabled = true;
   button.textContent = '保存中…';
@@ -3185,41 +3318,59 @@ async function savePlanToServer(planData, button) {
       throw new Error(detail.message || `保存失败（${resp.status}）`);
     }
     button.textContent = '已保存 ✓';
+    button.classList.add('is-saved');
+    // 告诉用户"存到哪去了"。只把按钮改成"已保存"是不够的——
+    // 计划进了库，但入口在另一个 tab，不说就等于没保存。
+    if (hint) {
+      hint.replaceChildren();
+      const jump = el('button', 'link-btn', '已存入「我的计划」 · 去看看 →');
+      jump.type = 'button';
+      jump.onclick = () => activateTab('tab-saved');
+      hint.appendChild(jump);
+    }
     loadSavedPlans();
     return true;
   } catch (e) {
     button.textContent = original;
     button.disabled = false;
+    button.classList.remove('is-saved');
     showStatus('log-status', `计划保存失败：${e.message}`);
     return false;
   }
 }
 
 async function loadSavedPlans() {
-  const panel = document.getElementById('saved-plans');
   const list = document.getElementById('saved-plans-list');
-  if (!panel || !list) return;
+  const empty = document.getElementById('saved-plans-empty');
+  if (!list || !empty) return;
+  // 这里不再把整块藏起来。列表现在是一个独立 tab 的内容，
+  // 没有计划时若整块消失，用户看到的是一个空白页——那比空状态更让人困惑。
+  const showEmpty = () => { list.replaceChildren(); list.hidden = true; empty.hidden = false; };
   try {
     const resp = await fetch(`/api/plans?athlete_key=${encodeURIComponent(athleteKey)}&limit=20`);
-    if (!resp.ok) { panel.hidden = true; return; }
+    if (!resp.ok) { showEmpty(); return; }
     const data = await resp.json();
     const plans = data.plans || [];
     list.replaceChildren();
-    if (!plans.length) { panel.hidden = true; return; }
+    if (!plans.length) { showEmpty(); return; }
     plans.forEach(p => {
       const row = el('div', 'saved-plan-row', '');
-      row.appendChild(el('span', 'saved-plan-title', p.title || '训练计划'));
-      row.appendChild(el('span', 'saved-plan-meta', `${p.day_count} 天 · ${(p.created_at || '').slice(0, 10)}`));
-      const open = el('button', 'account-btn account-btn-quiet', '查看');
+      const info = el('div', 'saved-plan-info', '');
+      info.appendChild(el('span', 'saved-plan-title', p.title || '训练计划'));
+      info.appendChild(el('span', 'saved-plan-meta', `${p.day_count} 天 · 保存于 ${(p.created_at || '').slice(0, 10)}`));
+      row.appendChild(info);
+      const open = el('button', 'account-btn', '查看');
       open.type = 'button'; open.onclick = () => openSavedPlan(p.plan_id);
+      const rename = el('button', 'account-btn account-btn-quiet', '重命名');
+      rename.type = 'button'; rename.onclick = () => startRenamePlan(row, info, p);
       const del = el('button', 'account-btn account-btn-quiet', '删除');
       del.type = 'button'; del.onclick = () => deleteSavedPlan(p.plan_id);
-      row.appendChild(open); row.appendChild(del);
+      row.appendChild(open); row.appendChild(rename); row.appendChild(del);
       list.appendChild(row);
     });
-    panel.hidden = false;
+    list.hidden = false; empty.hidden = true;
   } catch (e) {
-    panel.hidden = true;
+    showEmpty();
   }
 }
 
@@ -3232,6 +3383,11 @@ async function openSavedPlan(planId) {
     if (!area) return;
     showPlanSaveBarHidden();
     renderPlanResult(area, plan);
+    // 必须先切回「训练计划」再滚动。计划渲染在 panel-plan 里，而用户此刻
+    // 站在「我的计划」tab 上——不切过去的话内容是渲染进了一个隐藏面板，
+    // 紧接着的滚动调用作用在隐藏元素上也不会有任何动静，
+    // 用户看到的就是"点了查看，什么都没发生"。
+    activateTab('tab-plan');
     area.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     showStatus('log-status', `计划读取失败：${e.message}`);
@@ -3252,6 +3408,84 @@ async function deleteSavedPlan(planId) {
   } catch (e) {
     showStatus('log-status', `删除失败：${e.message}`);
   }
+}
+
+/* 就地重命名：标题原地变成输入框。回车或失焦保存，Esc 取消。
+   不用 prompt()——原生弹窗会打断整页、样式也无法与站点统一，
+   而这个操作本身很轻，弹窗比改动本身还重。 */
+function startRenamePlan(row, info, plan) {
+  if (row.dataset.renaming === '1') return;
+  const titleEl = info.querySelector('.saved-plan-title');
+  if (!titleEl) return;
+  row.dataset.renaming = '1';
+
+  const input = el('input', 'saved-plan-rename-input', '');
+  input.type = 'text';
+  input.value = plan.title || '训练计划';
+  input.maxLength = 40;
+  input.setAttribute('aria-label', '计划名称');
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let settled = false;
+  const restore = () => {
+    input.replaceWith(titleEl);
+    delete row.dataset.renaming;
+  };
+  const finish = async commit => {
+    if (settled) return;
+    settled = true;
+    const next = (input.value || '').trim();
+    // 没改、或清空了，都当作取消——空名字会被服务端拒绝，
+    // 与其让用户看一条报错，不如直接恢复原名。
+    if (!commit || !next || next === plan.title) { restore(); return; }
+    input.disabled = true;
+    const ok = await renameSavedPlan(plan.plan_id, next);
+    if (ok) {
+      titleEl.textContent = next;
+      plan.title = next;
+    }
+    restore();
+  };
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  // 失焦即保存：用户点到别处时不该丢掉刚打的字
+  input.addEventListener('blur', () => finish(true));
+}
+
+async function renameSavedPlan(planId, title) {
+  try {
+    const resp = await fetch(`/api/plans/${planId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, athlete_key: athleteKey }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      const detail = data.error || data.detail || {};
+      showSavedPlanNotice(detail.message || `重命名失败（${resp.status}）`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    showSavedPlanNotice(`重命名失败：${e.message}`);
+    return false;
+  }
+}
+
+/* 重命名失败的提示必须落在「我的计划」这一屏里。用全局的 showStatus 会写进
+   训练日志那一屏——用户正站在「我的计划」上，等于什么都没看见。 */
+function showSavedPlanNotice(message) {
+  const head = document.querySelector('.saved-plans-head');
+  if (!head) return;
+  document.querySelectorAll('.saved-plan-notice').forEach(n => n.remove());
+  const notice = el('p', 'saved-plan-notice', message);
+  head.after(notice);
+  setTimeout(() => notice.remove(), 4000);
 }
 
 function savePlanToHistory(profile, planData) {
@@ -3545,9 +3779,11 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
         // 保存到服务端：登录后跟账号走、换设备能找回；游客存在本机标识下。
         // 本机 localStorage 那份仍保留——它不依赖网络，离线演示时是唯一的记录。
         const saveBar = el('div', 'plan-save-bar', '');
-        const saveBtn = el('button', 'account-btn', '保存这份计划');
+        const saveHint = el('span', 'plan-save-hint', '');
+        const saveBtn = el('button', 'btn-primary', '保存这份计划');
         saveBtn.type = 'button';
-        saveBtn.onclick = () => savePlanToServer(data, saveBtn);
+        saveBtn.onclick = () => savePlanToServer(data, saveBtn, saveHint);
+        saveBar.appendChild(saveHint);
         saveBar.appendChild(saveBtn);
         resultArea.appendChild(saveBar);
 
@@ -3793,7 +4029,17 @@ function renderPlanDays(container, days) {
       const setsCell = el('span', 'plan-ex-sets', `${exercise?.sets ?? '?'} 组`); setsCell.dataset.planColumn = '组数'; row.appendChild(setsCell);
       const repsCell = el('span', 'plan-ex-reps', `${exercise?.reps ?? '?'} 次`); repsCell.dataset.planColumn = '次数'; row.appendChild(repsCell);
       const restCell = el('span', 'plan-ex-rest', `休息 ${exercise?.rest || '60 秒'}`); restCell.dataset.planColumn = '休息'; row.appendChild(restCell);
-      if (exercise?.notes) row.appendChild(el('div', 'plan-ex-notes', exercise.notes));
+      if (exercise?.notes) {
+        const notes = el('div', 'plan-ex-notes', exercise.notes);
+        // 长说明默认收起成一行，点开看全文。阈值取 36 字：桌面卡片宽 484px、
+        // 12px 字号下一行约容 40 字，超过就一定会被截断。
+        if (String(exercise.notes).length > 36) {
+          notes.classList.add('is-expandable');
+          notes.title = '点击展开 / 收起说明';
+          notes.onclick = () => notes.classList.toggle('is-open');
+        }
+        row.appendChild(notes);
+      }
       const demo = buildExerciseDemo(exercise?.name);
       if (demo) row.appendChild(demo);
       body.appendChild(row);
@@ -3845,6 +4091,122 @@ function renderPlanDraft(container, rawText) {
   container.appendChild(wrap);
 }
 
+/* 交付计划附带的提示按主题归类后再渲染。
+   后端给的是扁平字符串数组（契约如此：warnings 同时被缓存闸门当作
+   "问题清单是否干净"的判据），这里只做展示层归类，不动数据本身。
+
+   归类顺序沿用后端 classify_hold 的判定：先确定性伤病信号，再器械/动作名。
+   器械类文案由大模型生成、措辞不受控，句子里顺带出现「伤病」两个字完全
+   可能——若把宽松的伤病词排在前面，一条「缺根弹力带」会被显示成医疗风险。 */
+const NOTICE_TOPICS = [
+  { key: 'injury', label: '伤病相关', hint: '与你的伤病史有关，优先看',
+    re: /\[语义匹配\]|\[规则引擎\]\s*伤病|禁止动作:|用户查询含伤病/ },
+  { key: 'equipment', label: '器械不匹配', hint: '计划里的动作需要你没有的器械',
+    re: /器械|上斜凳|可调凳|平凳|长凳|卧推凳|TRX|未列出|未包含/ },
+  { key: 'naming', label: '动作名待确认', hint: '这些名字不在动作库里，可能只是写法不同',
+    re: /不在动作库|未收录|确认动作名称|动作库中不存在/ },
+];
+const NOTICE_ORDER = ['injury', 'equipment', 'naming', 'other'];
+const NOTICE_LOOSE_INJURY = /伤病|疼痛|损伤|急症/;
+
+function classifyNotice(text) {
+  const s = String(text || '');
+  for (const topic of NOTICE_TOPICS) if (topic.re.test(s)) return topic.key;
+  if (NOTICE_LOOSE_INJURY.test(s)) return 'injury';
+  return 'other';
+}
+
+/* 把「问题；建议…」拆成两行。
+   取**最后一个**「建议」——前面出现的多半是叙述的一部分（"虽有替代说明…"），
+   最后那个才是给用户的动作。拆不出就整句当问题，不会丢信息。 */
+function splitNotice(text) {
+  const s = String(text || '').trim();
+  const i = s.lastIndexOf('建议');
+  if (i <= 0) return { problem: s, advice: '' };
+  return {
+    problem: s.slice(0, i).replace(/[；;，,、\s]+$/, ''),
+    // 去掉「建议」二字：行首的箭头已经在说"这是该做的动作"，再写一遍是重复。
+    advice: s.slice(i).replace(/^建议/, ''),
+  };
+}
+
+function renderPlanNotice(warnings) {
+  const buckets = new Map();
+  warnings.forEach(raw => {
+    const key = classifyNotice(raw);
+    if (!buckets.has(key)) buckets.set(key, []);
+    // 去掉「[规则引擎]」「[语义匹配]」这类内部分类标记——它们是判据的来源，
+    // 对用户没有意义，读起来像报错日志。
+    buckets.get(key).push(String(raw || '').replace(/^\s*\[(规则引擎|语义匹配)\]\s*/, ''));
+  });
+
+  const box = el('section', 'plan-notice', '');
+  box.setAttribute('aria-label', '计划提示');
+
+  // 摘要行：把「哪几类问题、各几条」压成一行。收起时用户也能一眼看清全貌，
+  // 不至于以为只有一条提示而错过。
+  const summary = NOTICE_ORDER
+    .filter(k => buckets.get(k) && buckets.get(k).length)
+    .map(k => {
+      const t = NOTICE_TOPICS.find(x => x.key === k);
+      return `${t ? t.label : '其他'} ${buckets.get(k).length}`;
+    })
+    .join(' · ');
+
+  const head = el('button', 'plan-notice-head', '');
+  head.type = 'button';
+  head.setAttribute('aria-expanded', 'false');
+  head.appendChild(el('span', 'plan-notice-title', '⚠ 计划提示'));
+  head.appendChild(el('span', 'plan-notice-topics', summary));
+  head.appendChild(el('span', 'plan-notice-count', `${warnings.length} 条`));
+  head.appendChild(el('span', 'plan-notice-chevron', '▼'));
+  box.appendChild(head);
+
+  const groups = el('div', 'plan-notice-groups', '');
+  box.appendChild(groups);
+
+  const setOpen = open => {
+    box.classList.toggle('is-open', open);
+    head.setAttribute('aria-expanded', String(open));
+  };
+  head.onclick = () => setOpen(!box.classList.contains('is-open'));
+
+  NOTICE_ORDER.forEach(key => {
+    const items = buckets.get(key);
+    if (!items || !items.length) return;
+    const topic = NOTICE_TOPICS.find(t => t.key === key);
+    const label = topic ? topic.label : '其他';
+    const isInjury = key === 'injury';
+
+    const group = el('div', 'plan-notice-group', '');
+    const groupHead = el('div', 'plan-notice-grouphead', '');
+    groupHead.appendChild(el('span', `plan-notice-chip${isInjury ? ' is-injury' : ''}`, label));
+    const hint = topic && topic.hint ? `${items.length} 条 · ${topic.hint}` : `${items.length} 条`;
+    groupHead.appendChild(el('span', 'plan-notice-hint', hint));
+    group.appendChild(groupHead);
+
+    const list = el('ul', 'plan-notice-items', '');
+    items.forEach(raw => {
+      const { problem, advice } = splitNotice(raw);
+      const li = el('li', `plan-notice-item${isInjury ? ' is-injury' : ''}`, '');
+      // 问题与建议排在**同一段**里用箭头分隔，而不是各占一行：
+      // 8 条各拆两行会让这块比原来的文本墙还高 3 倍，把计划本体推到屏幕外。
+      const body = el('p', 'plan-notice-body', '');
+      body.appendChild(el('span', 'plan-notice-problem', problem));
+      if (advice) body.appendChild(el('span', 'plan-notice-advice', advice));
+      li.appendChild(body);
+      list.appendChild(li);
+    });
+    group.appendChild(list);
+    groups.appendChild(group);
+  });
+
+  // 伤病类默认展开：那是最该被看到的一类，藏在折叠里等于没提示。
+  // 器械缺件、动作名写法这类配置问题默认收起——它们不紧急，收起省一屏。
+  setOpen(buckets.has('injury'));
+  return box;
+}
+
 function renderPlanResult(container, data) {
   if (!container) return;
   const plan = data || {};
@@ -3863,15 +4225,15 @@ function renderPlanResult(container, data) {
   };
   const confidence = Number(plan.confidence) || 0;
   stats.appendChild(pill(plan.requires_review ? '建议留意' : (confidence >= .85 ? 'AI 可信度高' : 'AI 可信度良好'), plan.requires_review ? 'amber' : 'green'));
-  if (Array.isArray(plan.warnings) && plan.warnings.length) stats.appendChild(pill(`${plan.warnings.length} 条安全提示`, 'amber'));
+  // 不叫「安全提示」：多数条目是器械缺件、动作名写法差异这类配置问题，
+  // 用「安全」二字会把它们和真正的伤病风险混为一谈，反而稀释后者的分量。
+  if (Array.isArray(plan.warnings) && plan.warnings.length) stats.appendChild(pill(`${plan.warnings.length} 条提示`, 'amber'));
   if (plan.requires_review) stats.appendChild(pill('建议咨询专业教练', 'red'));
   stats.appendChild(pill(`${Array.isArray(plan.days) ? plan.days.length : 0} 天计划`));
   container.appendChild(stats);
 
   if (Array.isArray(plan.warnings) && plan.warnings.length) {
-    const warnings = el('div', 'warning-list', '');
-    plan.warnings.forEach(warning => { appendText(warnings, `· ${warning}`); warnings.appendChild(document.createElement('br')); });
-    container.appendChild(warnings);
+    container.appendChild(renderPlanNotice(plan.warnings));
   }
   // 放在计划卡片之前：用户正是读到这里时会产生「我凭什么信它」的疑问
   renderPlanExplanation(container, plan.explain);
@@ -4362,6 +4724,7 @@ function loadDemoData() {
   showStatus('log-status', '已切换到演示数据，正在刷新…');
   loadLogHistory();
   loadTrainingStats();
+  loadSavedPlans();
 }
 
 // ── ECharts 动态加载（双 CDN + 超时 + 降级）──

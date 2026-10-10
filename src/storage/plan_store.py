@@ -171,6 +171,41 @@ class PlanStore:
         data["saved_at"] = row.created_at.isoformat() if row.created_at else ""
         return data
 
+    def rename_plan(self, owner_key: str, plan_id: int, title: str) -> bool:
+        """给已保存的计划改名字。返回是否确实改了一行。
+
+        名字存在 ``plan_data.plan_name`` 里，不单独建列——列表展示名正是从
+        这个字段派生的（见 ``list_plans``）。改这里，列表与详情会同时变，
+        不会出现"列表显示新名、点进去还是旧名"的两处不一致。
+
+        调用方需保证 ``title`` 已校验（非空、未超长）；本方法只负责写。
+        返回 False 只有一种含义：该计划不存在，或不属于这个身份。
+        """
+        if not self._ready():
+            return False
+        owner = (owner_key or "")[:MAX_OWNER_KEY_LEN]
+        with self.db.transaction() as tx:
+            # FOR UPDATE：读-改-写之间若有人并发改同一行，后到的会覆盖先到的，
+            # 用户刚起的名字会凭空变回去。个人计划并发极低，但加锁成本是零。
+            row = tx.fetch_one(
+                """SELECT plan_data FROM training_plans
+                   WHERE id = :pid AND owner_key = :ok FOR UPDATE""",
+                {"pid": int(plan_id), "ok": owner},
+            )
+            if row is None:
+                return False
+            data = row.plan_data if isinstance(row.plan_data, dict) else json.loads(row.plan_data or "{}")
+            if not isinstance(data, dict):
+                data = {}
+            data["plan_name"] = title
+            tx.execute(
+                """UPDATE training_plans SET plan_data = :data
+                   WHERE id = :pid AND owner_key = :ok""",
+                {"data": json.dumps(data, ensure_ascii=False),
+                 "pid": int(plan_id), "ok": owner},
+            )
+            return True
+
     def delete_plan(self, owner_key: str, plan_id: int) -> bool:
         """删除一份计划。返回是否确实删掉了一行。
 
