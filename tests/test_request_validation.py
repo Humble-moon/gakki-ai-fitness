@@ -104,3 +104,57 @@ def test_ask_question_rejects_bad_numbers(client):
     r = client.post("/api/ask-question",
                     json={"question": "怎么练", "height": 0})
     assert r.status_code == 422
+
+
+# ----------------------------------------------------------------------
+# 请求体 → 用户档案的字段映射
+#
+# 这一层曾经是四个调用点各手写一份字段清单。age/sex 加进两个模型之后，
+# 映射没跟上，于是用户在表单里填了、前端也传了、请求模型也收下了，
+# 到了流水线里却是 None——热量目标悄悄退回粗估，界面上写着"缺身高或年龄"，
+# 没有任何一个环节报错。这类静默丢字段只有契约测试拦得住。
+# ----------------------------------------------------------------------
+
+def test_profile_mapping_carries_every_shared_field():
+    """两个模型的**交集字段**必须逐一映射过去，一个都不能漏。"""
+    from src.models.schemas import UserProfileInput
+
+    request_fields = set(server.PlanRequest.model_fields)
+    profile_fields = set(UserProfileInput.model_fields)
+    shared = request_fields & profile_fields
+
+    # 除了有默认值的可选字段，公共字段都应实际出现在档案模型上
+    assert shared, "两个模型没有交集字段，映射测试本身失效了"
+
+    req = server.PlanRequest(
+        height=180, weight=80, age=30, sex="男", training_years=1,
+        goal="增肌", days_per_week=4, injuries=["左肩袖损伤"],
+        habits=["晨练", "跑步"], available_equipment=["哑铃"],
+    )
+    profile = server._profile_from_request(req)
+
+    for name in shared:
+        assert getattr(profile, name) == getattr(req, name), (
+            f"{name} 在请求体到档案的映射中丢失了——"
+            "用户填了却不生效，且不会有任何报错"
+        )
+
+
+def test_age_and_sex_survive_the_api_boundary():
+    """点名守卫：这两个字段就是上述静默丢失的当事人。"""
+    req = server.PlanRequest(height=180, weight=80, age=30, sex="女",
+                             training_years=1, goal="减脂", days_per_week=3)
+    profile = server._profile_from_request(req)
+
+    assert profile.age == 30
+    assert profile.sex == "女"
+
+
+def test_requests_without_age_or_sex_still_build_a_profile():
+    """AnalysisRequest 没有 habits 字段，映射不能因此炸掉。"""
+    req = server.AnalysisRequest(exercise_name="深蹲")
+    profile = server._profile_from_request(req)
+
+    assert profile.age is None
+    assert profile.sex == "不填"
+    assert profile.habits == []

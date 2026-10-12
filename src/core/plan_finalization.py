@@ -15,6 +15,7 @@ full ``Orchestrator``.
 import re
 
 from src.agents.output_validation import OutputValidationError, validate_training_plan
+from src.core.nutrition import calc_calorie_target
 from src.core.goal_contract import (
     plan_goal_issue,
     plan_goal_matches,
@@ -130,8 +131,15 @@ def hold_guidance(result: dict) -> tuple[list[str], str]:
         "若反复出现同类问题，可以补充你的训练条件（器械、伤病、时间）后重试。")
 
 
-def safe_cached_result(result: dict | None, expected_goal: str | None = None) -> dict | None:
-    """Accept only cache entries that already passed the final gate and goal contract."""
+def safe_cached_result(result: dict | None, expected_goal: str | None = None,
+                       profile: dict | None = None) -> dict | None:
+    """Accept only cache entries that already passed the final gate and goal contract.
+
+    传入 ``profile`` 时会重算热量目标再返回。原因是缓存指纹（``make_user_key``）
+    只由身高/体重/目标/伤病组成，而热量还取决于年龄、性别、每周天数——这几项
+    变化不会造成缓存失效，于是命中缓存的用户会拿到**上一份档案算出来的热量**。
+    缓存的是计划，热量是当前档案的派生视图，交付时重算一次最省事也最准确。
+    """
     if not isinstance(result, dict) or result.get("_persistence_allowed") is not True:
         return None
     if result.get("requires_review") is not False or result.get("warnings"):
@@ -142,7 +150,7 @@ def safe_cached_result(result: dict | None, expected_goal: str | None = None) ->
         validate_training_plan(result)
     except OutputValidationError:
         return None
-    return result
+    return attach_nutrition(result, profile or {})
 
 
 def check_with_goal_issue(result: dict, check: dict, expected_goal: str) -> dict:
@@ -155,6 +163,29 @@ def check_with_goal_issue(result: dict, check: dict, expected_goal: str) -> dict
         merged["is_safe"] = False
     merged["issues"] = issues
     return merged
+
+
+def attach_nutrition(result: dict, profile: dict) -> dict:
+    """把每日热量与蛋白质目标挂到计划上（``result["nutrition"]``）。
+
+    与上面覆盖 ``sessions_per_week`` / ``weeks`` 属于同一类事：模型不参与，
+    全部由 profile 确定性算出来。热量是计划里唯一的「数字结论」，交给模型生成
+    就无从核对——公式和依据文本都写在 src/core/nutrition.py。
+
+    没有体重就不挂：算不出来的时候宁可不显示，也不给一个看着很确定的假数字。
+    """
+    weight = profile.get("weight")
+    if not weight:
+        return result
+    result["nutrition"] = calc_calorie_target(
+        weight_kg=weight,
+        height_cm=profile.get("height"),
+        age=profile.get("age"),
+        sex=profile.get("sex", "不填"),
+        goal=profile.get("goal") or "muscle_building",
+        days_per_week=profile.get("days_per_week"),
+    )
+    return result
 
 
 def normalize_plan(result: dict, *, profile: dict | None = None,
@@ -192,6 +223,7 @@ def normalize_plan(result: dict, *, profile: dict | None = None,
                 ex["name"] = ex.pop("exercise")
             if "movement" in ex and "name" not in ex:
                 ex["name"] = ex.pop("movement")
+    attach_nutrition(result, profile)
     return result
 
 
@@ -404,12 +436,49 @@ def create_review_artifact(review_store, profile: dict, query: str, result: dict
     )
 
 
+_INTERNAL_MARKER_RE = re.compile(r"^\s*\[(规则引擎|语义匹配)\]\s*")
+
+#: 交付层的第二道剥离：把只对内部有意义、却会落到用户屏幕上的片段摘掉。
+#:
+#: 「（触发词: 背）」暴露的是关键词匹配这个实现——用户看到的是"系统按字面比对了
+#: 一个『背』字"，比看到一句人话更容易让人怀疑整套判断。「，建议人工审核」则是
+#: 内部流程术语，而这一屏本来就写着"需要专业人员确认"，再说一遍像在推诿。
+#: 两者都不改变信息量，只改变它看起来像不像一个成品。
+_INTERNAL_FRAGMENT_RE = re.compile(r"（触发词:[^）]*）|，建议人工审核")
+
+
+def _strip_internal_markers(issue):
+    """剥掉只对内部有意义的前缀标记与术语。
+
+    ``[规则引擎]`` / ``[语义匹配]`` 标的是这条问题「由哪条通道发现」，
+    供 classify_hold 分类与日志排查使用。但审核面板会把 issue 原文直接
+    显示给用户，而普通用户不知道「规则引擎」是什么，只会觉得莫名其妙。
+    「（触发词: X）」与「建议人工审核」同理。
+
+    因此只在**交付给用户的载荷**这一步剥掉，原始数据保持不动——
+    classify_hold 仍要按这些标记分流，剥早了分类就失效了。
+    """
+    def scrub(text: str) -> str:
+        return _INTERNAL_FRAGMENT_RE.sub(
+            "", _INTERNAL_MARKER_RE.sub("", text))
+
+    if isinstance(issue, dict):
+        cleaned = dict(issue)
+        if cleaned.get("issue"):
+            cleaned["issue"] = scrub(str(cleaned["issue"]))
+        return cleaned
+    return scrub(str(issue or ""))
+
+
 def build_review_pending_payload(result: dict, artifact, thread_id: str | None = None) -> dict:
     """Build the ``review_pending`` delivery payload for a held plan."""
     final_check = result.get("active_issues") or []
+    # 兜底那一路直接取了 issue 原文，会带上 [规则引擎] / （触发词: X）这类内部标记，
+    # 而它是"风险原因"这一行的正文——比明细列表更显眼，必须同样过一遍剥离。
     reason = result.get("review_reason") or (
         final_check[0].get("issue") if final_check and isinstance(final_check[0], dict) else "安全检查需要人工确认"
     )
+    reason = _strip_internal_markers(reason)
     payload = {
         "delivery_status": "review_pending",
         "requires_review": True,
@@ -418,7 +487,7 @@ def build_review_pending_payload(result: dict, artifact, thread_id: str | None =
             "status": artifact.status,
             "created_at": artifact.created_at,
             "reason": reason,
-            "issues": artifact.issues,
+            "issues": [_strip_internal_markers(i) for i in (artifact.issues or [])],
             "severity": artifact.severity,
             "prohibited_actions": artifact.prohibited_actions,
             # 下一步按**拦截原因**给，而不是写死一句。

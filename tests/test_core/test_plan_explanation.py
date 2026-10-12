@@ -197,3 +197,32 @@ def test_explanation_never_mutates_its_inputs():
     assert repr(plan) == plan_snapshot
     assert repr(retrieved) == retrieved_snapshot
     assert repr(result) == result_snapshot
+
+
+# ----------------------------------------------------------------------
+# 运动习惯：面板要回答"我填的到底有没有被用上"
+# ----------------------------------------------------------------------
+
+def test_habits_section_lists_what_was_considered():
+    explain = build_explanation({}, {}, {}, profile={"habits": ["晨练", "跑步"]})
+
+    assert explain["habits"]["habits"] == ["晨练", "跑步"]
+
+
+def test_habits_section_is_empty_when_the_user_filled_none():
+    """没填习惯就整段隐藏，不显示一个空标题。"""
+    assert build_explanation({}, {}, {}, profile={"habits": []})["habits"] == {}
+    assert build_explanation({}, {}, {}, profile={})["habits"] == {}
+    assert build_explanation({}, {}, {}, profile=None)["habits"] == {}
+
+
+def test_habits_section_tolerates_junk_values():
+    """档案来自用户输入，脏值不能把渲染层带崩。"""
+    explain = build_explanation({}, {}, {}, profile={"habits": ["跑步", "", None, 3]})
+
+    assert explain["habits"]["habits"] == ["跑步"]
+
+
+def test_profile_is_optional_so_existing_callers_keep_working():
+    """新增参数必须有默认值——三处调用点之外还有测试与脚本在用旧签名。"""
+    assert build_explanation({}, {}, {})["habits"] == {}

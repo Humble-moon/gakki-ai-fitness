@@ -23,17 +23,23 @@ def calc_bmi(height_cm: float, weight_kg: float) -> dict:
     return {"bmi": bmi, "category": cat}
 
 
-def calc_calorie_target(weight_kg: float, goal: str = "muscle_building") -> dict:
-    """估算每日热量目标。"""
-    base = weight_kg * 22
-    if goal == "muscle_building":
-        return {"daily_kcal": round(base * 1.15), "protein_g": round(weight_kg * 1.8),
-                "note": "增肌期热量盈余 ~15%，蛋白质 1.8g/kg"}
-    elif goal == "fat_loss":
-        return {"daily_kcal": round(base * 0.8), "protein_g": round(weight_kg * 2.0),
-                "note": "减脂期热量缺口 ~20%，蛋白质 2.0g/kg 防肌肉流失"}
-    return {"daily_kcal": round(base), "protein_g": round(weight_kg * 1.6),
-            "note": "维持期"}
+def calc_calorie_target(weight_kg: float, height_cm: float | None = None,
+                        age: float | None = None, sex: str = "不填",
+                        goal: str = "muscle_building",
+                        days_per_week: int | None = None) -> dict:
+    """估算每日热量与蛋白质目标（Mifflin-St Jeor + 活动系数）。
+
+    实现在 ``src/core/nutrition.py``，这里只做委托。**不要在本地复制一份公式**：
+    同一个数字在技能工具和计划定稿流程里各算各的，两边迟早会漂移，而热量目标
+    恰恰是用户会拿去用的东西。
+
+    惰性 import 是刻意的——技能目录不是常规 Python 包，由 SkillLoader 按文件
+    路径加载；模块级 import 一旦取不到 src 就会让整个技能加载失败。放进函数体
+    后，最坏情况也只是调用这个工具时报错，不影响其它技能。
+    """
+    from src.core.nutrition import calc_calorie_target as _impl
+    return _impl(weight_kg, height_cm=height_cm, age=age, sex=sex,
+                 goal=goal, days_per_week=days_per_week)
 
 
 def check_volume(exercises_per_week: int, sets_per_exercise: int, goal: str = "muscle_building") -> dict:

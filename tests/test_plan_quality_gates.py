@@ -626,3 +626,49 @@ class TestPayloadActuallyUsesTheGuidance:
             "active_issues": [{"issue": "器械约束不满足：未包含TRX"}],
         })
         assert payload["review"]["hold_reason"] == "equipment"
+
+
+# ----------------------------------------------------------------------
+# 交付层剥离：内部标记与术语不能落到用户屏幕上
+# ----------------------------------------------------------------------
+
+def test_delivery_strips_internal_prefix_and_terms():
+    """交付载荷里不该出现 [规则引擎] / （触发词: X）/ 建议人工审核。
+
+    这些是给内部路由和排查用的：用户看到"系统按字面比对了一个『背』字"
+    比看到一句人话更容易怀疑整套判断；"建议人工审核"则是内部流程术语，
+    而这一屏本来就写着"需要专业人员确认"。
+    """
+    from src.core.plan_finalization import _strip_internal_markers
+
+    raw = ("[规则引擎] 伤病「下背有点酸」与动作「哑铃单臂划船」"
+           "存在冲突（触发词: 背），建议人工审核")
+    cleaned = _strip_internal_markers(raw)
+    assert "[规则引擎]" not in cleaned
+    assert "触发词" not in cleaned
+    assert "建议人工审核" not in cleaned
+    # 实质信息必须留下——剥离的是术语，不是结论
+    assert "下背有点酸" in cleaned
+    assert "哑铃单臂划船" in cleaned
+    assert "冲突" in cleaned
+
+
+def test_delivery_stripping_also_applies_to_issue_dicts():
+    """issue 既可能是字符串也可能是 {issue: ..., severity: ...} 字典。"""
+    from src.core.plan_finalization import _strip_internal_markers
+
+    cleaned = _strip_internal_markers(
+        {"issue": "[规则引擎] 冲突（触发词: 腰），建议人工审核", "severity": "danger"})
+    assert cleaned["severity"] == "danger"
+    assert "触发词" not in cleaned["issue"]
+    assert "规则引擎" not in cleaned["issue"]
+
+
+def test_reason_line_is_stripped_too():
+    """「风险原因」那一行比明细更显眼，兜底路径也必须剥离。"""
+    import inspect
+    from src.core import plan_finalization as pf
+
+    src = inspect.getsource(pf.build_review_pending_payload)
+    assert "reason = _strip_internal_markers(reason)" in src, \
+        "兜底 reason 直接取 issue 原文，会带内部标记，必须剥离"

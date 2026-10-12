@@ -14,6 +14,12 @@ from typing import List, Optional, Literal
 
 
 TrainingGoal = Literal["增肌", "减脂"]
+
+# 性别。**只服务于热量公式**（Mifflin-St Jeor 的性别常数项男女相差 166 kcal），
+# 不参与训练编排——那方面的证据很弱，假装有区分度是过度设计。
+# 「不填」是合法值而不是缺省占位：不填时按两性中值估算，误差约 ±83 kcal，
+# 小于活动系数分档之间的跨度，界面会如实标注。
+SexInput = Literal["男", "女", "不填"]
 from datetime import datetime
 
 
@@ -33,6 +39,13 @@ class UserProfileInput(BaseModel):
 
     weight: float = Field(..., ge=30, le=200, description="体重(kg)")
     # 体重（公斤），合法范围 30~200kg
+
+    age: Optional[int] = Field(None, ge=10, le=100, description="年龄")
+    # 年龄，合法范围 10~100。可选：它只影响热量估算，不该成为生成计划的硬前提——
+    # 没填就退回按体重粗估并在界面标明，而不是把整个请求拒掉。
+
+    sex: SexInput = Field("不填", description="性别（仅用于热量估算）")
+    # 性别，默认「不填」。见上面 SexInput 的说明。
 
     training_years: float = Field(..., ge=0, le=30, description="训练年限")
     # 训练年限，合法范围 0~30 年

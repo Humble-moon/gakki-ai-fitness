@@ -3,6 +3,7 @@
 import pytest
 
 from src.graph.events import build_inputs, graph_stream_events
+from src.llm.provider import QUOTA_EXHAUSTED
 from tests.test_graph.test_graph_flows import (
     _needs_review_check,
     make_profile,
@@ -55,11 +56,29 @@ def test_goal_mismatch_emits_single_error_terminal():
 
 
 def test_llm_unavailable_emits_dependency_error():
+    """网络类故障 → 可重试的提示。"""
     runtime = make_runtime(planner_raises=True)
     events = run_events(runtime)
     terminals = [(e, d) for e, d in events if e in {"done", "error"}]
     assert terminals == [("error", {"code": "DEPENDENCY_UNAVAILABLE",
-                                    "message": "演示依赖暂时不可用"})]
+                                    "message": "AI 服务暂时不可用，请稍后重试。"})]
+
+
+def test_llm_quota_exhausted_is_distinguished_from_outage():
+    """欠费不能和网络抖动报同一个错。
+
+    两者用户该做的事完全不同：欠费要去充值、重试多少次都不会好；网络抖动
+    等一会儿就行。原来一律回「演示依赖暂时不可用」，把不可自愈的配额问题
+    说成了暂时的，用户只能反复重试。
+    """
+    runtime = make_runtime(planner_raises=True, planner_error_reason=QUOTA_EXHAUSTED)
+    events = run_events(runtime)
+    terminals = [(e, d) for e, d in events if e in {"done", "error"}]
+    assert len(terminals) == 1
+    event, payload = terminals[0]
+    assert event == "error"
+    assert payload["code"] == "LLM_QUOTA_EXHAUSTED"
+    assert "额度" in payload["message"]
 
 
 def test_cache_hit_emits_cache_hit_then_done():

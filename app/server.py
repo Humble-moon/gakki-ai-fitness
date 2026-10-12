@@ -31,11 +31,12 @@ from fastapi import Depends, FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from src.core.orchestrator import Orchestrator
 from src.core.goal_contract import GoalConsistencyError
-from src.models.schemas import TrainingGoal, UserProfileInput
+from src.models.schemas import SexInput, TrainingGoal, UserProfileInput
 from src.health import readiness_checks
 from src.llm.provider import LLMUnavailableError
 from src.graph import build_inputs, build_runtime, graph_stream_events
@@ -161,6 +162,10 @@ class PlanRequest(BaseModel):
     # days_per_week=0 这类值穿透到下游抛 500，而不是在入口被拒。
     weight: float = Field(80, ge=30, le=200)
     # 体重（kg），默认 80，合法范围 30~200kg
+    age: Optional[int] = Field(None, ge=10, le=100)
+    # 年龄，合法范围 10~100。可选：只影响热量估算，没填就退回按体重粗估
+    sex: SexInput = "不填"
+    # 性别，仅用于热量公式。可选且允许「不填」——不填时按两性中值估算
     training_years: float = Field(1.0, ge=0, le=30)
     # 训练年限，默认 1.0，合法范围 0~30 年
     goal: TrainingGoal = "增肌"
@@ -197,6 +202,10 @@ class AnalysisRequest(BaseModel):
     # 身高（cm），合法范围 100~250cm
     weight: float = Field(80, ge=30, le=200)
     # 体重（kg），合法范围 30~200kg
+    age: Optional[int] = Field(None, ge=10, le=100)
+    # 年龄，合法范围 10~100。可选：只影响热量估算，没填就退回按体重粗估
+    sex: SexInput = "不填"
+    # 性别，仅用于热量公式。可选且允许「不填」——不填时按两性中值估算
     training_years: float = Field(1.0, ge=0, le=30)
     # 训练年限，合法范围 0~30 年
     goal: TrainingGoal = "增肌"
@@ -226,6 +235,10 @@ class QuestionRequest(BaseModel):
     # 身高（cm），合法范围 100~250cm
     weight: float = Field(80, ge=30, le=200)
     # 体重（kg），合法范围 30~200kg
+    age: Optional[int] = Field(None, ge=10, le=100)
+    # 年龄，合法范围 10~100。可选：只影响热量估算，没填就退回按体重粗估
+    sex: SexInput = "不填"
+    # 性别，仅用于热量公式。可选且允许「不填」——不填时按两性中值估算
     training_years: float = Field(1.0, ge=0, le=30)
     # 训练年限，合法范围 0~30 年
     goal: TrainingGoal = "增肌"
@@ -328,6 +341,18 @@ graph_runtime = build_runtime(orch)
 # ============================================================
 # SSE 流式传输辅助函数
 # ============================================================
+def _llm_failure_payload(exc) -> dict:
+    """把 LLM 不可用翻译成用户能据此行动的提示。
+
+    原来一律回「演示依赖暂时不可用」——把配额耗尽和网络抖动说成了同一回事。
+    前者要充值、不会自愈，后者等一会儿就好；混在一起用户只能反复重试。
+    文案由 LLMUnavailableError.payload 统一给出，这里只处理裸 ConnectionError。
+    """
+    if isinstance(exc, LLMUnavailableError):
+        return exc.payload
+    return {"code": "DEPENDENCY_UNAVAILABLE", "message": "AI 服务暂时不可用，请稍后重试。"}
+
+
 def _stream_events(generator):
     """Convert an orchestrator iterator into one stable SSE stream."""
     terminal = False
@@ -346,16 +371,16 @@ def _stream_events(generator):
             if terminal:
                 break
         if not terminal:
-            yield emit("error", {"code": "STREAM_INCOMPLETE", "message": "流式请求未返回明确完成事件"})
+            yield emit("error", {"code": "STREAM_INCOMPLETE", "message": "请求没有正常结束，请重试"})
     except GeneratorExit:
         raise
-    except (ConnectionError, LLMUnavailableError):
+    except (ConnectionError, LLMUnavailableError) as exc:
         if not terminal:
-            yield emit("error", {"code": "DEPENDENCY_UNAVAILABLE", "message": "演示依赖暂时不可用"})
+            yield emit("error", _llm_failure_payload(exc))
     except Exception:
         logger.exception("SSE stream failed")
         if not terminal:
-            yield emit("error", {"code": "STREAM_FAILED", "message": "流式请求暂时失败，请稍后重试"})
+            yield emit("error", {"code": "STREAM_FAILED", "message": "请求暂时失败，请稍后重试"})
     finally:
         close = getattr(generator, "close", None)
         if callable(close):
@@ -398,11 +423,7 @@ def generate_plan(req: PlanRequest,
         2. 调用 orchestrator 的流式生成方法
         3. 将生成器包装为 SSE StreamingResponse 返回
     """
-    profile = UserProfileInput(
-        height=req.height, weight=req.weight, training_years=req.training_years,
-        goal=req.goal, available_equipment=req.available_equipment,
-        days_per_week=req.days_per_week, injuries=req.injuries, habits=req.habits
-    )
+    profile = _profile_from_request(req)
     owner_key = require_owner_key(principal, req.athlete_key)
     return StreamingResponse(
         _stream_events(orch.generate_plan_stream(profile, req.query, req.session_id,
@@ -438,11 +459,7 @@ def analyze_exercise(req: AnalysisRequest):
         2. 调用 orchestrator 的流式分析方法
         3. 以 SSE 格式返回
     """
-    profile = UserProfileInput(
-        height=req.height, weight=req.weight, training_years=req.training_years,
-        goal=req.goal, available_equipment=req.available_equipment,
-        days_per_week=req.days_per_week, injuries=req.injuries
-    )
+    profile = _profile_from_request(req)
     return StreamingResponse(
         _stream_events(orch.analyze_exercise_stream(
             req.exercise_name, req.user_description, profile, req.session_id)),
@@ -480,11 +497,7 @@ def ask_question(req: QuestionRequest,
     说明：session_id 用于维持多轮对话上下文，
           前端在首次请求后获取并缓存 session_id，后续请求携带它。
     """
-    profile = UserProfileInput(
-        height=req.height, weight=req.weight, training_years=req.training_years,
-        goal=req.goal, available_equipment=req.available_equipment,
-        days_per_week=req.days_per_week, injuries=req.injuries, habits=req.habits
-    )
+    profile = _profile_from_request(req)
     owner_key = require_owner_key(principal, req.athlete_key)
     return StreamingResponse(
         _stream_events(orch.answer_question_stream(req.question, profile, req.session_id,
@@ -581,7 +594,7 @@ def _storage_unavailable():
     return JSONResponse(
         status_code=503,
         content={"error": {"code": "STORAGE_UNAVAILABLE",
-                           "message": "训练日志存储暂不可用，请确认数据库已启动"}},
+                           "message": "训练日志暂时不可用，请确认数据服务已启动"}},
     )
 
 
@@ -599,7 +612,7 @@ async def create_training_log(req: TrainingLogRequest,
     """
     if not req.athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
-            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
 
     store = _get_training_log_store()
     store.ensure_table()
@@ -641,7 +654,7 @@ async def list_training_logs(athlete_key: str = "", weeks: int = 12,
     """
     if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
-            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
 
     store = _get_training_log_store()
     store.ensure_table()
@@ -671,7 +684,7 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
     if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
             "error": "athlete_key_required",
-            "message": "必须提供 athlete_key 才能定位你的数据。",
+            "message": "必须提供身份信息才能定位你的数据。",
         })
 
     athlete_key = require_owner_key(principal, athlete_key)
@@ -679,6 +692,7 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
         "athlete_key": athlete_key,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "training_logs": [],
+        "saved_plans": [],
         "long_term_memory": {},
         "conversation": None,
         "note": (
@@ -694,6 +708,21 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
     except Exception as exc:  # noqa: BLE001 - 单源失败不该让整份导出失败
         logger.warning("[data-rights] 导出训练日志失败：%s", exc)
         payload["training_logs_error"] = str(exc)
+
+    try:
+        plan_store = _get_plan_store()
+        plan_store.ensure_table()
+        if plan_store.enabled:
+            # 导出整份计划正文而不是列表摘要——用户要的是能带走的内容，
+            # 只有标题和日期的话，这份导出对他没用。
+            exported = []
+            for summary in plan_store.list_plans(athlete_key, limit=10_000):
+                full = plan_store.get_plan(athlete_key, summary.get("plan_id"))
+                exported.append(full or summary)
+            payload["saved_plans"] = exported
+    except Exception as exc:  # noqa: BLE001 - 单源失败不该让整份导出失败
+        logger.warning("[data-rights] 导出已保存计划失败：%s", exc)
+        payload["saved_plans_error"] = str(exc)
 
     try:
         payload["long_term_memory"] = orch.long_term.get_preferences(athlete_key)
@@ -729,13 +758,13 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     传来的 athlete_key 被忽略。游客模式沿用自证式 key（本机数据本机可见），
     这条审计日志记录实际删除的主体，便于事后追溯。
 
-    删除范围与导出对齐（训练日志 / 长期记忆 / 会话）。**不做部分成功**：
+    删除范围与导出对齐（训练日志 / 已保存计划 / 长期记忆 / 会话）。**不做部分成功**：
     任一步抛错都如实返回失败与已完成的部分，不谎报"已全部删除"。
     """
     if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
             "error": "athlete_key_required",
-            "message": "必须提供 athlete_key 才能定位你的数据。",
+            "message": "必须提供身份信息才能定位你的数据。",
         })
     if confirm != "DELETE":
         return JSONResponse(status_code=400, content={
@@ -760,6 +789,14 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     except Exception as exc:  # noqa: BLE001
         logger.error("[data-rights] 删除长期记忆失败：%s", exc)
         result["errors"]["long_term"] = str(exc)
+
+    try:
+        plan_store = _get_plan_store()
+        plan_store.ensure_table()
+        result["deleted"]["plans"] = plan_store.delete_all(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[data-rights] 删除已保存计划失败：%s", exc)
+        result["errors"]["plans"] = str(exc)
 
     if session_id:
         try:
@@ -788,7 +825,7 @@ def list_plans(limit: int = 20,
     if not store.enabled:
         return JSONResponse(status_code=503, content={
             "error": {"code": "STORAGE_UNAVAILABLE",
-                      "message": "计划存储暂不可用，请确认数据库已启动"}})
+                      "message": "计划暂时不可用，请确认数据服务已启动"}})
     owner = require_owner_key(principal, athlete_key or None)
     plans = store.list_plans(owner, limit=limit)
     return {"plans": plans, "count": len(plans)}
@@ -803,7 +840,7 @@ def get_plan(plan_id: int,
     store.ensure_table()
     if not store.enabled:
         return JSONResponse(status_code=503, content={
-            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划存储暂不可用"}})
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划暂时不可用"}})
     owner = require_owner_key(principal, athlete_key or None)
     plan = store.get_plan(owner, plan_id)
     if plan is None:
@@ -832,7 +869,7 @@ def save_plan(req: PlanSaveRequest,
     store.ensure_table()
     if not store.enabled:
         return JSONResponse(status_code=503, content={
-            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划存储暂不可用"}})
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划暂时不可用"}})
 
     plan = req.plan or {}
     status = plan.get("delivery_status")
@@ -881,7 +918,7 @@ def rename_plan(plan_id: int,
     store.ensure_table()
     if not store.enabled:
         return JSONResponse(status_code=503, content={
-            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划存储暂不可用"}})
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划暂时不可用"}})
 
     title = (req.title or "").strip()
     if not title:
@@ -908,7 +945,7 @@ def delete_plan(plan_id: int,
     store.ensure_table()
     if not store.enabled:
         return JSONResponse(status_code=503, content={
-            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划存储暂不可用"}})
+            "error": {"code": "STORAGE_UNAVAILABLE", "message": "计划暂时不可用"}})
     owner = require_owner_key(principal, athlete_key or None)
     if not store.delete_plan(owner, plan_id):
         return JSONResponse(status_code=404, content={
@@ -945,14 +982,18 @@ async def training_stats(athlete_key: str = "", weeks: int = 12,
         athlete_key: 运动员标识（必填）
         weeks: 回溯周数，默认 12
 
-    返回：JSON {totals, weekly, exercises}，结构直接对应前端图表的 series。
-        无数据时返回结构完整的空壳，前端不必判空。
+    返回：JSON {totals, weekly, exercises, muscles, records}，结构直接对应前端
+        图表的 series。无数据时返回结构完整的空壳，前端不必判空。
     """
     if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
-            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
 
-    from src.core.training_analytics import compute_stats
+    from src.core.training_analytics import (
+        compute_muscle_volume,
+        compute_records,
+        compute_stats,
+    )
 
     store = _get_training_log_store()
     store.ensure_table()
@@ -962,6 +1003,17 @@ async def training_stats(athlete_key: str = "", weeks: int = 12,
     athlete_key = require_owner_key(principal, athlete_key)
     logs = store.get_logs(athlete_key, weeks=max(1, min(weeks, 52)))
     stats = compute_stats(logs)
+    # 肌群分布要先知道每个动作练的是哪儿。动作库取不到时退化成空映射：
+    # 动作会全部落进 unmatched_exercises，前端据此提示"这些没算进去"，
+    # 而不是把"查不到"直接画成"这个肌群没练过"。
+    try:
+        from src.rag.exercise_catalog import load_exercise_muscles
+        exercise_muscles = load_exercise_muscles()
+    except Exception as exc:
+        logger.warning("动作肌群标注读取失败，肌群分布将标记为未匹配: %s", exc)
+        exercise_muscles = {}
+    stats["muscles"] = compute_muscle_volume(logs, exercise_muscles)
+    stats["records"] = compute_records(logs)
     stats["athlete_key"] = athlete_key
     stats["weeks"] = weeks
     return stats
@@ -974,15 +1026,18 @@ async def create_training_advice(req: TrainingAdviceRequest,
     POST /api/training-advice - 生成调整建议（**只生成，不生效**）
 
     请求体：TrainingAdviceRequest
-    返回：JSON {advice_id, status, summary, items, stats}
+    返回：JSON {advice_id, status, summary, summary_source, summary_detail,
+                items, stats}
 
-    说明：建议由确定性规则引擎推导（见 training_analytics.rule_engine），
-          不依赖 LLM，模型不可用时依然可用。用户必须在 apply 接口确认勾选
-          后才会写入长期记忆。
+    说明：**调整条目**由确定性规则引擎推导（见 training_analytics.rule_engine），
+          不依赖 LLM，模型不可用时依然可用；**summary_detail** 是 LLM 把统计
+          与规则结论重述成的一份周报，属于增强层，失败时回退规则摘要并把
+          summary_source 标成 "rule"。用户必须在 apply 接口确认勾选后才会
+          写入长期记忆。
     """
     if not req.athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
-            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少运动员标识"}})
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
 
     from src.core.training_advice import build_advice
 
@@ -991,8 +1046,17 @@ async def create_training_advice(req: TrainingAdviceRequest,
     if not store.enabled:
         return _storage_unavailable()
 
-    return build_advice(require_owner_key(principal, req.athlete_key), store,
-                        weeks=max(1, min(req.weeks, 52)))
+    # 丢进线程池：周报会调一次 LLM（秒级）。build_advice 是同步函数，
+    # 直接在 async 端点里执行会阻塞事件循环——生成周报的那几秒里，同一进程
+    # 上正在跑的 SSE 流会一起卡住。build_advice 内部已做降级，LLM 不可用时
+    # 回退规则摘要，异常不会冒到这里。
+    return await run_in_threadpool(
+        build_advice,
+        require_owner_key(principal, req.athlete_key),
+        store,
+        weeks=max(1, min(req.weeks, 52)),
+        long_term=orch.long_term,
+    )
 
 
 @app.post("/api/training-advice/apply")
@@ -1028,6 +1092,175 @@ async def apply_training_advice(req: TrainingAdviceApplyRequest,
             "error": {"code": "ADVICE_EXPIRED",
                       "message": "该调整建议已失效，请重新生成"}})
     return result
+
+
+# ----------------------------------------------------------------------
+# AI 记忆面板
+# ----------------------------------------------------------------------
+# 让用户看到 AI 记住了自己什么、从哪来、能不能删。长期记忆一直在被写入
+# （训练画像、已确认的调整、计划反馈），但此前只有写入没有出口——用户既
+# 看不到内容，也无法单独拿掉某一条。
+
+# 偏好键的来源归类。面板要如实区分「你填的」和「AI 推的」：后者更该被
+# 质疑。用户看到 training_adjustments 里有一条不合适，应该能单独删掉它，
+# 而不是只能在「全留」和「全清」之间二选一。
+_USER_FILLED_PREF_KEYS = {"profile", "goal", "equipment", "habits"}
+_ADJUSTMENT_PREF_KEY = "training_adjustments"
+
+# 偏好新鲜度阈值，与 long_term._get_preference_ages 的口径保持一致
+_PREF_STALE_DAYS = 90
+
+
+def _pref_source_label(key: str) -> str:
+    """把偏好键翻译成用户能看懂的记忆来源。"""
+    if key == _ADJUSTMENT_PREF_KEY:
+        return "AI 建议，你确认采纳"
+    if key in _USER_FILLED_PREF_KEYS:
+        return "你在训练档案里填写的"
+    return "系统记录"
+
+
+def _pref_age_days(updated_at) -> int | None:
+    """把写入时间换算成天数差；缺失或无法解析时返回 None。"""
+    if not updated_at:
+        return None
+    try:
+        ts = datetime.fromisoformat(str(updated_at))
+    except (ValueError, TypeError):
+        return None
+    if ts.tzinfo is None:
+        # 旧格式可能不带时区（record_feedback 写的是本地时间），按 UTC 兜底
+        ts = ts.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - ts).days)
+
+
+@app.get("/api/memory")
+async def get_memory(athlete_key: str = "",
+                     principal: Principal = Depends(get_current_principal)):
+    """
+    GET /api/memory - 读取该身份名下的全部 AI 记忆
+
+    返回：JSON {athlete_key, preferences, feedback, injuries, counts}
+        preferences 每条含 key / value / updated_at / age_days / stale /
+        source_label，前端据此分组并标出过旧条目。
+
+    说明：只读。来源标签如实区分用户填写与 AI 推断，让用户知道哪些记忆
+          值得质疑。
+    """
+    if not athlete_key and not principal.is_authenticated:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
+
+    athlete_key = require_owner_key(principal, athlete_key)
+    memory = orch.long_term
+
+    try:
+        raw_prefs = memory.get_preferences_detailed(athlete_key)
+    except Exception as exc:  # noqa: BLE001 - 读不到要如实上报，不能假装没有记忆
+        logger.error("[memory] 读取长期记忆失败：%s", exc)
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "MEMORY_UNAVAILABLE",
+                      "message": "长期记忆暂不可用，请确认数据服务已启动"}})
+
+    preferences = []
+    for key, entry in sorted(raw_prefs.items()):
+        age = _pref_age_days(entry.get("updated_at"))
+        preferences.append({
+            "key": key,
+            "value": entry.get("value"),
+            "updated_at": entry.get("updated_at"),
+            "age_days": age,
+            "stale": bool(age is not None and age > _PREF_STALE_DAYS),
+            "source_label": _pref_source_label(key),
+        })
+
+    # 反馈与伤病是补充信息，读失败不该让整个面板打不开
+    try:
+        feedback = memory.get_feedback(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[memory] 读取计划反馈失败：%s", exc)
+        feedback = []
+
+    try:
+        injuries = memory.get_injury_history(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[memory] 读取伤病记录失败：%s", exc)
+        injuries = []
+
+    return {
+        "athlete_key": athlete_key,
+        "preferences": preferences,
+        "feedback": feedback,
+        "injuries": injuries,
+        "counts": {
+            "preferences": len(preferences),
+            "feedback": len(feedback),
+            "injuries": len(injuries),
+        },
+    }
+
+
+@app.delete("/api/memory")
+async def clear_memory(athlete_key: str = "", confirm: str = "",
+                       principal: Principal = Depends(get_current_principal)):
+    """
+    DELETE /api/memory - 清空该身份名下的全部 AI 记忆（**不可逆**）
+
+    只清长期记忆，不动训练日志与训练计划——与 DELETE /api/user-data 的
+    全量删除明确区分开。要求显式传 confirm=DELETE，理由同该端点：
+    一个拼错的请求不该把用户攒了几个月的画像抹掉。
+    """
+    if not athlete_key and not principal.is_authenticated:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
+    if confirm != "DELETE":
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "CONFIRMATION_REQUIRED",
+                      "message": "清空记忆不可恢复。请带上 confirm=DELETE 明确确认。"}})
+
+    athlete_key = require_owner_key(principal, athlete_key)
+    try:
+        deleted = orch.long_term.purge(athlete_key)
+    except Exception as exc:  # noqa: BLE001 - 删除失败要如实上报
+        logger.error("[memory] 清空长期记忆失败：%s", exc)
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "MEMORY_UNAVAILABLE",
+                      "message": "长期记忆暂不可用，未能清空"}})
+
+    logger.warning("[memory] 清空长期记忆 subject=%s 删除 %d 个键", athlete_key, deleted)
+    return {"deleted_keys": deleted,
+            "note": "已清空。下次生成计划时不再参考任何历史记忆。"}
+
+
+@app.delete("/api/memory/{pref_key}")
+async def delete_memory_preference(pref_key: str, athlete_key: str = "",
+                                   principal: Principal = Depends(get_current_principal)):
+    """
+    DELETE /api/memory/{pref_key} - 删除单条 AI 记忆
+
+    删除立即生效：下次生成计划时该条不再进入上下文。用于「某条记忆不对，
+    我要单独拿掉它」——比清空全部更常用。
+    """
+    if not athlete_key and not principal.is_authenticated:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
+
+    athlete_key = require_owner_key(principal, athlete_key)
+    try:
+        deleted = orch.long_term.delete_preference(athlete_key, pref_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[memory] 删除单条记忆失败：%s", exc)
+        return JSONResponse(status_code=503, content={
+            "error": {"code": "MEMORY_UNAVAILABLE",
+                      "message": "长期记忆暂不可用，未能删除"}})
+
+    if not deleted:
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "MEMORY_NOT_FOUND",
+                      "message": "这条记忆不存在或已被删除"}})
+
+    return {"deleted": True, "key": pref_key,
+            "note": "已删除。下次生成计划时不再包含这条记忆。"}
 
 
 @app.get("/")
@@ -1176,12 +1409,19 @@ class ReviewResolveRequest(BaseModel):
 
 
 def _profile_from_request(req) -> UserProfileInput:
-    """Reuse the flat request fields shared by PlanRequest-shaped bodies."""
-    return UserProfileInput(
-        height=req.height, weight=req.weight, training_years=req.training_years,
-        goal=req.goal, available_equipment=req.available_equipment,
-        days_per_week=req.days_per_week, injuries=req.injuries, habits=req.habits,
-    )
+    """由请求体构造用户档案，字段清单以 ``UserProfileInput`` 为准。
+
+    这里曾经逐字段手写映射，四个调用点各写一份。这种写法在新增字段时会
+    **静默丢数据**：age/sex 加进请求模型和档案模型之后，映射没跟上，于是
+    用户填了、前端传了、模型收下了，到流水线里却是 None——热量目标悄悄退回
+    粗估，界面还显示"缺身高或年龄"，而没有任何环节报错。
+
+    改成按模型字段反射取值：请求模型没有这个字段就跳过，档案模型有默认值的
+    自然落到默认值。以后再加字段，映射不必改，也就不会再漏。
+    """
+    payload = {name: getattr(req, name)
+               for name in UserProfileInput.model_fields if hasattr(req, name)}
+    return UserProfileInput(**payload)
 
 
 @app.post("/api/v2/plan")
@@ -1204,10 +1444,9 @@ def generate_plan_v2(req: PlanRequest,
         state = graph_runtime.graph.invoke(inputs, config)
     except GoalConsistencyError as exc:
         return JSONResponse(status_code=422, content={
-            "error": {"code": exc.code, "message": "训练计划目标校验失败，请重试"}})
-    except LLMUnavailableError:
-        return JSONResponse(status_code=503, content={
-            "error": {"code": "DEPENDENCY_UNAVAILABLE", "message": "演示依赖暂时不可用"}})
+            "error": {"code": exc.code, "message": "生成结果与目标不符，请重试"}})
+    except LLMUnavailableError as exc:
+        return JSONResponse(status_code=503, content={"error": _llm_failure_payload(exc)})
     if state.get("__interrupt__"):
         payload = dict(state.get("review_payload") or {})
         payload["thread_id"] = thread_id

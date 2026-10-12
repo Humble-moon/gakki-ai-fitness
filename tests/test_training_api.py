@@ -42,6 +42,46 @@ def store():
     return FakeTrainingLogStore()
 
 
+class FakeLLM:
+    """LLMProvider 替身：按配置返回 JSON 或抛错，并记录调用。"""
+
+    def __init__(self, payload=None, error=None):
+        self._payload = payload
+        self._error = error
+        self.calls = []
+
+    def chat_with_json_mode(self, messages, **kwargs):
+        self.calls.append(messages)
+        if self._error is not None:
+            raise self._error
+        return self._payload
+
+
+def _patch_llm(monkeypatch, fake):
+    """把 build_advice 内部现构造的 LLMProvider 换成替身。"""
+    monkeypatch.setattr("src.llm.provider.LLMProvider", lambda: fake)
+
+
+@pytest.fixture(autouse=True)
+def offline_llm(monkeypatch):
+    """默认让模型不可用，周报走规则降级路径。
+
+    离线套件不发真实请求（见 conftest 的说明）。若不打这个桩，每次
+    build_advice 都会真的打到 provider——测试变慢、依赖余额、还会把
+    用户的 API 额度消耗在断言不了的事情上。需要验证 LLM 路径的用例
+    用 _patch_llm 覆盖本替身即可。
+    """
+    from src.llm.provider import LLMUnavailableError
+
+    class _OfflineLLM:
+        def chat_with_json_mode(self, messages, **kwargs):
+            raise LLMUnavailableError("离线测试：不发起真实请求",
+                                      attempted_models=["offline"],
+                                      errors=["offline"])
+
+    monkeypatch.setattr("src.llm.provider.LLMProvider", lambda: _OfflineLLM())
+
+
 @pytest.fixture
 async def client(monkeypatch, store):
     from app import server
@@ -255,3 +295,71 @@ async def test_apply_rejects_forged_item_ids(client, store):
     assert resp.status_code == 200
     assert resp.json()["applied"] == []
     assert resp.json()["status"] == "advice_dismissed"
+
+
+# ----------------------------------------------------------------------
+# 周报：LLM 增强 + 降级
+# ----------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_advice_carries_llm_report_when_model_available(client, store, monkeypatch):
+    store._logs = [
+        _log("2026-09-16", "深蹲", 80.0, rpe=6.0),
+        _log("2026-09-23", "深蹲", 82.5, rpe=6.0),
+    ]
+    fake = FakeLLM(payload={
+        "headline": "本周完成 2 次训练，深蹲在稳步加重",
+        "highlights": [{"text": "深蹲进步明显", "evidence": "重量 80.0 → 82.5 kg"}],
+        "concerns": [],
+        "next_week": ["深蹲再加 2.5kg"],
+    })
+    _patch_llm(monkeypatch, fake)
+
+    body = (await client.post("/api/training-advice",
+                              json={"athlete_key": "k1"})).json()
+
+    assert body["summary_source"] == "llm"
+    assert body["summary_detail"]["headline"] == "本周完成 2 次训练，深蹲在稳步加重"
+    assert body["summary"] == body["summary_detail"]["headline"]
+    # 规则条目不受 LLM 影响，依然完整
+    assert body["items"]
+    # 数字必须来自注入的事实清单，而不是模型自己算的
+    assert fake.calls, "应当确实调用过模型"
+    sent = fake.calls[0][-1]["content"]
+    assert "80.0" in sent and "82.5" in sent
+
+
+@pytest.mark.anyio
+async def test_advice_falls_back_to_rule_summary_when_llm_unavailable(client, store, monkeypatch):
+    """模型全线不可用时，规则摘要与条目必须照常返回——降级不是错误。"""
+    from src.llm.provider import LLMUnavailableError
+
+    store._logs = [
+        _log("2026-09-16", "深蹲", 80.0, rpe=6.0),
+        _log("2026-09-23", "深蹲", 82.5, rpe=6.0),
+    ]
+    _patch_llm(monkeypatch, FakeLLM(error=LLMUnavailableError(
+        "全部模型失败", attempted_models=["deepseek-chat"], errors=["boom"])))
+
+    resp = await client.post("/api/training-advice", json={"athlete_key": "k1"})
+    body = resp.json()
+
+    assert resp.status_code == 200
+    assert body["summary_source"] == "rule"
+    assert body["summary_detail"] is None
+    assert body["summary"], "降级时仍要有可读摘要"
+    assert body["items"], "规则条目不该受模型可用性影响"
+
+
+@pytest.mark.anyio
+async def test_advice_falls_back_when_report_structure_is_unusable(client, store, monkeypatch):
+    """模型有返回但结构不可用（例如 JSON 解析失败）时同样降级，不放半成品出去。"""
+    store._logs = [_log("2026-09-16", "深蹲", 80.0, rpe=6.0)]
+    _patch_llm(monkeypatch, FakeLLM(payload={"raw": "抱歉，我无法完成这个请求。"}))
+
+    body = (await client.post("/api/training-advice",
+                              json={"athlete_key": "k1"})).json()
+
+    assert body["summary_source"] == "rule"
+    assert body["summary_detail"] is None
+    assert body["summary"]

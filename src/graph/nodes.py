@@ -103,7 +103,8 @@ def check_cache_node(deps, state: dict) -> dict:
     if state.get("session_id"):
         return {"cache_hit": None}
     cached = deps.cache.get(state.get("profile"), state.get("query"))
-    return {"cache_hit": safe_cached_result(cached, expected_goal=state.get("expected_goal"))}
+    return {"cache_hit": safe_cached_result(cached, expected_goal=state.get("expected_goal"),
+                                            profile=state.get("profile") or {})}
 
 
 def deliver_cached_node(deps, state: dict) -> dict:
@@ -124,6 +125,7 @@ def plan_node(deps, state: dict) -> dict:
         conv_context=state.get("conv_context", ""),
         plan_context=state.get("plan_context", ""),
         training_context=state.get("training_context", ""),
+        long_term_context=state.get("long_term_context", ""),
     )
     return {"plan": plan}
 
@@ -175,6 +177,7 @@ def write_node(deps, state: dict) -> dict:
         state.get("retrieved") or {}, profile, plan_config,
         plan_context=state.get("plan_context", ""), user_query=state.get("query", ""),
         training_context=state.get("training_context", ""),
+        long_term_context=state.get("long_term_context", ""),
     ):
         if event == "chunk":
             raw_text += data if isinstance(data, str) else ""
@@ -244,7 +247,8 @@ def finalize_node(deps, state: dict) -> dict:
         raise GoalConsistencyError("训练计划目标与用户目标不一致")
     # 与手写编排器共用同一个构建函数，两后端的解释块因此不会漂移
     result["explain"] = build_explanation(
-        state.get("plan") or {}, state.get("retrieved") or {}, result)
+        state.get("plan") or {}, state.get("retrieved") or {}, result,
+        profile=state.get("profile") or {})
     return {"result": result}
 
 
@@ -316,8 +320,14 @@ def deliver_node(deps, state: dict) -> dict:
     # 前端因 `!== 'safe_delivered'` 直接不渲染：计划有内容，用户却什么都看不到。
     # 这也与最终归一化里新增的 _delivery_allowed 保持同一语义。
     if result.get("requires_review") is not True:
+        # athlete_key 必须传：它是长期记忆的身份键。漏传时 persist_if_safe 退回
+        # make_user_key(profile) 指纹，而 ingest_node 是拿 athlete_key 去读的——
+        # **写和读落在两个键上，用户永远读不回自己刚存的习惯与旧伤**。
+        # 命令式编排一直传着这个参数，所以这不是"两边都错"，是两条后端分叉：
+        # 只有状态图这一侧（也就是前端实际走的那条）的记忆是死的。
         persist_if_safe(deps.cache, deps.conversation, deps.long_term,
-                        profile, query, result, session_id)
+                        profile, query, result, session_id,
+                        athlete_key=state.get("athlete_key"))
         final = dict(result)
         final["delivery_status"] = "safe_delivered"
         return {"final_payload": final}

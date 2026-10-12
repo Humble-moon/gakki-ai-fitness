@@ -35,3 +35,50 @@ def test_planner_prompt_preserves_profile_goal_separately_from_skill():
 
     assert '"requested_goal"' in messages[0]["content"]
     assert "即使安全路由到动作分析，也必须保留" in messages[0]["content"]
+
+
+# ----------------------------------------------------------------------
+# 运动习惯与跨会话画像
+#
+# 习惯此前只落进长期记忆、只进「训练建议」提示词，生成计划的 Writer 一个字
+# 都没用到——用户填了「跑步、瑜伽」，计划里完全看不出来。下面两条锁住它真的
+# 进了生成提示词，而不只是"参数加了"。
+# ----------------------------------------------------------------------
+
+def test_writer_prompt_turns_habits_into_an_explicit_constraint():
+    messages = build_writer_messages(
+        [], {"days_per_week": 4, "habits": ["晨练", "跑步"]}, "增肌"
+    )
+    content = messages[1]["content"]
+
+    assert "运动习惯" in content
+    assert "晨练" in content and "跑步" in content
+    # 约束要出现在最前面的约束区，而不是被淹没在末尾的用户画像 dump 里
+    assert content.index("运动习惯") < content.index("可用动作")
+
+
+def test_writer_prompt_omits_habits_section_when_empty():
+    """没填习惯时不该多出一行空约束——那是噪声，还会稀释真正的安全约束。"""
+    messages = build_writer_messages([], {"days_per_week": 4}, "增肌")
+
+    assert "运动习惯" not in messages[1]["content"]
+
+
+def test_long_term_memory_reaches_both_planner_and_writer():
+    """跨会话画像必须同时进 Planner 和 Writer。
+
+    只读不用的链路此前真实存在过：ingest 把记忆读出来，却只喂给教练开场白，
+    规划与生成两个环节都拿不到。
+    """
+    long_term = "运动习惯：['瑜伽']\n伤病史：['腰突']"
+
+    planner_msgs = build_planner_messages("增肌", {"goal": "增肌"},
+                                          long_term_context=long_term)
+    writer_msgs = build_writer_messages([], {"days_per_week": 4, "goal": "增肌"},
+                                        "增肌", long_term_context=long_term)
+
+    for msgs, who in ((planner_msgs, "Planner"), (writer_msgs, "Writer")):
+        content = msgs[1]["content"]
+        assert "瑜伽" in content and "腰突" in content, f"{who} 没拿到跨会话记忆"
+        # 记忆比本次表单旧，必须交代冲突时以表单为准，否则会拿旧数据覆盖新提交
+        assert "以本次表单为准" in content, f"{who} 缺少新旧冲突的裁决规则"

@@ -119,6 +119,41 @@ def test_review_artifact_carries_rule_engine_findings_and_merged_severity():
     assert "杠铃深蹲" in artifact.issues[0]["issue"]
 
 
+def test_review_payload_strips_internal_markers_but_artifact_keeps_them():
+    """交付给用户的 issue 文案不得带 [规则引擎]/[语义匹配] 来源标记。
+
+    这两个标记是给 classify_hold 分流与日志排查用的，普通用户不知道
+    「规则引擎」是什么。原始数据必须保留标记——剥早了分类就失效。
+    """
+    store = InMemoryReviewArtifactStore()
+    check = safe_check(
+        requires_human_review=True,
+        issues=[],
+        review_reason="规则引擎检测到 1 个伤病-动作冲突",
+        review_severity="danger",
+        review_suggestions=[
+            "[规则引擎] 伤病「腰椎间盘突出」与动作「杠铃深蹲」存在冲突，建议人工审核",
+            "[语义匹配] 你的描述与「膝关节骨关节炎」的常见症状相似",
+        ],
+    )
+    result = pf.finalize_result(valid_plan(), [check], 2)
+    artifact = pf.create_review_artifact(
+        store, {"goal": "增肌", "injuries": ["腰椎间盘突出"]}, "想练硬拉", result)
+    delivered = pf.build_review_pending_payload(result, artifact)
+
+    shown = delivered["review"]["issues"]
+    assert shown, "交付载荷应当带上问题明细"
+    joined = " ".join(i["issue"] for i in shown)
+    assert "[规则引擎]" not in joined
+    assert "[语义匹配]" not in joined
+    # 内容本身不能丢：剥的只是前缀
+    assert "杠铃深蹲" in joined
+
+    # 原始数据保留标记，分类逻辑仍依赖它
+    raw = " ".join(i["issue"] for i in artifact.issues)
+    assert "[规则引擎]" in raw or "[语义匹配]" in raw
+
+
 def test_review_artifact_deduplicates_suggestions_matching_active_issues():
     """LLM 阶段升级审核时，suggestions 与 active issues 同源，不得重复计入。"""
     store = InMemoryReviewArtifactStore()

@@ -54,7 +54,8 @@ class PlannerAgent:
 
     def plan(self, user_input: str, profile: dict,
              conv_context: str = "", plan_context: str = "",
-             training_context: str = "") -> dict:
+             training_context: str = "",
+             long_term_context: str = "") -> dict:
         """LLM 驱动的规划 + 安全闸门校验。
 
         流程:
@@ -67,6 +68,9 @@ class PlannerAgent:
             training_context: str — 训练执行历史与已确认调整。提供给 Planner 是
                 为了让拆解任务时就考虑到实际执行情况（例如某部位长期没练完，
                 不该继续按原量拆解）。
+            long_term_context: str — 跨会话画像记忆（目标/伤病/运动习惯/器械）。
+                此前它被读进状态却只喂给开场白，Planner 拿不到——于是"这个用户
+                之前来过、有什么习惯和旧伤"对拆解没有任何影响。
         """
         skill_descriptions = self.skills.describe_all()
         messages = build_planner_messages(
@@ -75,6 +79,7 @@ class PlannerAgent:
             conv_context=conv_context,
             plan_context=plan_context,
             training_context=training_context,
+            long_term_context=long_term_context,
         )
         plan = self.llm.chat_with_json_mode(messages)
 

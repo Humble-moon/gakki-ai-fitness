@@ -226,3 +226,29 @@ class PlanStore:
             tx.execute("DELETE FROM training_plans WHERE id = :pid AND owner_key = :ok",
                        {"pid": int(plan_id), "ok": (owner_key or "")[:MAX_OWNER_KEY_LEN]})
             return True
+
+    def delete_all(self, owner_key: str) -> int:
+        """删除该身份名下的全部已保存计划，返回删除条数。
+
+        用于「删除我的数据」。计划现在是自动收录的，会随着每次生成持续累积；
+        删除权利若漏掉它，用户点完「删除全部数据」还会看到一屏自己的训练计划
+        ——既不符合承诺，也让"删干净"变成半句空话。
+
+        先数后删，理由同 delete_plan：DELETE 的影响行数在 ``text()`` 查询里
+        拿不到，删完再数只会得到 0，"删成功"与"本来就没有"无法区分。
+        """
+        if not self._ready():
+            return 0
+        owner = (owner_key or "")[:MAX_OWNER_KEY_LEN]
+        if not owner:
+            return 0
+        with self.db.transaction() as tx:
+            row = tx.fetch_one(
+                "SELECT COUNT(*) AS c FROM training_plans WHERE owner_key = :ok",
+                {"ok": owner},
+            )
+            count = int(row.c) if row else 0
+            if count == 0:
+                return 0
+            tx.execute("DELETE FROM training_plans WHERE owner_key = :ok", {"ok": owner})
+            return count

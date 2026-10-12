@@ -71,6 +71,6 @@ def graph_stream_events(runtime, inputs: dict, config: dict):
                     if event[0] == "done":
                         return
     except GoalConsistencyError as exc:
-        yield "error", {"code": exc.code, "message": "训练计划目标校验失败，请重试"}
-    except LLMUnavailableError:
-        yield "error", {"code": "DEPENDENCY_UNAVAILABLE", "message": "演示依赖暂时不可用"}
+        yield "error", {"code": exc.code, "message": "生成结果与目标不符，请重试"}
+    except LLMUnavailableError as exc:
+        yield "error", exc.payload

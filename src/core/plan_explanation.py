@@ -24,16 +24,19 @@ SKILL_LABELS = {
 MAX_MUSCLES_SHOWN = 8
 
 
-def build_explanation(plan_meta: dict, retrieved: dict, result: dict) -> dict:
+def build_explanation(plan_meta: dict, retrieved: dict, result: dict,
+                      profile: dict | None = None) -> dict:
     """构建计划解释块。
 
     输入：
         plan_meta: Planner 的产出（含 skill / subtasks）
         retrieved: Retriever 的产出（含 exercises）
         result: 已终结的计划结果（含 active_issues / resolved_issues / confidence 等）
+        profile: 用户档案（可选）。只用来回答"我填的运动习惯有没有被用上"——
+            这个问题用户明确问过，而它在此之前没有任何可见的答案。
 
     输出：
-        dict — 三段式解释：规划依据 / 动作筛选 / 安全检查。
+        dict — 四段式解释：规划依据 / 动作筛选 / 运动习惯 / 安全检查。
         任何一段数据缺失时该段为空，前端据此隐藏，绝不编造。
 
     为什么读 result 而不是重算 issues：finalize_result 已经算过 active/resolved
@@ -42,8 +45,22 @@ def build_explanation(plan_meta: dict, retrieved: dict, result: dict) -> dict:
     return {
         "skill": _explain_skill(plan_meta),
         "retrieval": _explain_retrieval(retrieved),
+        "habits": _explain_habits(profile),
         "safety": _explain_safety(result),
     }
+
+
+def _explain_habits(profile: dict | None) -> dict:
+    """运动习惯：列出生效的习惯，让"填了到底有没有用"有个可见的答案。
+
+    只做展示，不声称模型已按习惯调整到位——那是提示词和 FactChecker 的职责。
+    这里陈述的是"这些习惯进入了生成输入"，与事实相符，不多说一分。
+    """
+    if not isinstance(profile, dict):
+        return {}
+    habits = [h for h in (profile.get("habits") or [])
+              if isinstance(h, str) and h.strip()]
+    return {"habits": habits} if habits else {}
 
 
 def _explain_skill(plan_meta: dict) -> dict:

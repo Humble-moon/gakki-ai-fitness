@@ -122,9 +122,10 @@ class Orchestrator:
         return cached
 
     @staticmethod
-    def _safe_cached_result(result: dict | None, expected_goal: str | None = None) -> dict | None:
+    def _safe_cached_result(result: dict | None, expected_goal: str | None = None,
+                            profile: dict | None = None) -> dict | None:
         """Accept only cache entries that already passed the final gate and goal contract."""
-        return plan_finalization.safe_cached_result(result, expected_goal)
+        return plan_finalization.safe_cached_result(result, expected_goal, profile)
 
     @staticmethod
     def _check_with_goal_issue(result: dict, check: dict, expected_goal: str) -> dict:
@@ -168,7 +169,8 @@ class Orchestrator:
         """Generate and finalize a training plan synchronously."""
         profile_dict = profile.model_dump()
         expected_goal = validate_requested_goal(profile_dict.get("goal"))
-        cached = self._safe_cached_result(self.cache.get(profile_dict, query), expected_goal=expected_goal)
+        cached = self._safe_cached_result(self.cache.get(profile_dict, query),
+                                              expected_goal=expected_goal, profile=profile_dict)
         if cached:
             logger.info("Cache hit for plan generation")
             return cached
@@ -176,9 +178,15 @@ class Orchestrator:
         # 训练历史上下文：放在缓存判断之后计算，命中缓存时不必白查一次数据库
         training_context = self._training_context(athlete_key)
 
+        # 跨会话画像记忆（目标/伤病/运动习惯/器械）。与流式版共用同一条注入路径
+        # （planner + writer），两条编排路径不会漂移；身份键也必须与写入侧一致。
+        long_term_key = plan_finalization.long_term_user_key(profile_dict, athlete_key)
+        long_term_context = self.long_term.build_context_for_prompt(long_term_key) or ""
+
         # 2. 规划器 —— 如果没有 query，用用户目标构造默认查询
         plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict,
-                                 training_context=training_context)
+                                 training_context=training_context,
+                                 long_term_context=long_term_context)
         provider_degraded = False
 
         # 3. 检索器 —— 根据 Planner 产出的子任务逐条检索动作数据
@@ -197,6 +205,7 @@ class Orchestrator:
         result = self.writer.write_plan(
             retrieved, profile_dict, plan.get("skill_config", {}),
             training_context=training_context,
+            long_term_context=long_term_context,
         )
         result = self._normalize_plan(
             result, profile=profile_dict, plan_config=plan.get("skill_config", {})
@@ -241,7 +250,8 @@ class Orchestrator:
                                        expected_goal=expected_goal)
         if not plan_goal_matches(result, expected_goal):
             raise GoalConsistencyError("训练计划目标与用户目标不一致")
-        result["explain"] = build_explanation(plan, retrieved, result)
+        result["explain"] = build_explanation(
+            plan, retrieved, result, profile=profile_dict)
         self._persist_if_safe(profile_dict, query, result, athlete_key=athlete_key)
         task.complete()
         return self._review_pending_result(profile_dict, query, result,
@@ -266,7 +276,8 @@ class Orchestrator:
         long_term_key = plan_finalization.long_term_user_key(profile_dict, athlete_key)
         long_term_context = self.long_term.build_context_for_prompt(long_term_key)
         if not session_id:
-            cached = self._safe_cached_result(self.cache.get(profile_dict, query), expected_goal=expected_goal)
+            cached = self._safe_cached_result(self.cache.get(profile_dict, query),
+                                              expected_goal=expected_goal, profile=profile_dict)
             if cached:
                 yield ("cache_hit", cached)
                 yield ("done", cached)
@@ -298,7 +309,8 @@ class Orchestrator:
         yield ("stage", "[规划] Planner 正在拆解任务...")
         plan = self.planner.plan(query or f"为{profile.goal}目标生成训练计划", profile_dict,
                                  conv_context=conv_context, plan_context=plan_context,
-                                 training_context=training_context)
+                                 training_context=training_context,
+                                 long_term_context=long_term_context)
         yield ("planner_done", {"skill": plan.get("skill", "unknown"), "subtasks": plan.get("subtasks", [])})
         yield ("stage", "[检索] Retriever 正在检索动作库...")
         retrieved = self.retriever.retrieve(plan)
@@ -311,6 +323,7 @@ class Orchestrator:
             retrieved, profile_dict, plan.get("skill_config", {}),
             plan_context=plan_context, user_query=query,
             training_context=training_context,
+            long_term_context=long_term_context,
         ):
             if event == "chunk":
                 full_text += data
@@ -361,9 +374,10 @@ class Orchestrator:
                                        provider_degraded=provider_degraded,
                                        expected_goal=expected_goal)
         if not plan_goal_matches(result, expected_goal):
-            yield ("error", {"code": GoalConsistencyError.code, "message": "训练计划目标校验失败，请重试"})
+            yield ("error", {"code": GoalConsistencyError.code, "message": "生成结果与目标不符，请重试"})
             return
-        result["explain"] = build_explanation(plan, retrieved, result)
+        result["explain"] = build_explanation(
+            plan, retrieved, result, profile=profile_dict)
         self._persist_if_safe(profile_dict, query, result, session_id=session_id,
                               athlete_key=athlete_key)
         yield ("done", self._review_pending_result(profile_dict, query, result,

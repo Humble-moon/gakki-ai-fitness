@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from src.core.muscle_groups import GROUP_ORDER, OTHER_GROUP, group_of
+
 # ----------------------------------------------------------------------
 # 阈值常量（集中定义，便于调参与测试）
 # ----------------------------------------------------------------------
@@ -87,20 +89,29 @@ def round_to_step(weight: float, step: float = WEIGHT_STEP_KG) -> float:
 # 统计聚合
 # ----------------------------------------------------------------------
 
-def compute_stats(logs: list[dict]) -> dict:
+def compute_stats(logs: list[dict], today: date | None = None) -> dict:
     """把训练日志聚合成分层统计，直接对应前端图表的数据源。
 
     输入：
         logs: TrainingLogStore.get_logs() 的返回（按日期倒序，含 entries）
+        today: 参照日，只用于判定「哪一周还没结束」。默认取系统当天；
+               显式传入是为了让测试不依赖运行时钟。
 
     输出：
         {
           "totals":    {sessions, volume, avg_completion, avg_rpe},
-          "weekly":    [{week_start, sessions, volume, completion, avg_rpe}],
+          "weekly":    [{week_start, sessions, volume, completion, avg_rpe,
+                         has_data, is_partial}],
           "exercises": [{name, sessions, first_weight, last_weight, trend_pct,
                          avg_rpe, completion, series:[{date, weight, est_1rm,
                          volume, rpe, completed}]}]
         }
+
+    weekly 是**连续的周序列**（首次训练 → 本周），不只有数据的周。
+    没有记录的周 has_data=False、数值为 None，前端据此把折线断开——
+    直接按有数据的周连线，会把「连续几周没练」画成一条平滑的下降曲线，
+    和「一直在练但量少了」完全分不出来。本周 is_partial=True：它还没结束，
+    拿它和整周比一定是下降的。
 
     空输入返回结构完整的空壳，而不是 None——让前端渲染逻辑不必到处判空。
     """
@@ -185,7 +196,7 @@ def compute_stats(logs: list[dict]) -> dict:
             "avg_completion": round(completion_hits / entry_count, 4) if entry_count else 0.0,
             "avg_rpe": round(sum(rpe_values) / len(rpe_values), 1) if rpe_values else None,
         },
-        "weekly": [_finalize_week(b) for b in sorted(weekly.values(), key=lambda x: x["week_start"])],
+        "weekly": _fill_weekly_gaps(weekly, today or date.today()),
         "exercises": sorted(
             (_finalize_exercise(e) for e in exercises.values()),
             key=lambda x: x["sessions"], reverse=True,
@@ -203,7 +214,49 @@ def _finalize_week(bucket: dict) -> dict:
         "volume": round(bucket["volume"], 2),
         "completion": round(bucket["_completed"] / n, 4) if n else 0.0,
         "avg_rpe": round(sum(rpes) / len(rpes), 1) if rpes else None,
+        "has_data": True,
     }
+
+
+def _fill_weekly_gaps(weekly: dict[str, dict], today: date) -> list[dict]:
+    """把「只有有数据的周」补成「首次训练 → 本周」的连续周序列。
+
+    终点取 max(最后一次记录的周, 本周) 而不是「最后一次记录的周」：
+    只看有数据的周，等于把「最近三周没练」这件事从图上删掉——
+    只补中间、不补尾巴，最该被看见的那段空白恰好消失了。
+
+    空周的数值一律 None 而不是 0：0 会被画成「这周练了但容量为零」，
+    与「这周没有记录」是两回事，前端靠 has_data 区分。
+    """
+    if not weekly:
+        return []
+
+    current_week = week_start_of(today)
+    ordered = sorted(weekly)
+    first = date.fromisoformat(ordered[0])
+    last = max(date.fromisoformat(ordered[-1]), current_week)
+
+    out: list[dict] = []
+    cursor = first
+    while cursor <= last:
+        key = cursor.isoformat()
+        bucket = weekly.get(key)
+        if bucket is not None:
+            row = _finalize_week(bucket)
+        else:
+            row = {
+                "week_start": key,
+                "sessions": 0,
+                "volume": None,
+                "completion": None,
+                "avg_rpe": None,
+                "has_data": False,
+            }
+        # 本周无论有没有记录都还没结束，不能与整周并列比较
+        row["is_partial"] = cursor == current_week
+        out.append(row)
+        cursor += timedelta(weeks=1)
+    return out
 
 
 def _finalize_exercise(ex: dict) -> dict:
@@ -244,6 +297,213 @@ def _finalize_exercise(ex: dict) -> dict:
             for s in series
         ],
     }
+
+
+# ----------------------------------------------------------------------
+# 肌群分布
+# ----------------------------------------------------------------------
+
+# 复合动作里主肌群与协同肌群的折算系数：卧推 = 1 组胸 + 0.5 组肩 + 0.5 组三头。
+# 不折算的话，一个三肌群动作会同时给三组各记满一组，做复合动作多的肌群
+# （腿、背）被系统性高估，而它们恰恰本来就练得最多——图上会更夸张。
+PRIMARY_MUSCLE_WEIGHT = 1.0
+SECONDARY_MUSCLE_WEIGHT = 0.5
+
+
+def compute_muscle_volume(logs: list[dict],
+                          exercise_muscles: dict | None = None) -> dict:
+    """按粗肌群统计训练组数与容量。
+
+    输入：
+        logs: TrainingLogStore.get_logs() 的返回
+        exercise_muscles: 动作名 → 目标肌群列表（主肌群排第一）。
+                          缺省视为空，所有动作都会被记为"未匹配"。
+
+    输出：
+        {
+          "groups": [{group, sets, volume, exercises, share}],   # 按组数降序
+          "total_sets": float,        # 实际完成的组数（原始，不折算）
+          "unmatched_exercises": [动作名...],   # 动作库查不到、无法归组的
+          "coverage": float,          # 成功归组的原始组数 / total_sets
+        }
+
+    注意 ``share`` 与 ``total_sets`` 是两套分母：协同肌群按 0.5 折算后，
+    各肌群组数之和**大于**实际组数（一个卧推同时贡献胸、肩、三头），
+    所以 share 的分母是"折算后总和"，各组合计恰好 100%；而 total_sets
+    记的是用户真正做了多少组，不参与 share 计算。混用这两个口径会得到
+    大于 100% 的占比。
+
+    主指标是**组数**而不是容量（kg）：自重动作（平板支撑、引体向上）按容量定义
+    weight=0 即 0kg，但它们实实在在练了核心和背。只看 kg 会让这些肌群显示成
+    "没练过"——而这张图存在的意义正是回答"我是不是漏练了哪儿"，这里出错代价最直接。
+    "每周每个肌群多少组"同时也是力量训练里评估训练量的通行口径。
+
+    查不到肌群的动作**不会**被悄悄丢掉，而是进 ``unmatched_exercises`` 并压低
+    ``coverage``：图上少一块却没人知道，比图上标着"有 N 个动作没算进去"更糟。
+    """
+    mapping = exercise_muscles or {}
+    buckets: dict[str, dict] = {
+        g: {"group": g, "sets": 0.0, "volume": 0.0, "exercises": set()}
+        for g in GROUP_ORDER
+    }
+    unmatched: set[str] = set()
+    total_sets = 0.0        # 实际完成的组数，不折算——只作分母基准与展示
+    matched_sets = 0.0      # 其中成功归到肌群的原始组数，用于算覆盖率
+    attributed_sets = 0.0   # 折算后各肌群组数之和（协同肌群算 0.5），用于算占比
+
+    for log in logs:
+        for entry in log.get("entries") or []:
+            name = (entry.get("exercise_name") or "").strip()
+            if not name:
+                continue
+            sets = float(entry.get("sets") or 0)
+            # 明确标为"没做完"的组不算训练量：统计的是实际完成的量
+            if not bool(entry.get("completed", True)):
+                continue
+            if sets <= 0:
+                continue
+
+            muscles = mapping.get(name)
+            # total_sets 先于匹配分支累加：它是"用户实际做了多少组"，
+            # 认不出动作的那几组同样是做了的。放在匹配之后累加会让未匹配的组
+            # 从分母里消失，coverage 恒等于 1——未匹配提示也就形同虚设了。
+            total_sets += sets
+
+            if not muscles:
+                unmatched.add(name)
+                continue
+
+            volume = volume_of(int(sets), int(entry.get("reps") or 0),
+                               float(entry.get("weight") or 0.0))
+            matched_sets += sets
+            for index, muscle in enumerate(muscles):
+                bucket = buckets[group_of(muscle)]
+                weight = (PRIMARY_MUSCLE_WEIGHT if index == 0
+                          else SECONDARY_MUSCLE_WEIGHT)
+                bucket["sets"] += sets * weight
+                bucket["volume"] += volume * weight
+                bucket["exercises"].add(name)
+                attributed_sets += sets * weight
+
+    # 一组都没归出去（没有记录，或动作全都不认识）时返回空：
+    # 这时候画出 7 根 0 长度的条，看起来像"每个肌群都练了 0 组"，
+    # 而实际是"根本没有可判断的数据"。
+    if attributed_sets <= 0:
+        return {
+            "groups": [],
+            "total_sets": round(total_sets, 1),
+            "unmatched_exercises": sorted(unmatched),
+            "coverage": 0.0 if total_sets else 1.0,
+        }
+
+    groups = [
+        {
+            "group": b["group"],
+            "sets": round(b["sets"], 1),
+            "volume": round(b["volume"], 1),
+            "exercises": len(b["exercises"]),
+            "share": round(b["sets"] / attributed_sets, 4),
+        }
+        for b in buckets.values()
+        # 零组的真实肌群照样列出（长度为 0 的条）。"核心这一格是空的"
+        # 正是这张图要回答的问题——把它整条省掉，读的人分不清
+        # 是"没练核心"还是"核心没被统计到"。
+        # "其他"不同：它不是肌群，没数据时列出来只会占位。
+        if b["sets"] > 0 or b["group"] != OTHER_GROUP
+    ]
+    groups.sort(key=lambda g: g["sets"], reverse=True)
+
+    return {
+        "groups": groups,
+        "total_sets": round(total_sets, 1),
+        "unmatched_exercises": sorted(unmatched),
+        # 覆盖率衡量的是"动作有没有被认出来"，与折算系数无关，
+        # 所以用原始组数比原始组数，结果必然落在 [0, 1]
+        "coverage": round(matched_sets / total_sets, 4) if total_sets else 1.0,
+    }
+
+
+# ----------------------------------------------------------------------
+# 个人纪录（PR）
+# ----------------------------------------------------------------------
+
+def compute_records(logs: list[dict]) -> list[dict]:
+    """逐动作统计个人纪录。
+
+    三项分开记，因为它们是三种不同的进步：
+      - best_1rm     估算 1RM：力量水平（重量涨了但次数掉了，看它）
+      - best_weight  单组最重：绝对负重能力
+      - best_volume  单次容量：一次训练的训练量（组数多了也能刷它）
+    只留其中一项都会漏——只记重量会看不见"重量没变但次数涨了"，
+    只记容量会把"加组数"误当成力量进步。
+
+    ``is_recent_pr``：最近一次做这个动作时就刷新了至少一项纪录。
+    这是图上唯一值得标红的信号——"我上次练的时候破了自己的纪录"。
+
+    只统计有重量的动作：自重动作的 est_1rm 恒为 0，拿 0 参与比较会让
+    "最佳纪录 = 0kg"这种没有意义的条目混进榜单（与 trend_pct 同一口径）。
+    """
+    per_exercise: dict[str, dict] = {}
+
+    for log in logs:
+        day = _as_date(log.get("log_date"))
+        if day is None:
+            continue
+        iso = day.isoformat()
+        for entry in log.get("entries") or []:
+            name = (entry.get("exercise_name") or "").strip()
+            weight = float(entry.get("weight") or 0.0)
+            reps = int(entry.get("reps") or 0)
+            sets = int(entry.get("sets") or 0)
+            one_rm = estimate_1rm(weight, reps)
+            if not name or one_rm <= 0 or not bool(entry.get("completed", True)):
+                continue
+
+            rec = per_exercise.setdefault(name, {
+                "name": name, "sessions": set(),
+                "latest_date": iso,
+                "best_1rm": 0.0, "best_1rm_date": None,
+                "best_weight": 0.0, "best_weight_date": None,
+                "best_volume": 0.0, "best_volume_date": None,
+            })
+            rec["sessions"].add(iso)
+            if iso > rec["latest_date"]:
+                rec["latest_date"] = iso
+
+            volume = volume_of(sets, reps, weight)
+            # 用严格大于：同一日期内并存的同值纪录保留最早出现的那个日期，
+            # 否则日期会随遍历顺序漂移，is_recent_pr 也跟着不稳
+            if one_rm > rec["best_1rm"]:
+                rec["best_1rm"], rec["best_1rm_date"] = one_rm, iso
+            if weight > rec["best_weight"]:
+                rec["best_weight"], rec["best_weight_date"] = weight, iso
+            if volume > rec["best_volume"]:
+                rec["best_volume"], rec["best_volume_date"] = volume, iso
+
+    out: list[dict] = []
+    for rec in per_exercise.values():
+        latest = rec["latest_date"]
+        hit = [rec["best_1rm_date"], rec["best_weight_date"], rec["best_volume_date"]]
+        sessions = len(rec["sessions"])
+        out.append({
+            "name": rec["name"],
+            "sessions": sessions,
+            "latest_date": latest,
+            "best_1rm": rec["best_1rm"],
+            "best_1rm_date": rec["best_1rm_date"],
+            "best_weight": rec["best_weight"],
+            "best_weight_date": rec["best_weight_date"],
+            "best_volume": rec["best_volume"],
+            "best_volume_date": rec["best_volume_date"],
+            # 只练过一次的动作，它的"最佳"必然就是那一次——把它标成 PR
+            # 等于新用户每加一个动作就点亮一次，整个标记失去信号量。
+            # 至少要有两次可比较的记录，破纪录才是一件值得说的事。
+            "is_recent_pr": sessions >= 2 and latest in hit,
+        })
+
+    # 先排最近刷新纪录的，再按绝对力量水平
+    out.sort(key=lambda r: (not r["is_recent_pr"], -r["best_1rm"]))
+    return out
 
 
 # ----------------------------------------------------------------------

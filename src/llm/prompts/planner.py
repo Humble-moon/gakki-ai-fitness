@@ -54,7 +54,8 @@ PLANNER_SYSTEM = """你是健身训练计划编排专家。根据用户的身体
 def build_planner_messages(user_input: str, profile: dict,
                           skill_descriptions: str = "",
                           conv_context: str = "", plan_context: str = "",
-                          training_context: str = "") -> list:
+                          training_context: str = "",
+                          long_term_context: str = "") -> list:
     """
     构造发送给 Planner Agent 的消息列表。
 
@@ -65,6 +66,9 @@ def build_planner_messages(user_input: str, profile: dict,
         conv_context: str      - 多轮对话历史上下文（可选）
         plan_context: str      - 上一轮训练计划摘要（可选）
         training_context: str  - 训练执行历史与已确认调整（可选）
+        long_term_context: str - 跨会话画像记忆：用户之前来过时存下的目标/伤病/
+                                 运动习惯/器械（可选）。它比本次表单更旧，因此
+                                 提示里明确交代冲突时以表单为准。
 
     返回值：
         list - OpenAI 格式的 messages 列表
@@ -73,6 +77,9 @@ def build_planner_messages(user_input: str, profile: dict,
     user_msg = f"用户信息：{profile}\n用户请求：{user_input}"
     if conv_context:
         user_msg = f"{conv_context}\n\n{user_msg}"
+    if long_term_context:
+        user_msg += (f"\n\n【跨会话记忆：这个用户之前来过】\n{long_term_context}\n"
+                     "以上是历史记录。与本次表单冲突时，以本次表单为准。")
     if plan_context:
         user_msg += f"\n\n【当前训练计划（用户可能要修改它）】\n{plan_context}"
     if training_context:

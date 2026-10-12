@@ -253,7 +253,7 @@ def test_stream_generation_emits_only_goal_error_after_rewrite_budget():
     events = list(orch.generate_plan_stream(profile, "q"))
     terminals = [(event, data) for event, data in events if event in {"done", "error"}]
 
-    assert terminals == [("error", {"code": "GOAL_CONSISTENCY_FAILED", "message": "训练计划目标校验失败，请重试"})]
+    assert terminals == [("error", {"code": "GOAL_CONSISTENCY_FAILED", "message": "生成结果与目标不符，请重试"})]
     assert persisted == []
 
 

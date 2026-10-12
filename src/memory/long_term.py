@@ -102,6 +102,81 @@ class LongTermMemory:
                 prefs[key_name] = data
         return prefs
 
+    def get_preferences_detailed(self, user_id: int | str) -> dict[str, dict]:
+        """读取全部偏好项并**保留写入时间**，供记忆面板展示新鲜度。
+
+        与 get_preferences() 的分工：后者把存储结构 {"v": ..., "ts": ...}
+        拆成纯值返回，时间戳被丢弃。那种形状被 build_context_for_prompt()
+        等多处依赖，不能为了展示需求去改它——需要时间的调用方用本方法。
+
+        返回值：
+            {key: {"value": <值>, "updated_at": <ISO 字符串或 None>}}
+            兼容旧格式（无 ts 的裸值）时 updated_at 为 None。
+        """
+        pattern = f"{self.prefix}{user_id}:pref:*"
+        detailed: dict[str, dict] = {}
+        for key_bytes in self.redis.conn.scan_iter(match=pattern, count=20):
+            key_str = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
+            key_name = key_str.split(":pref:")[-1]
+            raw = self.redis.get(key_str)
+            if not raw:
+                continue
+            try:
+                data = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(data, dict) and "v" in data:
+                detailed[key_name] = {"value": data["v"], "updated_at": data.get("ts")}
+            else:
+                detailed[key_name] = {"value": data, "updated_at": None}
+        return detailed
+
+    def get_feedback(self, user_id: int | str) -> list[dict]:
+        """读取全部计划反馈（评分 + 评论），按记录时间倒序。
+
+        此前只有 record_feedback 这个写入口、没有读出口——反馈写进去之后
+        除了影响提示词，用户自己看不见。记忆面板需要把它呈现出来。
+        """
+        pattern = f"{self.prefix}{user_id}:feedback:*"
+        records: list[dict] = []
+        for key_bytes in self.redis.conn.scan_iter(match=pattern, count=20):
+            key_str = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
+            raw = self.redis.get(key_str)
+            if not raw:
+                continue
+            try:
+                data = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(data, dict):
+                data["feedback_key"] = key_str.split(":feedback:")[-1]
+                records.append(data)
+        records.sort(key=lambda r: str(r.get("timestamp") or ""), reverse=True)
+        return records
+
+    def delete_preference(self, user_id: int | str, key: str) -> bool:
+        """删除单个偏好项，返回是否真的删掉了一条。
+
+        用于记忆面板的逐条删除：用户看到某条记忆不合适，应该能单独拿掉，
+        而不是只能在「全部保留」和「清空所有」之间二选一。
+
+        key 会被拼进 Redis 键名，因此先做通配符校验。理由同
+        security.session.resolve_owner_key 对游客 key 的强校验——放行 `*`
+        这类字符，一次删除就能波及该身份下的全部记忆。调用方仍应完成身份
+        校验，这里是纵深防御的第二道。
+        """
+        if not key or any(ch in key for ch in "*?[]"):
+            logger.warning("[long_term] 拒绝删除可疑偏好键：%r", key)
+            return False
+        try:
+            # 直接用底层连接取 DEL 的返回条数：RedisClient.delete() 丢弃了
+            # 返回值，无法据此判断到底有没有命中。
+            deleted = self.redis.conn.delete(f"{self.prefix}{user_id}:pref:{key}")
+        except Exception as exc:  # noqa: BLE001 - 删除失败要如实上报，不能假装成功
+            logger.error("[long_term] 删除偏好 %s 失败：%s", key, exc)
+            return False
+        return bool(deleted)
+
     def record_feedback(self, user_id: int, plan_id: str, rating: int, comment: str):
         """
         记录用户对某个训练计划的反馈。

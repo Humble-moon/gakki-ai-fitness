@@ -181,7 +181,7 @@ def _user_payload(user: dict) -> dict:
 def _unavailable() -> HTTPException:
     return HTTPException(status_code=503, detail={
         "error": "STORAGE_UNAVAILABLE",
-        "message": "账号服务暂不可用（数据库未就绪）。游客模式仍可使用。",
+        "message": "账号服务暂不可用（暂时连不上）。游客模式仍可使用。",
     })
 
 

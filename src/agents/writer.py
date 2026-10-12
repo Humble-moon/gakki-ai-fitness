@@ -35,7 +35,8 @@ class WriterAgent:
         self.llm = LLMProvider()
 
     def write_plan(self, retrieved: dict, profile: dict, plan_config: dict,
-                   training_context: str = "") -> dict:
+                   training_context: str = "",
+                   long_term_context: str = "") -> dict:
         """【同步版】根据检索结果和用户画像生成训练计划。
 
         输入：
@@ -43,6 +44,7 @@ class WriterAgent:
             profile: dict — 用户画像字典
             plan_config: dict — Planner 匹配的技能模板配置
             training_context: str — 训练执行历史与已确认调整（可空）
+            long_term_context: str — 跨会话画像记忆：目标/伤病/运动习惯/器械（可空）
         输出：
             dict — 训练计划 JSON（含 "days"/"plan_id"/"user_id" 等字段）
 
@@ -56,6 +58,7 @@ class WriterAgent:
         messages = build_writer_messages(
             retrieved.get("exercises", []), profile, goal,
             training_context=training_context,
+            long_term_context=long_term_context,
         )
         # chat_with_json_mode：在 system prompt 中注入 JSON 格式约束，
         # 并在 API 调用时设置 response_format={"type": "json_object"}
@@ -67,13 +70,15 @@ class WriterAgent:
 
     def write_plan_stream(self, retrieved: dict, profile: dict, plan_config: dict,
                           plan_context: str = "", user_query: str = "",
-                          training_context: str = "") -> Generator:
+                          training_context: str = "",
+                          long_term_context: str = "") -> Generator:
         """【流式版】逐 token 产出训练计划。每次产出 (event_type, data) 元组。
 
         输入：同 write_plan
             plan_context: str — 上一轮计划摘要（多轮对话中用户要修改的计划）
             user_query: str — 用户当前的修改请求
             training_context: str — 训练执行历史与已确认调整（可空）
+            long_term_context: str — 跨会话画像记忆（可空）
         产出（Generator）：
             ("chunk", str) — LLM 生成的文本片段（逐 token）
             ("done", dict) — 解析完成后的训练计划 JSON
@@ -87,6 +92,7 @@ class WriterAgent:
         messages = build_writer_messages(
             retrieved.get("exercises", []), profile, goal,
             training_context=training_context,
+            long_term_context=long_term_context,
         )
         # 多轮对话：注入已有计划上下文，让 LLM 基于原计划做修改而非从零生成
         if plan_context:
@@ -173,6 +179,7 @@ class WriterAgent:
 4. 修正后的计划必须仍然是 {profile.get('days_per_week', original_plan.get('sessions_per_week'))} 天
 5. 输出完整的修正后计划 JSON（不是只输出修改的部分），并保留原计划的 weeks 和 sessions_per_week；未知的 weeks 保持 null，不得猜测
 6. 输出 JSON 的 goal 必须严格等于用户的 canonical goal：{goal}；不得输出其他 goal
+7. 用户平时的运动习惯是 {profile.get('habits') or '无'}，修正后仍要与这些习惯配合
 
 目标：{goal}
 用户画像：{profile}

@@ -70,6 +70,42 @@ _SECRET_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
 )
 
+# 配额耗尽类失败 —— 和「网络抖动」不是一回事：它不会自愈，重试多少次都一样，
+# 只有充值或换 provider 才能恢复。两者混在同一个 DEPENDENCY_UNAVAILABLE 里，
+# 用户看到「暂时不可用」只会反复重试，而正确动作是去充值。
+#
+# 按关键字而不是只看状态码：OpenAI 兼容端点各家表达余额不足的方式不同
+# （DeepSeek 用 402 + Insufficient Balance，DashScope 用 Arrearage，
+# 还有 exceeded your current quota / top up your balance 等文案）。
+_QUOTA_PATTERNS = (
+    re.compile(r"(?i)insufficient\s+(balance|quota|funds|credit)"),
+    re.compile(r"(?i)\b402\b"),
+    re.compile(r"(?i)arrearage|欠费|余额不足"),
+    re.compile(r"(?i)exceeded your current quota"),
+    re.compile(r"(?i)top up your balance"),
+    re.compile(r"(?i)insufficient_quota"),
+)
+
+QUOTA_EXHAUSTED = "quota_exhausted"
+UNAVAILABLE = "unavailable"
+
+# 用户可见文案。放在异常旁边，是因为 server 与 graph/events 两条链路都要用，
+# 分散在两处写会慢慢走样。
+_QUOTA_MESSAGE = "AI 服务额度已用完，暂时无法生成。请充值后重试。"
+_UNAVAILABLE_MESSAGE = "AI 服务暂时不可用，请稍后重试。"
+
+
+def _classify_failure(errors: list[str]) -> str:
+    """把所有模型失败的原因归成一类，供上层给出用户能据此行动的提示。
+
+    只要有任何一次失败是配额耗尽，就按配额耗尽上报——因为链上每个模型都
+    失败了，而配额问题是其中唯一「等一等也不会好」的那种。
+    """
+    joined = " ".join(errors)
+    if any(pattern.search(joined) for pattern in _QUOTA_PATTERNS):
+        return QUOTA_EXHAUSTED
+    return UNAVAILABLE
+
 
 def _error_summary(error: Exception) -> str:
     """Return a single-line, redacted, strictly bounded error summary."""
@@ -186,12 +222,26 @@ class LLMStream(Iterator[str]):
 
 
 class LLMUnavailableError(RuntimeError):
-    """Raised when every configured LLM model fails before producing output."""
+    """Raised when every configured LLM model fails before producing output.
 
-    def __init__(self, message: str, *, attempted_models: list[str], errors: list[str]):
+    reason 区分两类失败，因为用户该做的事完全不同：
+      - QUOTA_EXHAUSTED：额度用完/欠费，不会自愈，要去充值或换 provider
+      - UNAVAILABLE：网络/服务端抖动，等一会儿重试即可
+    """
+
+    def __init__(self, message: str, *, attempted_models: list[str], errors: list[str],
+                 reason: str = UNAVAILABLE):
         super().__init__(message)
         self.attempted_models = attempted_models
         self.errors = errors
+        self.reason = reason
+
+    @property
+    def payload(self) -> dict:
+        """API 层的用户可见载荷。"""
+        if self.reason == QUOTA_EXHAUSTED:
+            return {"code": "LLM_QUOTA_EXHAUSTED", "message": _QUOTA_MESSAGE}
+        return {"code": "DEPENDENCY_UNAVAILABLE", "message": _UNAVAILABLE_MESSAGE}
 
 
 class LLMProvider:
@@ -399,6 +449,7 @@ class LLMProvider:
             "所有配置的 LLM provider 均不可用",
             attempted_models=attempted,
             errors=errors,
+            reason=_classify_failure(errors),
         )
 
     # ------------------------------------------------------------------
@@ -463,6 +514,7 @@ class LLMProvider:
                 "所有配置的 LLM provider 均不可用",
                 attempted_models=metadata.attempted_models,
                 errors=errors,
+                reason=_classify_failure(errors),
             )
 
         return LLMStream(generate(), metadata)

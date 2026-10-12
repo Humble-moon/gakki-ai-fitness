@@ -1,8 +1,12 @@
 """训练统计聚合与规则引擎的纯函数测试（无 IO、无 LLM、无数据库）。"""
 
+from datetime import date
+
 import pytest
 
 from src.core.training_analytics import (
+    compute_muscle_volume,
+    compute_records,
     compute_stats,
     estimate_1rm,
     round_to_step,
@@ -100,7 +104,9 @@ def test_compute_stats_groups_same_week_into_one_bucket():
         _log("2026-09-24", [_entry("卧推", 4, 8, 60.0)]),   # 同周周四
         _log("2026-09-28", [_entry("卧推", 4, 8, 60.0)]),   # 下周一
     ]
-    stats = compute_stats(logs)
+    # 参照日传最后一个有数据的周，否则周序列会一路补到"本周"，
+    # 断言的长度就取决于跑测试的那一天
+    stats = compute_stats(logs, today=date(2026, 9, 28))
     assert len(stats["weekly"]) == 2
     assert stats["weekly"][0]["week_start"] == "2026-09-21"
     assert stats["weekly"][0]["sessions"] == 2
@@ -113,8 +119,64 @@ def test_compute_stats_orders_weekly_buckets_chronologically():
         _log("2026-09-14", [_entry("卧推", 4, 8, 60.0)]),
         _log("2026-09-21", [_entry("卧推", 4, 8, 60.0)]),
     ]
-    weeks = [w["week_start"] for w in compute_stats(logs)["weekly"]]
+    weeks = [w["week_start"] for w in compute_stats(logs, today=date(2026, 9, 28))["weekly"]]
     assert weeks == sorted(weeks)
+
+
+# ----------------------------------------------------------------------
+# 周序列的空缺与未结束周
+#
+# 折线图按数组下标连线，所以"周序列里有什么"直接决定图长什么样：
+# 缺周被跳过 → 连续几周没练被画成平滑下滑；本周被当成整周 → 永远显示暴跌。
+# ----------------------------------------------------------------------
+
+def test_compute_stats_fills_missing_weeks_with_null_and_flag():
+    """中间没记录的周要补成占位项，且数值为 None —— 0 会被读成"练了但容量为零"。"""
+    logs = [
+        _log("2026-09-07", [_entry("卧推", 4, 8, 60.0)]),
+        # 09-14、09-21 两周完全没练
+        _log("2026-09-28", [_entry("卧推", 4, 8, 60.0)]),
+    ]
+    weeks = compute_stats(logs, today=date(2026, 9, 28))["weekly"]
+    assert [w["week_start"] for w in weeks] == [
+        "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28",
+    ]
+    gap = weeks[1]
+    assert gap["has_data"] is False
+    assert gap["volume"] is None
+    assert gap["completion"] is None
+    assert gap["avg_rpe"] is None
+    assert gap["sessions"] == 0
+    assert weeks[0]["has_data"] is True
+
+
+def test_compute_stats_extends_series_to_current_week():
+    """尾部也要补到本周：只补中间不补尾巴，恰好把"最近三周没练"从图上删掉了。"""
+    logs = [_log("2026-09-07", [_entry("卧推", 4, 8, 60.0)])]
+    weeks = compute_stats(logs, today=date(2026, 10, 5))["weekly"]
+    assert [w["week_start"] for w in weeks] == [
+        "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05",
+    ]
+    assert all(w["has_data"] is False for w in weeks[1:])
+
+
+def test_compute_stats_marks_only_current_week_as_partial():
+    """只有包含参照日的那一周算"未结束"，已过去的周都是整周。"""
+    logs = [
+        _log("2026-09-28", [_entry("卧推", 4, 8, 60.0)]),
+        _log("2026-10-05", [_entry("卧推", 4, 8, 60.0)]),
+    ]
+    weeks = compute_stats(logs, today=date(2026, 10, 7))["weekly"]   # 10-05 那周的周三
+    assert [w["is_partial"] for w in weeks] == [False, True]
+
+
+def test_compute_stats_marks_current_week_partial_even_without_records():
+    """本周还没练也要标未结束：留空的当前周同样是"还没练完"，不是"零"。"""
+    logs = [_log("2026-09-28", [_entry("卧推", 4, 8, 60.0)])]
+    weeks = compute_stats(logs, today=date(2026, 10, 7))["weekly"]
+    assert weeks[-1]["week_start"] == "2026-10-05"
+    assert weeks[-1]["has_data"] is False
+    assert weeks[-1]["is_partial"] is True
 
 
 def test_compute_stats_builds_exercise_series_in_chronological_order():
@@ -316,3 +378,197 @@ def test_progress_delta_never_exceeds_declared_cap_for_heavy_loads():
     item = rule_engine(stats)[0]
     assert item["type"] == "progress"
     assert item["delta_pct"] <= 5.0
+
+
+# ----------------------------------------------------------------------
+# 肌群分布
+# ----------------------------------------------------------------------
+
+_MUSCLES = {
+    "杠铃卧推": ["胸大肌", "三角肌前束", "肱三头肌"],
+    "哑铃侧平举": ["三角肌中束"],
+    "平板支撑": ["腹直肌"],          # 自重动作
+    "深蹲": ["股四头肌", "臀大肌"],
+}
+
+
+def test_muscle_volume_weights_primary_higher_than_secondary():
+    """主肌群 1.0、协同肌群 0.5：卧推 4 组 = 4 组胸 + 2 组肩 + 2 组三头。"""
+    logs = [_log("2026-09-21", [_entry("杠铃卧推", 4, 8, 60.0)])]
+    out = compute_muscle_volume(logs, _MUSCLES)
+    by_group = {g["group"]: g["sets"] for g in out["groups"]}
+    assert by_group["胸"] == 4.0
+    assert by_group["肩"] == 2.0
+    assert by_group["手臂"] == 2.0
+
+
+def test_muscle_volume_counts_bodyweight_sets():
+    """自重动作没有容量（kg=0），但组数必须算进去。
+
+    只看容量的话，平板支撑会被算成"核心没练过"——而这张图存在的意义
+    就是回答"我漏练了哪儿"，这里出错代价最直接。
+    """
+    logs = [_log("2026-09-21", [_entry("平板支撑", 3, 60, 0.0)])]
+    out = compute_muscle_volume(logs, _MUSCLES)
+    by_group = {g["group"]: g for g in out["groups"]}
+    assert by_group["核心"]["sets"] == 3.0
+    assert by_group["核心"]["volume"] == 0.0     # 容量确实是 0，不编造
+
+
+def test_muscle_volume_share_sums_to_one():
+    """各肌群占比合计恰好 100%：share 的分母是折算后总和，不是原始组数。"""
+    logs = [
+        _log("2026-09-21", [_entry("杠铃卧推", 4, 8, 60.0)]),
+        _log("2026-09-22", [_entry("深蹲", 4, 8, 80.0)]),
+        _log("2026-09-23", [_entry("哑铃侧平举", 3, 12, 8.0)]),
+    ]
+    out = compute_muscle_volume(logs, _MUSCLES)
+    assert out["total_sets"] == 11.0            # 原始组数，不折算
+    # 容差 1e-3：每组占比各自四舍五入到 4 位小数，累加会有约 1e-4 的偏差
+    assert abs(sum(g["share"] for g in out["groups"]) - 1.0) < 1e-3
+
+
+def test_muscle_volume_reports_unmatched_exercises_instead_of_dropping_them():
+    """动作库查不到的动作要显式报出来，不能悄悄消失。"""
+    logs = [_log("2026-09-21", [
+        _entry("杠铃卧推", 4, 8, 60.0),
+        _entry("某个库里没有的动作", 3, 10, 20.0),
+    ])]
+    out = compute_muscle_volume(logs, _MUSCLES)
+    assert out["unmatched_exercises"] == ["某个库里没有的动作"]
+    assert out["total_sets"] == 7.0
+    assert out["coverage"] == pytest.approx(4 / 7, abs=1e-4)
+
+
+def test_muscle_volume_coverage_is_one_when_everything_matches():
+    logs = [_log("2026-09-21", [_entry("杠铃卧推", 4, 8, 60.0)])]
+    assert compute_muscle_volume(logs, _MUSCLES)["coverage"] == 1.0
+
+
+def test_muscle_volume_skips_incomplete_sets():
+    """明确标为没做完的组不计入训练量。"""
+    logs = [_log("2026-09-21", [_entry("杠铃卧推", 4, 8, 60.0, completed=False)])]
+    out = compute_muscle_volume(logs, _MUSCLES)
+    assert out["groups"] == []
+    assert out["total_sets"] == 0.0
+
+
+def test_muscle_volume_without_mapping_marks_everything_unmatched():
+    """动作库不可用时，动作全进未匹配，而不是画出"什么都没练"的空图。"""
+    logs = [_log("2026-09-21", [_entry("杠铃卧推", 4, 8, 60.0)])]
+    out = compute_muscle_volume(logs, None)
+    assert out["groups"] == []
+    assert out["unmatched_exercises"] == ["杠铃卧推"]
+
+
+def test_muscle_volume_sorted_by_sets_descending():
+    logs = [
+        _log("2026-09-21", [_entry("杠铃卧推", 2, 8, 60.0)]),
+        _log("2026-09-22", [_entry("深蹲", 6, 8, 80.0)]),
+    ]
+    sets = [g["sets"] for g in compute_muscle_volume(logs, _MUSCLES)["groups"]]
+    assert sets == sorted(sets, reverse=True)
+
+
+# ----------------------------------------------------------------------
+# 个人纪录
+# ----------------------------------------------------------------------
+
+def test_records_track_best_1rm_weight_and_volume_separately():
+    """三项纪录分开记：重量涨了次数掉、次数涨了组数掉，各自都能被看见。"""
+    logs = [
+        _log("2026-09-14", [_entry("杠铃卧推", 3, 10, 60.0)]),   # 容量最大
+        _log("2026-09-21", [_entry("杠铃卧推", 5, 5, 70.0)]),    # 最重
+    ]
+    rec = compute_records(logs)[0]
+    # 60*(1+10/30)=80 > 70*(1+5/30)=81.67 → 后者 1RM 更高
+    assert rec["best_1rm"] == 81.67
+    assert rec["best_1rm_date"] == "2026-09-21"
+    assert rec["best_weight"] == 70.0
+    assert rec["best_volume"] == 3 * 10 * 60.0        # 1800 > 5*5*70=1750
+    assert rec["best_volume_date"] == "2026-09-14"
+
+
+def test_records_flag_recent_pr_only_when_latest_session_set_a_record():
+    fresh = [_log("2026-09-14", [_entry("杠铃卧推", 3, 8, 60.0)]),
+             _log("2026-09-21", [_entry("杠铃卧推", 3, 8, 70.0)])]
+    assert compute_records(fresh)[0]["is_recent_pr"] is True
+
+    stale = [_log("2026-09-14", [_entry("杠铃卧推", 3, 8, 70.0)]),
+             _log("2026-09-21", [_entry("杠铃卧推", 3, 8, 60.0)])]
+    assert compute_records(stale)[0]["is_recent_pr"] is False
+
+
+def test_records_exclude_bodyweight_exercises():
+    """自重动作 est_1rm 恒为 0，不该以"最佳 0kg"的形式混进纪录榜。"""
+    logs = [_log("2026-09-21", [_entry("平板支撑", 3, 60, 0.0)])]
+    assert compute_records(logs) == []
+
+
+def test_records_skip_incomplete_entries():
+    logs = [_log("2026-09-21", [_entry("杠铃卧推", 3, 8, 60.0, completed=False)])]
+    assert compute_records(logs) == []
+
+
+def test_records_recent_pr_ranks_first():
+    logs = [
+        # 深蹲更重，但最后一次没有刷新任何纪录
+        _log("2026-09-07", [_entry("深蹲", 3, 5, 100.0)]),
+        _log("2026-09-14", [_entry("深蹲", 3, 5, 90.0)]),
+        # 卧推较轻，但最后一次刷了纪录
+        _log("2026-09-07", [_entry("卧推", 3, 5, 40.0)]),
+        _log("2026-09-14", [_entry("卧推", 3, 5, 45.0)]),
+    ]
+    records = compute_records(logs)
+    assert records[0]["name"] == "卧推"
+    assert records[0]["is_recent_pr"] is True
+    assert records[1]["is_recent_pr"] is False
+
+
+def test_records_do_not_flag_first_ever_session_as_pr():
+    """只练过一次的动作不标 PR：否则新用户每加一个动作就点亮一次。"""
+    logs = [_log("2026-09-14", [_entry("卧推", 3, 5, 60.0)])]
+    rec = compute_records(logs)[0]
+    assert rec["best_1rm"] > 0          # 纪录本身照样记下来
+    assert rec["is_recent_pr"] is False
+
+
+def test_records_do_not_flag_first_ever_session_as_pr():
+    """只练过一次的动作不标 PR：否则新用户每加一个动作就点亮一次。"""
+    logs = [_log("2026-09-14", [_entry("卧推", 3, 5, 60.0)])]
+    rec = compute_records(logs)[0]
+    assert rec["best_1rm"] > 0          # 纪录本身照样记下来
+    assert rec["is_recent_pr"] is False
+
+
+def test_muscle_volume_lists_untrained_groups_as_zero():
+    """没练到的肌群也要出现（0 组长度），否则"没练"和"没统计到"分不出来。
+
+    这张图存在的意义就是回答"我漏练了哪儿"——把零组那一格整个省掉，
+    读的人只能看到一个更短的列表，看不出少了什么。
+    """
+    logs = [_log("2026-09-21", [_entry("杠铃卧推", 4, 8, 60.0)])]
+    out = compute_muscle_volume(logs, _MUSCLES)
+    by_group = {g["group"]: g["sets"] for g in out["groups"]}
+    assert by_group["胸"] == 4.0
+    assert by_group["腿"] == 0.0          # 没练，但要露出来
+    assert by_group["核心"] == 0.0
+    # 有数据的排在前面
+    assert out["groups"][0]["group"] == "胸"
+    assert out["groups"][-1]["sets"] == 0.0
+
+
+def test_muscle_volume_omits_other_group_when_empty():
+    """"其他"不是肌群，没数据时列出来只是占位。"""
+    logs = [_log("2026-09-21", [_entry("杠铃卧推", 4, 8, 60.0)])]
+    groups = [g["group"] for g in compute_muscle_volume(logs, _MUSCLES)["groups"]]
+    assert "其他" not in groups
+
+
+def test_muscle_volume_returns_empty_when_nothing_could_be_attributed():
+    """一组都没归出去时返回空，而不是 7 根零长度的条——那会被读成"全都练了 0 组"。"""
+    logs = [_log("2026-09-21", [_entry("库里没有的动作", 4, 8, 60.0)])]
+    out = compute_muscle_volume(logs, _MUSCLES)
+    assert out["groups"] == []
+    assert out["total_sets"] == 4.0
+    assert out["coverage"] == 0.0

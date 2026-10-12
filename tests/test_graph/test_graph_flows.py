@@ -66,7 +66,7 @@ def make_profile(goal="增肌", injuries=()):
 
 
 def make_runtime(*, plan=None, checks=None, rewrite_out=None, cache_return=None,
-                 planner_raises=False, retrieved=None):
+                 planner_raises=False, retrieved=None, planner_error_reason=None):
     """Build a GraphRuntime with fully faked dependencies."""
     plan = plan if plan is not None else valid_plan()
     checks = list(checks) if checks else [safe_check()]
@@ -84,19 +84,25 @@ def make_runtime(*, plan=None, checks=None, rewrite_out=None, cache_return=None,
         return checks_queue.pop(0) if checks_queue else fallback_check
 
     if planner_raises:
+        # planner_error_reason 决定模拟哪一类失败：欠费（quota_exhausted）还是
+        # 网络抖动（默认）。两者对用户的含义不同，见 provider._classify_failure。
+        from src.llm.provider import UNAVAILABLE
+        reason = planner_error_reason or UNAVAILABLE
+
         def plan_fn(*args, **kwargs):
             raise LLMUnavailableError("all models down",
-                                      attempted_models=["m"], errors=["down"])
+                                      attempted_models=["m"], errors=["down"],
+                                      reason=reason)
     else:
         def plan_fn(user_input, prof, conv_context="", plan_context="",
-                    training_context=""):
+                    training_context="", long_term_context=""):
             return planner_out
 
     planner = SimpleNamespace(plan=plan_fn)
     retriever = SimpleNamespace(retrieve=lambda p, route=None: retrieved)
 
     def write_plan_stream(retr, prof, plan_config, plan_context="", user_query="",
-                          training_context=""):
+                          training_context="", long_term_context=""):
         yield ("chunk", "生成中")
         yield ("done", copy.deepcopy(plan))
 
@@ -155,6 +161,32 @@ def test_happy_path_delivers_safe_and_persists():
     # persisted to semantic cache + long-term memory
     assert "set" in runtime.deps.cache.names()
     assert runtime.deps.long_term.names().count("save_preference") == 3
+
+
+def test_long_term_memory_is_written_under_the_key_it_is_read_with():
+    """画像落盘必须用 athlete_key——它正是 ingest 读回记忆时用的身份键。
+
+    这里曾经漏传 athlete_key，于是 persist_if_safe 退回 make_user_key(profile)
+    这个身高体重指纹，而 ingest_node 是拿 athlete_key 去读的。**写一个键、
+    读另一个键，用户永远读不回自己刚存的运动习惯与旧伤**，而且不会报任何错。
+
+    命令式编排一直传着这个参数，所以这不是"两边都错"，是两条后端分叉——
+    受影响的是状态图这一侧，也就是前端实际走的那条。
+    """
+    runtime = make_runtime()
+    thread_id = runtime.new_thread_id()
+    config = runtime.config_for(thread_id)
+    inputs = build_inputs(make_profile(), query="帮我设计计划",
+                          thread_id=thread_id, athlete_key="athlete-42")
+    runtime.graph.invoke(inputs, config)
+
+    writes = [args for name, args, _ in runtime.deps.long_term.calls
+              if name == "save_preference"]
+    assert writes, "画像根本没有落盘"
+    assert {args[0] for args in writes} == {"athlete-42"}, (
+        "画像写在了 profile 指纹下，而读侧用的是 athlete_key——"
+        "写入身份键与读取身份键不一致，跨会话记忆等于没写"
+    )
 
 
 def test_cache_hit_short_circuits_pipeline():

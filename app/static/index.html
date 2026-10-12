@@ -14,57 +14,130 @@
   异步化之后首屏立刻用系统字体渲染，字体到位再替换——字体栈本身有
   sans-serif/monospace 兜底，加载失败只是视觉降级，不影响功能。
 -->
-<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;">
-<noscript><link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"></noscript>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet"></noscript>
+<script>
+/* 首帧状态判定：本机有放行标记（游客或上次登录）就直接显示应用。
+
+   必须内联在这里、在 head 里同步执行——挪到页面底部的主脚本就晚了：
+   那时登录页已经画出来了，游客刷新时会看到它闪一下再消失。
+   （会话 cookie 是 HttpOnly，读不到，所以这里只依据本机标记；
+   真正的登录态仍由 /api/auth/session 回来之后纠正。）
+
+   读不到 localStorage（隐私模式/被禁用）时当作没有标记，停在登录页——
+   功能不受影响，只是多一次点击。 */
+(function () {
+  try {
+    var passed = localStorage.getItem('ironmind_guest_pass') === '1'
+              || localStorage.getItem('ironmind_auth_hint') === '1';
+    if (passed) document.documentElement.classList.add('auth-passed');
+  } catch (e) { /* 停登录页即可 */ }
+})();
+</script>
 <style>
 /* ============================================================
-   IRON MIND — Industrial Forge Aesthetic v3
-   氛围：深锻炉 + 胶片噪点 + 悬浮火星粒子 + 金属拉丝质感
+   IRON MIND — Light Aesthetic v4
+   氛围：近白底 + 大留白 + 克制的一点橙
+   （v3 的深锻炉底盘、胶片噪点、火星粒子、暗角光晕已随浅色化移除）
    ============================================================ */
 :root {
-  --bg-deep: #090d12;
-  --bg-panel: #111820;
-  --bg-elevated: #17212b;
-  --border: #263340;
-  --accent-orange: #f2764a;
-  --accent-orange-soft: #d98a6b;
-  --status-safe: #6fa88b;
-  --text-primary: #e9e6df;
-  --text-secondary: #9ba7b2;
-  --text-muted: #68727b;
-  --focus-ring: #ffc2a9;
+  /* ── 配色（2026-10-12 深色整体转浅色）────────────────────────────
+     背景从蓝黑 #090d12 换成近白，整站由「工业锻炉」转为苹果式浅色。
+     深浅转换不是把色值反相就行，下面三件事必须一起做，缺一件就出问题：
+
+     1) 强调色要拆成「填充」和「文字」两支。深色底上 #f2764a 既是按钮底色
+        又是文字色，两种用法都够亮；放到白底后它当文字只剩 2.81:1，远低于
+        WCAG AA 的 4.5。所以 --accent-orange 只负责填充（配深色字），另设
+        --accent-ink 专供文字，实测 5.18:1。青绿／琥珀／红直接取深一档的值，
+        两种用法都过线，不必再拆。
+     2) 深色专有的提亮手法全部失效：rgba(255,255,255,.0xx) 的白色叠加在白底
+        上等于没写；发光（glow）在浅底上会糊成脏边。这两类改成深色低透明度
+        叠加或直接移除。
+     3) 卡片从「比底色亮」变成「比底色白」，只靠明度差已经分不开（卡片底与
+        页面底仅差 1.09），必须靠 1px 细边框拉开——这是浅色主题的通用做法。
+
+     改动后实测（白卡片底）：正文 16.83 / 次级 9.12 / 弱化 5.07，强调文字 5.18，
+     全部通过 WCAG AA。改配色前请用同样的尺子复测，别凭眼睛调。 */
+  --bg-deep: #f5f5f7;
+  --bg-panel: #fbfbfd;
+  --bg-elevated: #ffffff;
+  --border: #e3e3e8;
+  --accent-orange: #ff6b35;
+  --accent-ink: #c2410c;
+  --status-safe: #0f766e;
+  --text-primary: #1d1d1f;
+  --text-secondary: #48484a;
+  --text-muted: #6e6e73;
+  --focus-ring: #ff6b35;
 
   --bg-card: var(--bg-elevated);
-  --bg-card-hover: #1d2a35;
+  --bg-card-hover: #f0f0f2;
   --steel: var(--border);
-  --steel-light: #3a4b59;
+  --steel-light: #d2d2d7;
   /* --accent 被 9 处引用却一直没定义：var() 取不到值时整条声明在计算期失效，
      颜色静默回退成继承值（那些按钮/链接本来该是橙色，实际显示成普通正文色）。
-     这里补上别名，与 --forge-amber 指向同一个值。 */
-  --accent: var(--accent-orange);
+     这里补上别名。它被当作文字色与描边使用，所以指向 --accent-ink（深的那支），
+     而不是填充用的 --accent-orange。 */
+  --accent: var(--accent-ink);
   --forge-amber: var(--accent-orange);
-  --forge-amber-dim: rgba(242,118,74,0.16);
-  --forge-amber-glow: rgba(242,118,74,0.30);
-  --forge-ember: var(--accent-orange-soft);
+  /* 铺底、光晕、渐变用的低透明度色没法从 hex 变量里拼出 rgba，
+     所以把分量单独存一份。改上面那些色时，这几行必须同步改。 */
+  --accent-rgb: 255,107,53;
+  --safe-rgb: 15,118,110;
+  --warn-rgb: 180,83,9;
+  --border-rgb: 227,227,232;
+  --chalk-rgb: 29,29,31;
+  --elevated-rgb: 255,255,255;
+  /* 承载白字的实心橙（主按钮、选中的标签）。
+     它和 --accent-orange 是两种角色：亮橙只配深色字（5.94），深橙才配白字（4.81）。 */
+  --accent-strong: #cf3f08;
+  /* 按钮/选中标签上的文字色。改成白字后橙底必须同时加深，两者是配套的：
+     白字压在原来的亮橙 #ff6b35 上只有 2.84:1，连大字门槛 3.0 都不到；
+     压在加深后的 #cf3f08 上是 4.81:1，通过 AA。只改其中一个就会破线。 */
+  --on-accent: #ffffff;
+  --forge-amber-dim: rgba(var(--accent-rgb),0.14);
+  --forge-amber-glow: rgba(var(--accent-rgb),0.22);
+  /* 主按钮 hover 用。浅底上 hover 要「压深」而不是「提亮」，而且必须比
+     --accent-strong 更深——否则白字对比会掉到线下（#b03a0a 对白字 6.08）。 */
+  --forge-ember: #b03a0a;
   --cool-blue: var(--status-safe);
-  --cool-blue-dim: rgba(111,168,139,0.15);
-  --cool-blue-glow: rgba(111,168,139,0.24);
-  --danger: #d96c68;
-  --warn: #d8a05f;
+  --cool-blue-dim: rgba(var(--safe-rgb),0.15);
+  /* 「同色相深字压在同色相浅底」这个组合要单独一支更淡的底：
+     0.15 的底会把青绿字压到 4.43、橙字压到 4.48，都差一点过不了 WCAG AA。
+     0.12 实测青绿 4.63 / 橙 4.57。这两支只用来做底，不要拿去当描边或聚焦环
+     （当描边会太淡看不清），那些继续用 --cool-blue-dim / --forge-amber-dim。 */
+  /* 「同色相深字压在同色相浅底」这个组合，用普通那支强调色会差一点过不了 AA：
+     青绿压在青绿浅底上只有 4.10、橙压橙浅底只有 4.30。根因是它们并不压在纯白上，
+     而是压在页面灰 / 面板底上，底更暗、对比被拉低。因此这两支专供「浅色底上的
+     同色相文字」，比 --accent-ink / --status-safe 再深一档；实测 6.07 / 5.68，
+     对页面底变暗也有余量。不是浅底场景就仍用原来那两支。 */
+  --accent-ink-strong: #9a3412;
+  --safe-ink-strong:   #115e59;
+  --cool-blue-glow: rgba(var(--safe-rgb),0.24);
+  --danger: #c0392b;
+  --danger-rgb: 192,57,43;
+  --warn: #b45309;
   --chalk: var(--text-primary);
   --chalk-dim: var(--text-secondary);
   --chalk-faint: var(--text-muted);
-  --font-heading: 'Rajdhani', sans-serif;
-  --font-body:    'Noto Sans SC', sans-serif;
-  --font-mono:    'Share Tech Mono', monospace;
+  /* 字体换成系统栈。原来的 Rajdhani（工业窄体）+ Syncopate（超宽大写）
+     + Share Tech Mono 是"硬核科技感"的来源，和苹果式浅色不搭；
+     顺带修掉 --font-logo 一直没定义的问题（.logo 之前实际在用继承字体渲染）。 */
+  --font-logo:    -apple-system, 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', sans-serif;
+  --font-heading: -apple-system, 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', sans-serif;
+  --font-body:    -apple-system, 'PingFang SC', 'Noto Sans SC', 'Helvetica Neue', sans-serif;
+  --font-mono:    ui-monospace, 'SF Mono', 'Menlo', 'Consolas', monospace;
 
   --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-smooth:  cubic-bezier(0.4, 0, 0.2, 1);
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 16px;
+  /* 圆角比原来大：苹果式浅色的柔和感很大一部分来自圆角，
+     原来的 4px 是工业直角风。 */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
 }
 
 [hidden] { display: none !important; }
@@ -81,71 +154,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Ambient Background: Forge Atmosphere ── */
-/* Three layers of controlled light — fills the "empty" right side with purpose */
-body::before {
-  content: '';
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    /* Deep forge glow: bottom-left — the furnace */
-    radial-gradient(ellipse 90% 70% at 15% 85%, rgba(255,107,53,0.05) 0%, transparent 55%),
-    /* Cool steel bloom: top-right — fills the right-side dead space */
-    radial-gradient(ellipse 50% 70% at 80% 20%, rgba(0,201,160,0.04) 0%, transparent 60%),
-    /* Warm ember haze: center-right — bridges the gap */
-    radial-gradient(ellipse 40% 50% at 70% 50%, rgba(255,140,90,0.02) 0%, transparent 65%),
-    /* Deep void fill */
-    radial-gradient(ellipse 60% 60% at 50% 50%, rgba(120,120,160,0.015) 0%, transparent 70%);
-}
-
-/* Film-grain overlay — organic texture over the clean grid */
-body::after {
-  content: '';
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-  opacity: 0.45;
-  mask-image: radial-gradient(ellipse 60% 70% at 50% 40%, black 50%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 60% 70% at 50% 40%, black 50%, transparent 100%);
-}
-
-/* Floating ember particles — the forge is alive */
-.ember-particles {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-}
-.ember {
-  position: absolute;
-  width: 2px; height: 2px;
-  background: var(--forge-amber);
-  border-radius: 50%;
-  opacity: 0;
-  animation: emberFloat 5s ease-in infinite;
-  box-shadow: 0 0 4px var(--forge-amber-glow);
-}
-.ember:nth-child(1)  { left: 15%; top: 70%; animation-delay: 0s; animation-duration: 5s; }
-.ember:nth-child(2)  { left: 25%; top: 80%; animation-delay: 1.2s; animation-duration: 6s; width: 1.5px; height: 1.5px; }
-.ember:nth-child(3)  { left: 20%; top: 75%; animation-delay: 2.5s; animation-duration: 4.5s; }
-.ember:nth-child(4)  { left: 12%; top: 85%; animation-delay: 3.8s; animation-duration: 5.5s; width: 2.5px; height: 2.5px; }
-.ember:nth-child(5)  { left: 30%; top: 72%; animation-delay: 0.6s; animation-duration: 6.5s; width: 1px; height: 1px; background: var(--forge-ember); }
-.ember:nth-child(6)  { left: 18%; top: 78%; animation-delay: 1.8s; animation-duration: 4.8s; }
-.ember:nth-child(7)  { left: 22%; top: 82%; animation-delay: 2.2s; animation-duration: 5.2s; width: 1.8px; height: 1.8px; background: var(--forge-ember); }
-.ember:nth-child(8)  { left: 8%;  top: 74%; animation-delay: 3s; animation-duration: 7s; }
-.ember:nth-child(9)  { left: 28%; top: 76%; animation-delay: 4s; animation-duration: 4.2s; width: 1.2px; height: 1.2px; }
-.ember:nth-child(10) { left: 16%; top: 88%; animation-delay: 0.4s; animation-duration: 5.8s; }
-
-@keyframes emberFloat {
-  0%   { opacity: 0; transform: translateY(0) translateX(0) scale(1); }
-  20%  { opacity: 0.7; }
-  50%  { opacity: 0.4; transform: translateY(-60px) translateX(8px) scale(0.6); }
-  80%  { opacity: 0.1; }
-  100% { opacity: 0; transform: translateY(-120px) translateX(-4px) scale(0.2); }
-}
-
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--steel-light); }
+::-webkit-scrollbar-thumb { background: #c7c7cc; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #aeaeb2; }
 
-::selection { background: rgba(255,107,53,0.25); color: var(--chalk); }
+::selection { background: rgba(var(--accent-rgb),0.25); color: var(--chalk); }
 
 /* ── Layout ── */
 .app {
@@ -159,36 +174,33 @@ body::after {
 .sidebar {
   background: var(--bg-panel);
   border-right: 1px solid var(--steel);
-  padding: 36px 32px;
+  /* 纵向内边距 36→26、块间距 22→17：侧栏内容比常见视口高约 90px，
+     收紧之后「生成计划」不再被折叠线切掉——它是主行动，被切一半看起来
+     像页面没加载完。横向不动，留白是这一栏的呼吸感来源。 */
+  padding: 26px 32px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  position: relative;
+  gap: 17px;
+  /* 侧栏内容比视口高（7 个档案字段就 500px），所以它必须自己滚。
+     置成视口高度 + sticky 之后，页面滚动时侧栏留在原地、内部独立滚动，
+     底部账号区才能吸住底边常驻——这是应用外壳里账号区的常规位置。
+     不做这一步的话 sticky 会认 .sidebar 这个 overflow 容器为参照，
+     而它当时并不滚动，吸底就是个哑操作（实测过：属性写了但没生效）。 */
+  position: sticky;
+  top: 0;
+  height: 100vh;
   overflow-y: auto;
 }
 
-/* Sidebar top accent line */
+/* Sidebar top accent line。
+   原来是橙->青绿的横向渐变，浅底上中间段会褪成发浑的灰绿；
+   浅色主题里一条纯色细线更干净，也符合「只留一点橙」。 */
 .sidebar::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--forge-amber), var(--cool-blue));
-}
-
-/* Sidebar bottom glow — breathing forge pulse */
-.sidebar::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 200px;
-  background: linear-gradient(to top, var(--forge-amber-dim), transparent);
-  pointer-events: none;
-  animation: forgeBreathe 4s ease-in-out infinite;
-}
-@keyframes forgeBreathe {
-  0%, 100% { opacity: 0.6; }
-  50%      { opacity: 1; }
+  background: var(--accent-orange);
 }
 
 .logo-block {
@@ -197,19 +209,19 @@ body::after {
 
 .logo {
   font-family: var(--font-logo);
-  font-size: 38px;
+  font-size: 34px;
   font-weight: 700;
-  letter-spacing: 6px;
+  letter-spacing: 0.5px;
   line-height: 1;
   color: var(--chalk);
   text-transform: uppercase;
 }
 
-.logo-accent { color: var(--forge-amber); }
+.logo-accent { color: var(--accent-ink); }
 
 .logo-sub {
   font-size: 10px;
-  letter-spacing: 8px;
+  letter-spacing: 2px;
   color: var(--chalk-dim);
   font-family: var(--font-mono);
   text-transform: uppercase;
@@ -220,7 +232,7 @@ body::after {
 .field-group {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 .field-group .field {
   animation: fadeSlideIn 0.5s var(--ease-out) both;
@@ -234,7 +246,7 @@ body::after {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 /* 字段标签原来是 9px + 最暗的灰（--chalk-faint），在暗底上基本读不出来；
@@ -244,7 +256,7 @@ body::after {
 .field label {
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 2.5px;
+  letter-spacing: 1.0px;
   color: var(--chalk-dim);
   font-family: var(--font-mono);
   font-weight: 400;
@@ -254,7 +266,7 @@ body::after {
   background: var(--bg-deep);
   border: 1px solid var(--steel-light);
   color: var(--chalk);
-  padding: 10px 14px;
+  padding: 9px 14px;
   border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-size: 13px;
@@ -264,11 +276,8 @@ body::after {
 
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none;
-  border-color: var(--forge-amber);
-  box-shadow:
-    inset 0 2px 4px rgba(0,0,0,0.3),
-    0 0 0 3px var(--forge-amber-dim),
-    0 0 16px var(--forge-amber-dim);
+  border-color: var(--accent-ink);
+  box-shadow: 0 0 0 3px var(--forge-amber-dim);
 }
 
 .field input::placeholder { color: var(--chalk-faint); }
@@ -297,29 +306,28 @@ body::after {
 }
 
 .tag:hover {
-  border-color: var(--forge-amber);
+  border-color: var(--accent-ink);
   color: var(--chalk);
   background: var(--forge-amber-dim);
 }
 
 .tag.active {
-  background: var(--forge-amber);
-  border-color: var(--forge-amber);
-  color: #fff;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--on-accent);
   font-weight: 500;
-  box-shadow: 0 0 16px var(--forge-amber-glow);
 }
 
 /* ── Generate Button ── */
 .btn-generate {
-  background: var(--forge-amber);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--on-accent);
   border: none;
   padding: 16px 32px;
   font-family: var(--font-heading);
   font-size: 18px;
   font-weight: 700;
-  letter-spacing: 3px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: all 0.25s var(--ease-out);
@@ -327,6 +335,12 @@ body::after {
   position: relative;
   overflow: hidden;
   width: 100%;
+  /* 侧栏是「定高 + overflow:auto」的纵向 flex 容器。内容一旦超出视口，
+     flex 项默认会被压缩；而这个按钮带 overflow:hidden（那道扫光要裁剪），
+     自动最小尺寸因此失效、可以被一路压到 0——实测 57px 高塌成 32px，
+     内边距还是 16+16，于是文字被裁掉，主行动看起来像"被挡住了"。
+     它永远不该被压：宁可让侧栏滚，也不能让「生成计划」变矮。 */
+  flex-shrink: 0;
 }
 
 .btn-generate::before {
@@ -342,7 +356,7 @@ body::after {
 
 .btn-generate:hover {
   background: var(--forge-ember);
-  box-shadow: 0 0 48px var(--forge-amber-glow), 0 0 0 4px var(--forge-amber-dim), 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: 0 0 0 4px var(--forge-amber-dim), 0 8px 22px rgba(0,0,0,0.12);
   transform: translateY(-2px);
 }
 
@@ -372,7 +386,7 @@ body::after {
   padding: 8px 16px;
   font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: all 0.2s var(--ease-out);
@@ -380,8 +394,8 @@ body::after {
 }
 
 .btn-secondary:hover {
-  border-color: var(--forge-amber);
-  color: var(--forge-amber);
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
   background: var(--forge-amber-dim);
 }
 
@@ -395,7 +409,7 @@ body::after {
   padding: 8px 16px;
   font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: all 0.2s var(--ease-out);
@@ -415,21 +429,6 @@ body::after {
   overflow-y: auto;
   position: relative;
 }
-/* Forge-edge: subtle warm bleed where sidebar meets main */
-.main::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; bottom: 0;
-  width: 1px;
-  background: linear-gradient(180deg,
-    transparent 0%,
-    var(--forge-amber-glow) 15%,
-    var(--forge-amber-dim) 50%,
-    var(--cool-blue-dim) 85%,
-    transparent 100%);
-  z-index: 2;
-}
-
 /* Two-column plan layout on wide screens */
 @media (min-width: 1400px) {
   .main { padding: 40px 64px; }
@@ -449,13 +448,12 @@ body::after {
 .splash .big-icon {
   font-size: 64px;
   margin-bottom: 8px;
-  filter: grayscale(0.4);
-  opacity: 0.6;
+  opacity: 1;
 }
 .splash h3 {
   font-family: var(--font-heading);
   font-size: 18px;
-  letter-spacing: 3px;
+  letter-spacing: 0.4px;
   color: var(--chalk);
   text-transform: uppercase;
 }
@@ -508,7 +506,7 @@ body::after {
 }
 .plan-day-column:hover {
   border-color: var(--steel-light);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
   transform: translateY(-2px);
 }
 .plan-day-column:hover::before { opacity: 1; }
@@ -520,7 +518,9 @@ body::after {
   font-family: var(--font-heading);
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: 2px;
+  /* 字距从 2px 收到 0.3px：字体换到 SF Pro 后比原来的窄体 Rajdhani 宽不少，
+     2px 的字距会把长标题顶到换行。 */
+  letter-spacing: 0.3px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -528,32 +528,11 @@ body::after {
   position: relative;
   overflow: hidden;
 }
-/* Corner rivet accents */
-.plan-day-header::before {
-  content: '';
-  position: absolute;
-  top: 8px; right: 12px;
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--forge-amber);
-  opacity: 0.12;
-  box-shadow: 26px 0 0 var(--cool-blue), 26px 26px 0 var(--forge-amber), 0 26px 0 var(--cool-blue);
-}
-/* Metallic brush texture on header */
-.plan-day-header::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    90deg,
-    transparent,
-    transparent 2px,
-    rgba(255,255,255,0.01) 2px,
-    rgba(255,255,255,0.01) 4px
-  );
-  pointer-events: none;
-}
-
+/* 标题让位、计数不折断。不加这两条时，长标题会把右上角的动作计数
+   挤成两行（"6" / "EX"），看起来像坏了。 */
+.plan-day-title { flex: 1 1 auto; min-width: 0; }
+.plan-day-count { flex: 0 0 auto; white-space: nowrap; padding-left: 12px;
+  font-size: 12px; letter-spacing: .06em; color: var(--text-muted); }
 .plan-day-body {
   --plan-columns: minmax(0, 2.4fr) minmax(56px, .7fr) minmax(72px, .9fr) minmax(92px, 1.1fr);
   padding: 14px 20px;
@@ -574,7 +553,7 @@ body::after {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1.2px;
+  letter-spacing: 0.2px;
   text-transform: uppercase;
 }
 
@@ -598,7 +577,7 @@ body::after {
   transition: background 0.15s;
 }
 .plan-ex-row:last-child { border-bottom: none; }
-.plan-ex-row:hover { background: rgba(255,107,53,0.03); }
+.plan-ex-row:hover { background: rgba(var(--accent-rgb),0.03); }
 .plan-ex-name { font-weight: 600; color: var(--chalk); }
 .plan-ex-sets { font-family: var(--font-mono); color: var(--cool-blue); }
 .plan-ex-reps { font-family: var(--font-mono); color: var(--chalk-dim); }
@@ -656,7 +635,7 @@ body::after {
   font-family: var(--font-heading);
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: 2px;
+  letter-spacing: 0.3px;
   cursor: pointer;
   transition: background 0.25s var(--ease-out), color 0.25s var(--ease-out), border-color 0.25s var(--ease-out);
   text-transform: uppercase;
@@ -673,15 +652,15 @@ body::after {
 }
 
 .tab-btn:hover {
-  background: rgba(233,230,223,0.05);
+  background: rgba(var(--chalk-rgb),0.05);
   color: var(--chalk);
 }
 .tab-btn:hover .tab-icon { opacity: 1; }
 
 .tab-btn.active {
   background: var(--forge-amber-dim);
-  border-color: rgba(242,118,74,0.42);
-  color: var(--forge-amber);
+  border-color: rgba(var(--accent-rgb),0.42);
+  color: var(--accent-ink-strong);
 }
 .tab-btn.active .tab-icon { opacity: 1; }
 
@@ -710,14 +689,13 @@ body::after {
   display: flex; align-items: center; justify-content: center;
   font-size: 18px;
   background: var(--bg-card);
-  box-shadow: 0 0 12px var(--cool-blue-dim);
 }
 
 .section-header h2 {
   font-family: var(--font-heading);
   font-size: 22px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
   color: var(--chalk);
 }
@@ -728,7 +706,7 @@ body::after {
    改成正式字段：左标题、右「选填」提示、下方输入区。 */
 .query-field { display: flex; flex-direction: column; gap: 9px; }
 .query-field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.query-field-label { display: block; font-family: var(--font-heading); font-size: 15px; font-weight: 600; letter-spacing: 1px; color: var(--text-primary); }
+.query-field-label { display: block; font-family: var(--font-heading); font-size: 15px; font-weight: 600; letter-spacing: 0.2px; color: var(--text-primary); }
 .query-field-hint { color: var(--text-muted); font-size: 12px; }
 /* 窄屏下标题和提示并排会互相挤，改为上下排列 */
 @media (max-width: 600px) {
@@ -752,7 +730,7 @@ body::after {
 
 .query-input:focus {
   outline: none;
-  border-color: var(--forge-amber);
+  border-color: var(--accent-ink);
   box-shadow: 0 0 0 3px var(--forge-amber-dim);
 }
 
@@ -795,7 +773,7 @@ body::after {
 
 /* ── Advice Bubble ── */
 .advice-bubble {
-  background: linear-gradient(135deg, rgba(255,107,53,0.06), rgba(0,201,160,0.03));
+  background: linear-gradient(135deg, rgba(var(--accent-rgb),0.06), rgba(var(--safe-rgb),0.03));
   border-left: 3px solid var(--forge-amber);
   padding: 20px 24px;
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
@@ -838,17 +816,17 @@ body::after {
   gap: 8px 16px;
   margin: 14px 0 18px;
   padding: 12px 14px;
-  border: 1px solid rgba(0, 201, 160, .22);
+  border: 1px solid rgba(var(--safe-rgb), .22);
   border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, rgba(0,201,160,.08), rgba(255,107,53,.04));
+  background: linear-gradient(90deg, rgba(var(--safe-rgb),.08), rgba(var(--accent-rgb),.04));
   color: var(--chalk-dim);
   font-size: 12px;
 }
 .qa-coach-context strong { color: var(--chalk); font-weight: 600; }
-.qa-hero-kicker { color: var(--forge-amber); font: 600 11px var(--font-mono); letter-spacing: 2px; text-transform: uppercase; }
+.qa-hero-kicker { color: var(--accent-ink); font: 600 11px var(--font-mono); letter-spacing: 2px; text-transform: uppercase; }
 .qa-lead { max-width: 650px; color: var(--chalk); font-size: 16px; line-height: 1.7; }
 .qa-topic-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.qa-topic-list .eq-chip { border-color: rgba(0,201,160,.35); }
+.qa-topic-list .eq-chip { border-color: rgba(var(--safe-rgb),.35); }
 .qa-secondary-topics { margin-top: 12px; color: var(--chalk-faint); font-size: 12px; }
 .qa-secondary-topics summary { cursor: pointer; color: var(--chalk-dim); }
 .qa-safety-note { margin-top: 14px; color: var(--chalk-faint); font-size: 12px; line-height: 1.6; }
@@ -988,7 +966,7 @@ body::after {
 }
 .chat-user-bubble {
   background: var(--forge-amber-dim);
-  border: 1px solid rgba(255,107,53,0.15);
+  border: 1px solid rgba(var(--accent-rgb),0.15);
   padding: 14px 18px;
   border-radius: var(--radius-md) var(--radius-md) 4px var(--radius-md);
   margin-bottom: 8px;
@@ -1002,14 +980,14 @@ body::after {
 .chat-user-bubble .user-label {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--forge-amber);
+  color: var(--accent-ink);
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 0.4px;
   margin-bottom: 6px;
   display: block;
 }
 .chat-ai-bubble {
-  background: linear-gradient(135deg, rgba(0,201,160,0.05), rgba(255,107,53,0.04), rgba(0,201,160,0.02));
+  background: linear-gradient(135deg, rgba(var(--safe-rgb),0.05), rgba(var(--accent-rgb),0.04), rgba(var(--safe-rgb),0.02));
   border-left: 3px solid var(--cool-blue);
   padding: 18px 22px;
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
@@ -1017,7 +995,7 @@ body::after {
   line-height: 1.9;
   color: var(--chalk);
   position: relative;
-  box-shadow: 0 0 1px rgba(0,201,160,0.08) inset;
+  box-shadow: 0 0 1px rgba(var(--safe-rgb),0.08) inset;
 }
 .chat-ai-bubble .cursor {
   display: inline-block;
@@ -1032,7 +1010,7 @@ body::after {
   font-size: 10px;
   color: var(--cool-blue);
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 0.4px;
   margin-bottom: 8px;
   display: block;
 }
@@ -1089,7 +1067,6 @@ body::after {
   font-size: 30px;
   position: relative;
   background: var(--bg-card);
-  box-shadow: 0 0 32px var(--forge-amber-dim);
 }
 .empty-state .icon-ring::before {
   content: '';
@@ -1117,7 +1094,7 @@ body::after {
 .empty-state h3 {
   font-family: var(--font-heading);
   font-size: 18px;
-  letter-spacing: 2px;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
   margin-bottom: 6px;
   color: var(--chalk);
@@ -1154,7 +1131,7 @@ body::after {
 .feature-card:hover {
   border-color: var(--steel-light);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
 }
 
 .feature-card .fc-icon {
@@ -1167,7 +1144,7 @@ body::after {
   font-family: var(--font-heading);
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
   color: var(--chalk);
   margin-bottom: 4px;
@@ -1183,7 +1160,11 @@ body::after {
   position: absolute;
   top: 0; right: 0;
   width: 40px; height: 40px;
-  opacity: 0.06;
+  /* 水印数字。0.06 是深色底上的值，白底上只剩 1.12:1 等于没有；
+     0.34 又太抢——数字会盖过卡片标题，看着像排版坏了。
+     0.18（约 1.42:1）才回到"质感而不是内容"的分寸。
+     装饰性文字不受 AA 约束，这个值纯粹为观感，不是为了达标。 */
+  opacity: 0.18;
   font-size: 40px;
   line-height: 1;
   pointer-events: none;
@@ -1201,7 +1182,7 @@ body::after {
 .example-queries .eq-label {
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 3px;
+  letter-spacing: 0.5px;
   color: var(--chalk-faint);
   font-family: var(--font-mono);
   width: 100%;
@@ -1256,7 +1237,6 @@ body::after {
   width: 6px; height: 6px;
   border-radius: 50%;
   background: var(--cool-blue);
-  box-shadow: 0 0 6px var(--cool-blue-dim);
 }
 
 /* ── Progress Bar ── */
@@ -1281,7 +1261,6 @@ body::after {
 
 .progress-step.active {
   background: var(--forge-amber);
-  box-shadow: 0 0 8px var(--forge-amber-glow);
   animation: stepPulse 1.5s ease-in-out infinite;
 }
 
@@ -1292,10 +1271,10 @@ body::after {
   font-size: 10px;
   font-family: var(--font-mono);
   color: var(--chalk-faint);
-  letter-spacing: 1px;
+  letter-spacing: 0.3px;
 }
 
-.progress-label span.active { color: var(--forge-amber); }
+.progress-label span.active { color: var(--accent-ink); }
 .progress-label span.done { color: var(--cool-blue); }
 
 /* ── Iteration Buttons ── */
@@ -1321,50 +1300,11 @@ body::after {
 }
 
 .iterate-chip:hover {
-  border-color: var(--forge-amber);
-  color: var(--forge-amber);
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
   background: var(--forge-amber-dim);
   transform: translateY(-1px);
 }
-
-/* ── History Panel ── */
-.history-panel {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--steel);
-}
-
-.history-panel h4 {
-  font-family: var(--font-heading);
-  font-size: 14px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--chalk-dim);
-  margin-bottom: 12px;
-}
-
-.history-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--steel);
-  border-radius: var(--radius-sm);
-  margin-bottom: 6px;
-  cursor: pointer;
-  transition: all 0.2s var(--ease-out);
-  font-size: 13px;
-}
-
-.history-item:hover {
-  border-color: var(--steel-light);
-  background: var(--bg-card-hover);
-  transform: translateX(4px);
-}
-
-.history-item .hi-date { color: var(--chalk-faint); font-family: var(--font-mono); font-size: 11px; }
-.history-item .hi-goals { color: var(--chalk-dim); }
 
 @keyframes stepPulse {
   0%, 100% { opacity: 1; }
@@ -1417,9 +1357,37 @@ body::after {
 }
 
 .stat-pill .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.dot.green { background: var(--cool-blue); box-shadow: 0 0 8px var(--cool-blue-dim); }
+.dot.green { background: var(--cool-blue); }
 .dot.amber { background: var(--warn); }
-.dot.red   { background: var(--danger); box-shadow: 0 0 8px rgba(240,67,67,0.3); }
+.dot.red   { background: var(--danger); }
+
+/* ── 每日热量与蛋白质目标 ──
+   计划里唯一的「数字结论」，由后端确定性算出（Mifflin-St Jeor + 活动系数），
+   不是模型生成的。所以那一行依据文本和数字同等重要：用户要能看懂这个数是怎么
+   来的，而不是接受一个凭空的数字——这也正是它敢做成确定性的理由。 */
+.plan-nutrition {
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0 0 24px;
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-md);
+}
+.plan-nutrition .nutrition-label {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
+  color: var(--text-muted);
+}
+.plan-nutrition .nutrition-metric { display: flex; align-items: baseline; gap: 6px; }
+.plan-nutrition .nutrition-value {
+  font-family: var(--font-heading); font-size: 22px; font-weight: 700;
+  color: var(--text-primary); letter-spacing: 0.3px;
+}
+.plan-nutrition .nutrition-unit { font-size: 12px; color: var(--text-secondary); }
+.plan-nutrition .nutrition-basis {
+  flex-basis: 100%;
+  color: var(--text-muted); font-size: 11.5px; line-height: 1.55;
+}
 
 /* ── 计划提示（交付时附带）──
    这里曾经是「· 句子」平铺的文本墙：实测一次交付 8 条，其中 5 条都在说
@@ -1429,25 +1397,25 @@ body::after {
    配色刻意比扣下计划的面板轻——这是交付的计划，不该看起来像出事了。 */
 .plan-notice {
   margin-bottom: 20px;
-  border: 1px solid rgba(216,160,95,0.20);
+  border: 1px solid rgba(var(--warn-rgb),0.20);
   border-radius: var(--radius-sm);
-  background: rgba(216,160,95,0.04);
+  background: rgba(var(--warn-rgb),0.04);
   overflow: hidden;
 }
 .plan-notice-head {
   display: flex; align-items: center; gap: 8px;
   width: 100%;
   padding: 10px 14px;
-  background: rgba(216,160,95,0.05);
+  background: rgba(var(--warn-rgb),0.05);
   border: none;
   color: inherit; font: inherit; text-align: left;
   cursor: pointer;
 }
-.plan-notice.is-open .plan-notice-head { border-bottom: 1px solid rgba(216,160,95,0.16); }
+.plan-notice.is-open .plan-notice-head { border-bottom: 1px solid rgba(var(--warn-rgb),0.16); }
 .plan-notice-head:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .plan-notice-title {
   font-family: var(--font-heading);
-  font-size: 13px; font-weight: 700; letter-spacing: 2px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.4px;
   color: var(--warn); text-transform: uppercase;
   flex: 0 0 auto;
 }
@@ -1465,23 +1433,23 @@ body::after {
    而其中 6 条是同一个问题（缺凳）。收起后只留一行摘要。 */
 .plan-notice-groups { display: none; }
 .plan-notice.is-open .plan-notice-groups { display: block; }
-.plan-notice-group + .plan-notice-group { border-top: 1px solid rgba(216,160,95,0.12); }
+.plan-notice-group + .plan-notice-group { border-top: 1px solid rgba(var(--warn-rgb),0.12); }
 .plan-notice-grouphead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 10px 14px 2px; }
 .plan-notice-chip {
   flex: 0 0 auto; padding: 1px 7px; border-radius: 3px;
-  background: rgba(216,160,95,0.16); color: var(--warn);
+  background: rgba(var(--warn-rgb),0.16); color: var(--warn);
   font-size: 11px; font-weight: 600;
 }
-.plan-notice-chip.is-injury { background: rgba(217,108,104,0.18); color: var(--danger); }
+.plan-notice-chip.is-injury { background: rgba(var(--danger-rgb),0.18); color: var(--danger); }
 .plan-notice-hint { color: var(--text-muted); font-size: 11px; }
 .plan-notice-items { margin: 0; padding: 2px 14px 12px; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 /* 普通条目只留一条细竖线归组。短句再套「填充块 + 左侧色条」，叠在外框和分组
    之上就是三层边框，视觉重量远超它承载的那点信息。 */
-.plan-notice-item { padding: 0 0 0 11px; border-left: 2px solid rgba(216,160,95,0.22); }
+.plan-notice-item { padding: 0 0 0 11px; border-left: 2px solid rgba(var(--warn-rgb),0.22); }
 /* 伤病条目反过来要压得住场：它是这一块里唯一真正紧急的东西，值得占一个盒子 */
 .plan-notice-item.is-injury {
   padding: 7px 11px;
-  background: rgba(217,108,104,0.07);
+  background: rgba(var(--danger-rgb),0.07);
   border-left: 3px solid var(--danger);
   border-radius: var(--radius-sm);
 }
@@ -1498,7 +1466,7 @@ body::after {
   border: 1px dashed var(--steel-light);
   border-radius: var(--radius-md);
   padding: 18px;
-  background: rgba(23,33,43,0.45);
+  background: rgba(var(--elevated-rgb),0.45);
 }
 
 .plan-draft-banner {
@@ -1507,7 +1475,7 @@ body::after {
   gap: 10px;
   padding: 12px 16px;
   margin-bottom: 18px;
-  background: rgba(240,160,64,0.08);
+  background: rgba(var(--warn-rgb),0.08);
   border-left: 3px solid var(--warn);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   font-size: 12.5px;
@@ -1539,7 +1507,7 @@ body::after {
 }
 .plan-card:hover {
   border-color: var(--steel-light);
-  box-shadow: 0 4px 28px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
 }
 
 .plan-card-header {
@@ -1549,7 +1517,7 @@ body::after {
   font-family: var(--font-heading);
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0.4px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -1568,7 +1536,7 @@ body::after {
   color: var(--chalk-faint);
 }
 
-.plan-card.open .plan-card-header::after { transform: rotate(180deg); color: var(--forge-amber); }
+.plan-card.open .plan-card-header::after { transform: rotate(180deg); color: var(--accent-ink); }
 
 .plan-card-body {
   max-height: 0;
@@ -1588,7 +1556,7 @@ body::after {
   grid-template-columns: 1fr 70px 70px 70px;
   gap: 12px;
   padding: 10px 4px;
-  border-bottom: 1px solid rgba(255,255,255,0.025);
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
   align-items: center;
   transition: background 0.15s, transform 0.15s;
@@ -1596,7 +1564,7 @@ body::after {
 }
 
 .exercise-row:hover {
-  background: rgba(255,255,255,0.015);
+  background: rgba(0,0,0,0.025);
   transform: translateX(4px);
 }
 
@@ -1642,7 +1610,7 @@ body::after {
   font-family: var(--font-heading);
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0.4px;
   margin-bottom: 14px;
   text-transform: uppercase;
 }
@@ -1676,7 +1644,7 @@ body::after {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--cool-blue);
+  color: var(--safe-ink-strong);
   font-family: var(--font-mono);
   padding: 4px 12px;
   border: 1px solid var(--cool-blue-dim);
@@ -1723,7 +1691,7 @@ body::after {
     max-height: none;
   }
   .main { padding: 24px 20px; }
-  .logo { font-size: 28px; letter-spacing: 4px; }
+  .logo { font-size: 28px; letter-spacing: 0.5px; }
   .tabs { overflow-x: auto; }
   .tab-btn { padding: 10px 18px; font-size: 14px; white-space: nowrap; }
 }
@@ -1739,14 +1707,78 @@ body::after {
 /* Task 2 visual foundation: constrained workspace, clear hierarchy, responsive profile. */
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); }
 .profile-panel { min-width: 0; }
-.profile-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; }
+/* 训练档案摘要。
+   桌面上它是纯重复——表单本来就常显，同样的 180cm/80kg/增肌/每周4练
+   再列一遍只是噪声，而且和下面的表单长得像两张卡片叠在一起。
+   只在窄屏保留：那里表单折叠，它是唯一的概览与展开入口。 */
+.profile-summary { display: none; }
+
+/* 档案区：一个整体，内部统一 16px 节奏（.field-group 提供）。
+   它自己与侧栏其它块之间才是 22px。 */
+.profile-fields { display: flex; flex-direction: column; }
 
 /* 账号区块：默认收起，游客也能直接用 */
-.account-block { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.account-state { display: flex; flex-direction: column; gap: 2px; }
-.account-label { color: var(--text-primary); font-size: 14px; font-weight: 600; }
-.account-hint { color: var(--text-muted); font-size: 12px; }
-.account-actions { display: flex; gap: 8px; }
+/* ── 账号区（侧栏底部）────────────────────────────────────────
+   登录是一次性动作，却曾经占据品牌正下方最贵的位置、用一个卡片装着
+   一个描边按钮（边框套边框），110px 里只放了一个「退出登录」。
+   现在它退到侧栏底部，压成一行：左边圆点＋身份，右边动作按钮，
+   说明折到第二行。高度比原先的文字链接版还矮——动作占的是这一行本来
+   就空着的右侧，不另起一行，侧栏就不会因为它变高。
+   分隔靠一条细线交代，不靠卡片。 */
+.account-block {
+  margin-top: auto;              /* 推到底部，把主流程顶上去 */
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+}
+/* 试过吸底（position:sticky;bottom:0），撤了：侧栏总共才溢出 89px，
+   而这块带内边距有 115px，吸住时会盖掉「运动习惯」那个字段——只露出
+   标签、输入框被压在下面，比"要滚一下才看到"更像坏了。
+   正常流放在末尾即可：它本来就只有很小的滚动距离。 */
+.account-state {
+  display: grid;
+  grid-template-columns: auto 1fr auto;   /* 圆点 · 身份 · 动作 */
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 5px;
+}
+/* 状态圆点：一眼分清"游客"和"已登录"，比读两行小字快。
+   游客是空心灰、登录是实心橙——橙色在这里只标"数据已经归属账号"。 */
+.account-dot {
+  grid-column: 1; grid-row: 1;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--steel-light);
+}
+.account-block.is-account .account-dot {
+  background: var(--accent-orange);
+  box-shadow: none;
+}
+/* 身份和按钮抢同一行，用户名长起来会先把按钮挤扁，所以这里允许省略号——
+   宁可截断用户名，也不能让按钮变形。 */
+.account-label {
+  grid-column: 2; grid-row: 1;
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-primary); font-size: 13px; font-weight: 600;
+}
+.account-hint {
+  grid-column: 2 / -1; grid-row: 2;
+  color: var(--text-muted); font-size: 11.5px; line-height: 1.55;
+}
+/* 动作是按钮，不是下划线文字。
+   曾经写成文字链接，理由是"设置项不该和「生成计划」一样重"。但落地后
+   它只是左下角一行孤零零的小字：既不像能点，也和上面的输入框对不齐。
+   按钮形状（描边＋内填充）才是"这里可以点"的通用语言；不抢主行动靠的是
+   中性色，而不是把它缩成一个链接。样式复用 .account-btn，与登录表单同一档。 */
+.account-actions {
+  grid-column: 3; grid-row: 1;
+  display: flex; gap: 8px;
+}
+/* 这一档的按钮按内容定宽（不是登录表单里那种等宽并排），
+   内边距也收一档——它要挤在身份右边，不能占掉整行。 */
+.account-actions .account-btn { flex: 0 0 auto; padding: 7px 12px; }
 /* 账号区的按钮。原来是 --bg-base 底 + --border 描边——底色比它所在的卡片
    还暗、描边又和卡片边框同色，等于把自己藏进了背景里。「登录 / 注册」是
    第一次进来的人唯一的入口，却比「生成计划」弱一大截。 */
@@ -1762,28 +1794,233 @@ body::after {
 .review-issue-list { margin: 0 0 12px; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .review-issue { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 8px 10px; background: var(--bg-base); border-left: 3px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 13px; line-height: 1.65; }
 .review-issue-sev { flex: 0 0 auto; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
-.review-issue-sev.is-danger { background: rgba(229, 72, 77, .16); color: #e5484d; }
-.review-issue-sev.is-warn { background: rgba(230, 160, 40, .16); color: #d99420; }
+.review-issue-sev.is-danger { background: rgba(var(--danger-rgb), .16); color: var(--danger); }
+.review-issue-sev.is-warn { background: rgba(var(--warn-rgb), .16); color: var(--warn); }
 .review-issue-exercise { flex: 0 0 auto; }
-.review-pending-id { margin-top: 10px; color: var(--text-muted); font-size: 11px; opacity: .7; }
+/* 禁止项的补充说明：挂在「下一步」下面，语气是解释而不是命令，
+   所以用弱化的灰而不进 review-pending-row 那一档（那一档是加粗标签结构）。 */
+.review-pending-footnote {
+  margin: 6px 0 0;
+  padding-left: 13px;
+  border-left: 2px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.7;
+  max-width: 68ch;
+  text-wrap: pretty;
+}
 
-/* 登录页：整屏盖住应用，进去之前不加载业务界面 */
-.auth-gate { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg-deep, #0b0b0d); overflow-y: auto; }
-.auth-gate[hidden] { display: none; }
-.auth-gate-card { width: min(100%, 380px); display: flex; flex-direction: column; gap: 12px; padding: 28px 26px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); }
-.auth-gate-brand { color: var(--text-primary); font-family: var(--font-heading); font-size: 30px; letter-spacing: 3px; }
-.auth-gate-sub { margin-top: -8px; color: var(--text-muted); font-size: 11px; letter-spacing: 3px; }
-.auth-gate-lead { margin: 6px 0 4px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
-.auth-gate-actions { display: flex; gap: 8px; }
-.auth-gate-actions .btn-generate { flex: 1; }
-.auth-gate-actions .account-btn { flex: 0 0 auto; }
-.auth-gate-status { min-height: 16px; font-size: 12px; color: var(--text-muted); }
-.auth-gate-status[data-kind="error"] { color: var(--danger, #e5484d); }
-.auth-gate-status[data-kind="ok"] { color: var(--accent); }
-.auth-gate-guest { margin-top: 4px; padding: 10px; background: transparent; color: var(--text-muted); border: 1px dashed var(--border); border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; }
-.auth-gate-guest:hover { color: var(--accent); border-color: var(--accent); }
-.auth-gate-guest:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.auth-gate-note { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.6; opacity: .8; }
+/* ── 登录页 ────────────────────────────────────────────────────
+   首屏就是它，不是"盖在应用上的浮层"：应用壳（.app-shell）在门开着时
+   是 hidden 的（见下方 .app-shell[hidden]），所以登录页底下没有东西可看，
+   Tab 键也穿不到应用里。
+
+   左右分栏：左品牌、右表单。左屏用**暖调浅色**渐变，不铺深色——
+   这个项目刚从深色转成苹果式浅色，用户当时的原话是深色"看着阴森冷淡"。
+   为追求"高级感"再铺一块深色，等于把刚修掉的问题请回来。
+   质感靠层次（两层低透明度径向渐变 + 1px 分隔线）而不是靠暗度。 */
+.auth-gate {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid;
+  grid-template-columns: 46% 54%;
+  background: var(--bg-deep);
+  overflow-y: auto;
+}
+/* .auth-passed 由 <head> 里的内联脚本加上：本机有放行标记时，首帧直接就
+   是应用，而不是先画登录页再切掉。JS 走到 hideAuthGate() 时会把它移除，
+   交回给 hidden 属性管。 */
+.auth-gate[hidden],
+.auth-passed .auth-gate { display: none; }
+
+/* 左屏：品牌区 */
+.login-brand {
+  position: relative;
+  display: flex; flex-direction: column; justify-content: space-between;
+  gap: 40px;
+  padding: 56px 52px;
+  background:
+    radial-gradient(120% 90% at 10% 6%, rgba(var(--accent-rgb), .14), transparent 58%),
+    radial-gradient(90% 75% at 92% 102%, rgba(var(--safe-rgb), .11), transparent 62%),
+    var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+.login-brand-top { display: flex; flex-direction: column; gap: 6px; }
+.login-brand .logo { font-size: 34px; }
+.login-brand-body { max-width: 30ch; }
+.login-brand-headline {
+  margin: 0 0 14px;
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.42;
+  letter-spacing: .2px;
+  text-wrap: balance;
+}
+.login-brand-lead {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+.login-features { margin: 26px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 11px; }
+.login-feature {
+  display: flex; align-items: baseline; gap: 10px;
+  color: var(--text-secondary); font-size: 13px; line-height: 1.6;
+}
+/* 小圆点用主色，但只有 6px——是节奏记号，不是装饰 */
+.login-feature::before {
+  content: ""; flex: 0 0 auto;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent-strong);
+  transform: translateY(-2px);
+}
+.login-brand-foot {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+}
+
+/* 右屏：表单区 */
+.login-form-pane { display: flex; align-items: center; justify-content: center; padding: 48px 32px; }
+.login-form { width: min(100%, 372px); display: flex; flex-direction: column; gap: 13px; }
+.login-title {
+  margin: 0; color: var(--text-primary);
+  font-family: var(--font-heading); font-size: 23px; font-weight: 700; letter-spacing: .3px;
+}
+.login-sub { margin: -6px 0 6px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
+
+/* 两个同级按钮：登录（实心）与游客（描边）。高度一致，
+   因为它们对这次演示是同等重要的两条路——游客入口尤其不能被做成小字链接，
+   否则"不登录也能完整使用"这件事就没人知道。 */
+.login-btn {
+  height: 44px; width: 100%;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-heading); font-size: 15px; font-weight: 700; letter-spacing: .4px;
+  cursor: pointer;
+  transition: background .18s var(--ease-out), border-color .18s var(--ease-out),
+              color .18s var(--ease-out), transform .1s var(--ease-out);
+}
+.login-btn:active { transform: translateY(1px); }
+.login-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.login-btn-primary { background: var(--accent-strong); color: var(--on-accent); border: 1px solid transparent; }
+.login-btn-primary:hover { filter: brightness(1.06); }
+.login-btn-primary:disabled { opacity: .6; cursor: default; transform: none; }
+.login-btn-guest {
+  background: transparent; color: var(--text-primary);
+  border: 1px solid var(--steel-light);
+}
+.login-btn-guest:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--bg-card-hover); }
+
+.login-divider {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--text-muted); font-size: 11px; letter-spacing: .5px;
+}
+.login-divider::before, .login-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
+}
+
+/* 登录 / 注册页签。
+   做成两格分段控件而不是两个独立的链接：它表达的是"同一件事的两种模式"，
+   选中态必须一眼可辨——否则用户点完不知道自己现在会提交成什么。 */
+.login-tabs {
+  display: flex; gap: 3px; padding: 3px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.login-tab {
+  flex: 1; height: 33px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 6px;
+  color: var(--text-muted);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background .16s var(--ease-out), color .16s var(--ease-out),
+              box-shadow .16s var(--ease-out);
+}
+.login-tab:hover { color: var(--text-primary); }
+.login-tab[aria-checked="true"] {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .07);
+}
+.login-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.auth-gate-status { min-height: 18px; font-size: 12.5px; color: var(--text-muted); }
+.auth-gate-status[data-kind="error"] { color: var(--danger); }
+.auth-gate-status[data-kind="ok"] { color: var(--accent-ink); }
+
+.login-note {
+  margin: 2px 0 0; padding-top: 13px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted); font-size: 11px; line-height: 1.65;
+}
+
+/* 窄屏折成单列：品牌区收成紧凑页头，表单占满。
+   左屏的卖点列表在小屏上是噪音（用户已经决定要用这个产品了），去掉。 */
+@media (max-width: 900px) {
+  .auth-gate { grid-template-columns: 1fr; align-content: start; }
+  .login-brand {
+    padding: 30px 24px 24px; gap: 14px;
+    border-right: none; border-bottom: 1px solid var(--border);
+  }
+  .login-brand .logo { font-size: 26px; }
+  .login-brand-headline { font-size: 18px; margin-bottom: 8px; }
+  .login-brand-lead, .login-features { display: none; }
+  .login-brand-foot { display: none; }
+  .login-form-pane { padding: 28px 22px 40px; align-items: flex-start; }
+  .login-form { width: 100%; }
+}
+
+/* 首帧带 .auth-passed（本机有放行标记）时，要把应用壳从 hidden 里放出来。
+
+   !important 不能省：文件顶部有一条全局的 `[hidden] { display: none !important }`。
+   important 声明之间按特异性决胜负，所以这里必须也是 important、且选择器
+   更具体（0,3,0 对 0,1,0）才压得住。只写普通声明会被那条全局规则静默吃掉——
+   表现是"登录页消失了但应用也没出来"，一屏全白，而且 CSS 检查里看不出问题。 */
+.auth-passed .app-shell[hidden] { display: grid !important; }
+
+/* ── 注册成功确认条 ──────────────────────────────────────────
+   用安全绿而不是主橙：它表达的是"已完成、无异常"，不是需要行动的号召。
+   主橙在这里会和页面里所有"下一步动作"的按钮抢注意力。 */
+.welcome-banner {
+  display: flex; align-items: flex-start; gap: 11px;
+  margin: 0 0 18px;
+  padding: 13px 15px;
+  background: rgba(var(--safe-rgb), .07);
+  border: 1px solid rgba(var(--safe-rgb), .22);
+  border-radius: var(--radius-md);
+  animation: tabEnter .28s var(--ease-out);
+}
+.welcome-banner[hidden] { display: none; }
+.welcome-banner-icon {
+  flex: 0 0 auto;
+  width: 19px; height: 19px; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--status-safe); color: #fff;
+  border-radius: 50%; font-size: 11px; font-weight: 700;
+}
+.welcome-banner-body { flex: 1; min-width: 0; }
+.welcome-banner-title {
+  display: block;
+  color: var(--text-primary); font-size: 13.5px; font-weight: 600;
+  margin-bottom: 3px;
+}
+.welcome-banner-text {
+  margin: 0;
+  color: var(--text-secondary); font-size: 12.5px; line-height: 1.65;
+}
+.welcome-banner-close {
+  flex: 0 0 auto;
+  background: none; border: none; padding: 0 2px;
+  color: var(--text-muted); font-size: 17px; line-height: 1;
+  cursor: pointer; border-radius: 4px;
+}
+.welcome-banner-close:hover { color: var(--text-primary); }
+.welcome-banner-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .workspace, .sidebar { transition: none; }
 
 /* 已保存的计划 */
@@ -1796,24 +2033,24 @@ body::after {
 .btn-primary {
   padding: 11px 22px;
   background: var(--accent);
-  color: #12181e;
+  color: var(--on-accent);
   border: none;
   border-radius: var(--radius-sm);
   font-family: var(--font-heading);
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   transition: filter .15s, transform .1s, background .2s;
 }
-.btn-primary:hover { filter: brightness(1.1); }
+.btn-primary:hover { filter: brightness(1.05); }
 .btn-primary:active { transform: scale(.98); }
 .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
-.btn-primary.is-saved { background: var(--status-safe); color: #0c1410; }
+.btn-primary.is-saved { background: var(--status-safe); color: var(--on-accent); }
 
-.plan-title { margin: 0 0 12px; color: var(--text-primary); font-family: var(--font-heading); font-size: 20px; letter-spacing: 1px; }
+.plan-title { margin: 0 0 12px; color: var(--text-primary); font-family: var(--font-heading); font-size: 20px; letter-spacing: 0.3px; }
 .saved-plans-head { margin-bottom: 16px; }
-.saved-plans-head h3 { margin: 0 0 4px; color: var(--text-primary); font-family: var(--font-heading); font-size: 20px; letter-spacing: 1px; }
+.saved-plans-head h3 { margin: 0 0 4px; color: var(--text-primary); font-family: var(--font-heading); font-size: 20px; letter-spacing: 0.3px; }
 .saved-plans-head p { margin: 0; color: var(--text-secondary); font-size: 13px; }
 .saved-plans-list { display: flex; flex-direction: column; gap: 10px; }
 .saved-plans-list[hidden] { display: none; }
@@ -1838,13 +2075,13 @@ body::after {
   font: inherit;
   font-weight: 600;
   color: var(--text-primary);
-  background: var(--bg-base, rgba(0, 0, 0, .25));
+  background: var(--bg-deep);
   border: 1px solid var(--accent);
   border-radius: var(--radius-xs, 4px);
   outline: none;
 }
 .saved-plan-rename-input:disabled { opacity: .6; }
-.saved-plan-notice { margin: 10px 0 0; color: var(--danger, #f87171); font-size: 13px; }
+.saved-plan-notice { margin: 10px 0 0; color: var(--danger); font-size: 13px; }
 .saved-plans-empty { padding: 40px 20px; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius-md); }
 .saved-plans-empty[hidden] { display: none; }
 .saved-plans-empty-title { margin: 0 0 6px; color: var(--text-primary); font-size: 15px; }
@@ -1854,7 +2091,7 @@ body::after {
   color: var(--accent); font-size: 12px; font-family: inherit;
   cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
 }
-.link-btn:hover { filter: brightness(1.15); }
+.link-btn:hover { filter: brightness(0.92); }
 
 /* 动作图示：默认只给一个入口，点开才加载图片 */
 .plan-ex-demo { grid-column: 1 / -1; margin-top: 6px; }
@@ -1880,7 +2117,7 @@ body::after {
 .claim-text { color: var(--text-muted); font-size: 11px; }
 .claim-offer .account-btn { flex: 0 0 auto; }
 .auth-status { min-height: 16px; font-size: 12px; color: var(--text-muted); }
-.auth-status[data-kind="error"] { color: var(--danger, #e5484d); }
+.auth-status[data-kind="error"] { color: var(--danger); }
 .auth-status[data-kind="ok"] { color: var(--accent); }
 .auth-note { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { .account-btn { transition: none; } }
@@ -1889,7 +2126,7 @@ body::after {
 .profile-editor[hidden] { display: none; }
 .workspace { width: min(100%, 1120px); margin: 0 auto; padding: 32px clamp(20px, 4vw, 64px) 56px; }
 .workspace-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
-.workspace-header h1 { color: var(--text-primary); font-family: var(--font-heading); font-size: clamp(26px, 3vw, 38px); letter-spacing: 2px; }
+.workspace-header h1 { color: var(--text-primary); font-family: var(--font-heading); font-size: clamp(26px, 3vw, 38px); letter-spacing: 0.3px; }
 .workspace-header p { color: var(--text-secondary); font-size: 13px; margin-top: 6px; }
 .feature-tabs { margin-bottom: 24px; }
 .feature-panel { min-width: 0; }
@@ -1897,18 +2134,32 @@ body::after {
 :where(button, input, select, textarea, [role="tab"]):focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 @media (max-width: 767px) {
   .app-shell { grid-template-columns: 1fr; }
+  /* 窄屏是单列、整页滚，侧栏不该再自己固定高度与吸顶——
+     那会把档案卡死在一个视口里，下面的内容永远看不到。 */
+  .sidebar { position: static; height: auto; overflow-y: visible; }
   .workspace { padding: 20px 16px 40px; }
   .workspace-header { align-items: start; flex-direction: column; gap: 12px; margin-bottom: 16px; }
   .feature-tabs { order: -1; overflow-x: auto; margin-bottom: 16px; }
   .profile-panel { padding: 16px; gap: 12px; }
-  /* 窄屏下这是展开训练档案的唯一入口，原来描边和卡片边框同色、又没禁换行，
+  /* 窄屏下摘要卡恢复显示：这里表单是折叠的，它是唯一的概览与展开入口。 */
+  .profile-summary {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 12px 14px;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary); font-size: 13.5px;
+  }
+  /* 这是展开训练档案的唯一入口，原来描边和卡片边框同色、又没禁换行，
      「编辑资料」被折成两行。给足内边距、禁换行，描边提到能看见的一档。 */
   .profile-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; white-space: nowrap; min-height: 44px; padding: 8px 14px; background: var(--bg-card-hover); border: 1px solid var(--steel-light); border-radius: var(--radius-sm); color: var(--text-secondary); }
+  /* 所有档案字段现在都在 #profile-editor 里，所以折叠只需要这一个开关——
+     原先外面还散着三个 .field，得再靠 .sidebar > .field 单独收一遍，
+     两套机制容易不同步（展开后只出来一半）。 */
   .profile-editor { display: none; }
   .profile-editor.is-open { display: flex; }
-  .sidebar > .field, .sidebar > .btn-generate { display: none; }
-  .sidebar.profile-expanded > .field, .sidebar.profile-expanded > .btn-generate { display: flex; }
-  .sidebar.profile-expanded > .btn-generate { display: block; }
+  /* 「生成计划」是主行动，不跟「编辑资料」绑在一起——手机上想生成计划
+     得先点开编辑资料才看得到按钮，等于把主入口藏起来。它在 .profile-fields
+     外面，所以天然常驻，不需要额外规则。 */
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
@@ -1974,7 +2225,7 @@ body::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ember, .sidebar::after, .progress-step.active, .empty-state .icon-ring::before,
+  .progress-step.active, .empty-state .icon-ring::before,
   .empty-state .icon-ring::after, .chat-ai-bubble .cursor, .advice-bubble .cursor {
     animation: none !important;
   }
@@ -2038,9 +2289,9 @@ body::after {
 .log-entry-row:hover { border-color: var(--border); }
 /* 聚焦某一行时整行提亮——一排相同输入框里，用户需要知道自己在哪 */
 .log-entry-row:focus-within {
-  border-color: var(--forge-amber);
+  border-color: var(--accent-ink);
   background: var(--bg-card-hover);
-  box-shadow: 0 0 0 3px var(--forge-amber-dim), 0 12px 26px -16px rgba(242,118,74,.45);
+  box-shadow: 0 0 0 3px var(--forge-amber-dim), 0 8px 20px -12px rgba(var(--accent-rgb),.30);
 }
 
 .log-entry-row .field { margin: 0; min-width: 0; }
@@ -2084,11 +2335,11 @@ body::after {
 .log-history-item:hover {
   background: var(--bg-card-hover);
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px -14px rgba(2,6,12,.9);
+  box-shadow: 0 10px 22px -14px rgba(0,0,0,.18);
 }
 .log-history-item .lh-date {
   font-family: var(--font-mono);
-  color: var(--accent-orange);
+  color: var(--accent-ink);
   font-size: 13px;
   white-space: nowrap;
 }
@@ -2111,11 +2362,11 @@ body::after {
   margin: 20px 0;
   padding: 10px;
   background:
-    radial-gradient(120% 80% at 50% 0%, rgba(242,118,74,.045), transparent 60%),
+    radial-gradient(120% 80% at 50% 0%, rgba(var(--accent-rgb),.045), transparent 60%),
     var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.025), inset 0 -18px 34px -26px rgba(0,0,0,.9);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .chart-note {
@@ -2123,6 +2374,77 @@ body::after {
   color: var(--warn);
   margin-top: 8px;
   line-height: 1.5;
+}
+
+/* ── 个人纪录 ──────────────────────────────────────────────
+   一条纪录就是「动作 × 三项成绩」。做成两列网格而不是表格：
+   每项成绩要带自己的日期和单位，表格会把它们挤成三行小字。 */
+.records-panel { margin-top: 26px; }
+
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.pr-card {
+  padding: 13px 15px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: inset 3px 0 0 0 var(--border);
+  transition: background .2s var(--ease-out), box-shadow .2s var(--ease-out);
+}
+.pr-card:hover { background: var(--bg-card-hover); }
+/* 最近一次就刷新了纪录——这是这张面板上唯一值得抢眼的信号 */
+.pr-card.is-pr { box-shadow: inset 3px 0 0 0 var(--accent-orange); }
+
+.pr-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.pr-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.pr-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: rgba(var(--accent-rgb), .1);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.pr-sessions {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pr-metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 3px 0;
+}
+.pr-metric b {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.pr-metric span { color: var(--text-muted); }
+
+.records-empty {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
 }
 
 .advice-summary {
@@ -2150,19 +2472,19 @@ body::after {
 .advice-item:hover {
   background: var(--bg-card-hover);
   transform: translateY(-1px);
-  box-shadow: inset 3px 0 0 0 var(--accent-orange), 0 12px 26px -18px rgba(2,6,12,.95);
+  box-shadow: inset 3px 0 0 0 var(--accent-orange), 0 12px 26px -18px rgba(0,0,0,.16);
 }
 .advice-item.sev-warn { box-shadow: inset 3px 0 0 0 var(--warn); }
-.advice-item.sev-warn:hover { box-shadow: inset 3px 0 0 0 var(--warn), 0 12px 26px -18px rgba(2,6,12,.95); }
+.advice-item.sev-warn:hover { box-shadow: inset 3px 0 0 0 var(--warn), 0 12px 26px -18px rgba(0,0,0,.16); }
 .advice-item.sev-notice { box-shadow: inset 3px 0 0 0 var(--cool-blue); }
-.advice-item.sev-notice:hover { box-shadow: inset 3px 0 0 0 var(--cool-blue), 0 12px 26px -18px rgba(2,6,12,.95); }
+.advice-item.sev-notice:hover { box-shadow: inset 3px 0 0 0 var(--cool-blue), 0 12px 26px -18px rgba(0,0,0,.16); }
 
 .advice-item input[type="checkbox"] {
   margin-top: 3px;
   flex-shrink: 0;
   width: 16px;
   height: 16px;
-  accent-color: var(--accent-orange);
+  accent-color: var(--accent-ink);
   cursor: pointer;
 }
 .advice-item .ai-body { flex: 1; min-width: 0; }
@@ -2175,7 +2497,7 @@ body::after {
 }
 .advice-item .ai-change {
   font-family: var(--font-mono);
-  color: var(--accent-orange);
+  color: var(--accent-ink);
   font-size: 13px;
   letter-spacing: .02em;
   margin-bottom: 7px;
@@ -2186,6 +2508,129 @@ body::after {
   line-height: 1.7;
   text-wrap: pretty;
 }
+
+/* ── 周报正文（调整建议上方的结构化摘要）───────────────────────────────
+   有模型生成的 summary_detail 时画成分组小结；模型不可用则退回一段纯文本
+   摘要，并用 .report-degraded 如实标注来源——不能让用户以为规则拼的话
+   是 AI 写的。 */
+.advice-summary .report-headline {
+  margin: 0 0 14px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.report-block { margin-bottom: 12px; }
+.report-block-title {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.report-list { margin: 0; padding-left: 18px; list-style: disc; }
+.report-list li { margin-bottom: 6px; line-height: 1.7; }
+.report-list li::marker { color: var(--border); }
+.report-block.report-list-good .report-block-title { color: var(--accent-ink); }
+.report-block.report-list-warn .report-block-title { color: var(--warn); }
+.report-text { color: var(--text-secondary); }
+.report-evidence {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: .02em;
+  color: var(--text-muted);
+}
+.report-degraded {
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: .02em;
+  color: var(--text-muted);
+}
+.advice-summary-text { margin: 0; }
+
+/* ── AI 记忆面板 ───────────────────────────────────────────────────────
+   与建议条目同一套视觉语言（内嵌色条 + 卡片底），过旧条目降饱和并标出
+   时间，让「这条可能已经不作数了」一眼可见。 */
+.memory-group { margin-bottom: 18px; }
+.memory-group-title {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.memory-item {
+  position: relative;
+  padding: 12px 40px 12px 14px;
+  margin-bottom: 8px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: inset 3px 0 0 0 var(--accent-orange);
+}
+.memory-item.is-stale {
+  box-shadow: inset 3px 0 0 0 var(--border);
+  opacity: .72;
+}
+.memory-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+.memory-key {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  letter-spacing: .05em;
+  color: var(--text-primary);
+}
+.memory-source {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+.memory-value {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+.memory-time {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+.memory-item.is-stale .memory-time { color: var(--warn); }
+.memory-del {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color .2s var(--ease-out), border-color .2s var(--ease-out);
+}
+.memory-del:hover { color: var(--warn); border-color: var(--warn); }
+
 
 /* 降级数据表：斑马纹 + 表头下边线，密集数字横向扫读更稳 */
 .fallback-table {
@@ -2211,9 +2656,9 @@ body::after {
 .fallback-table td {
   font-family: var(--font-mono);
   color: var(--text-secondary);
-  border-bottom: 1px solid rgba(38,51,64,.5);
+  border-bottom: 1px solid rgba(var(--border-rgb),.5);
 }
-.fallback-table tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+.fallback-table tr:nth-child(even) td { background: rgba(0,0,0,.025); }
 
 /* 空状态：给出下一步动作，而不是丢一句「还没有记录」 */
 .empty-composed {
@@ -2226,7 +2671,7 @@ body::after {
   color: var(--text-muted);
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
-  background: rgba(255,255,255,.012);
+  background: rgba(0,0,0,.02);
 }
 .empty-composed .ec-mark {
   font-family: var(--font-mono);
@@ -2280,7 +2725,7 @@ body::after {
               background .2s var(--ease-out), transform .12s var(--ease-out);
 }
 .explain-toggle:hover {
-  border-color: var(--accent-orange);
+  border-color: var(--accent-ink);
   color: var(--text-primary);
   background: var(--bg-card-hover);
 }
@@ -2294,10 +2739,10 @@ body::after {
   margin-top: 10px;
   padding: 18px 20px;
   background:
-    radial-gradient(100% 60% at 0% 0%, rgba(111,168,139,.05), transparent 55%),
+    radial-gradient(100% 60% at 0% 0%, rgba(var(--safe-rgb),.05), transparent 55%),
     var(--bg-panel);
   border-radius: var(--radius-md);
-  box-shadow: inset 3px 0 0 0 var(--cool-blue), inset 0 1px 0 rgba(255,255,255,.025);
+  box-shadow: inset 3px 0 0 0 var(--cool-blue), 0 1px 3px rgba(0,0,0,0.05);
   animation: tabEnter .25s var(--ease-out);
 }
 
@@ -2313,7 +2758,7 @@ body::after {
   font-size: 11px;
   letter-spacing: .14em;
   text-transform: uppercase;
-  color: var(--accent-orange);
+  color: var(--accent-ink);
 }
 
 .explain-line {
@@ -2346,48 +2791,81 @@ body::after {
   </filter>
 </svg>
 
-<!-- Ember particles — floating forge sparks -->
-<div class="ember-particles">
-  <div class="ember"></div><div class="ember"></div><div class="ember"></div>
-  <div class="ember"></div><div class="ember"></div><div class="ember"></div>
-  <div class="ember"></div><div class="ember"></div><div class="ember"></div>
-  <div class="ember"></div>
-</div>
-
-<!-- ═══════════════ 登录页 ═══════════════
-     进来先看到它：登录后计划与记忆跟着账号走。也可以选择以游客身份直接进入，
-     那个入口是明写的，而不是藏起来——否则"免登录可用"这件事就没人知道。 -->
-<div class="auth-gate" id="auth-gate" hidden>
-  <div class="auth-gate-card">
-    <div class="auth-gate-brand">IRON<span class="logo-accent">MIND</span></div>
-    <div class="auth-gate-sub">AI FITNESS COACH</div>
-    <p class="auth-gate-lead">登录后，训练计划、长期记忆与训练日志都跟着账号走，换设备也能找回。</p>
-
-    <div class="field">
-      <label for="gate-username">用户名</label>
-      <input id="gate-username" type="text" autocomplete="username" placeholder="2 个字符以上">
+<!-- ═══════════════ 登录页（首屏） ═══════════════
+     默认可见——不是"先渲染应用再盖一层"，所以首次进来的人直接看到它，
+     不会先闪一下背后的功能界面。对应的，#app-shell 默认 hidden。
+     三条出口必须都在：① 登录；② 注册；③ 以游客身份继续。
+     第三条尤其不能省，也不能做成小字链接——它是"不登录也能完整使用"这件事
+     的唯一可见入口，藏起来用户就会以为必须先注册。 -->
+<div class="auth-gate" id="auth-gate">
+  <!-- 左：品牌区 -->
+  <div class="login-brand">
+    <div class="login-brand-top">
+      <div class="logo">IRON<span class="logo-accent">MIND</span></div>
+      <div class="logo-sub">AI FITNESS COACH</div>
     </div>
-    <div class="field">
-      <label for="gate-password">密码</label>
-      <input id="gate-password" type="password" autocomplete="current-password" placeholder="至少 8 位">
+    <div class="login-brand-body">
+      <h2 class="login-brand-headline">能执行的训练计划，<br>而不是看起来对的计划</h2>
+      <p class="login-brand-lead">
+        把伤病史、器械条件和每周能练的天数一起考虑进去，再排出你今天该练什么。
+      </p>
+      <ul class="login-features">
+        <li class="login-feature">按你的条件生成计划，随时可调</li>
+        <li class="login-feature">记录实际完成的重量与次数</li>
+        <li class="login-feature">看出进步与停滞，并据此调整下一次</li>
+      </ul>
     </div>
+    <div class="login-brand-foot">Personal Training System</div>
+  </div>
 
-    <div class="auth-gate-actions">
-      <button class="btn-generate" type="button" id="gate-login" onclick="gateAuth('login')">登录</button>
-      <button class="account-btn" type="button" id="gate-register" onclick="gateAuth('register')">注册新账号</button>
+  <!-- 右：表单区 -->
+  <div class="login-form-pane">
+    <div class="login-form">
+      <!-- 登录 / 注册是两种模式，不是两个按钮。
+           原先注册是一个藏在游客按钮下面的小字链接，新用户填完账号密码点「登录」
+           只会得到"用户名或密码不正确"，而没有任何"我还没账号"的出口；
+           按回车也永远走登录。做成页签后：模式可见、文案跟着变、回车按当前模式提交。 -->
+      <!-- 用 radiogroup 而不是 tablist：这是"二选一的模式"，不是"切出另一块面板"。
+           早先按页签写过，指向的受控元素并不存在；更要命的是主界面的页签逻辑
+           按 role="tab" 全文档扫描，会被这一组带偏（详见 activateTab 的注释）。 -->
+      <div class="login-tabs" role="radiogroup" aria-label="登录或注册">
+        <button class="login-tab" type="button" role="radio" id="gate-login"
+                aria-checked="true"
+                onclick="setGateMode('login')">登录</button>
+        <button class="login-tab" type="button" role="radio" id="gate-register"
+                aria-checked="false"
+                onclick="setGateMode('register')">注册</button>
+      </div>
+
+      <h1 class="login-title" id="gate-title">欢迎回来</h1>
+      <p class="login-sub" id="gate-sub">登录后，训练计划、长期记忆与训练日志都跟着账号走，换设备也能找回。</p>
+
+      <div class="field">
+        <label for="gate-username">用户名</label>
+        <input id="gate-username" type="text" autocomplete="username" placeholder="2 个字符以上">
+      </div>
+      <div class="field">
+        <label for="gate-password">密码</label>
+        <input id="gate-password" type="password" autocomplete="current-password" placeholder="至少 8 位">
+      </div>
+
+      <button class="login-btn login-btn-primary" type="button" id="gate-submit">登录</button>
+      <div class="auth-gate-status" id="gate-status" role="alert"></div>
+
+      <div class="login-divider">或</div>
+
+      <button class="login-btn login-btn-guest" type="button" id="gate-guest" onclick="enterAsGuest()">
+        先随便看看（游客模式）
+      </button>
+
+      <p class="login-note" id="gate-note">
+        游客模式的数据只保存在本机浏览器，清缓存会丢。账号为本机演示级，请勿使用真实密码。
+      </p>
     </div>
-    <div class="auth-gate-status" id="gate-status" role="alert"></div>
-
-    <button class="auth-gate-guest" type="button" id="gate-guest" onclick="enterAsGuest()">
-      先随便看看（游客模式）
-    </button>
-    <p class="auth-gate-note">
-      游客模式的数据只保存在本机浏览器，清缓存会丢。账号为本机演示级，请勿使用真实密码。
-    </p>
   </div>
 </div>
 
-<div class="app app-shell" id="app-shell">
+<div class="app app-shell" id="app-shell" hidden>
 
   <!-- ═══════════════ SIDEBAR ═══════════════ -->
   <aside class="sidebar profile-panel">
@@ -2396,19 +2874,111 @@ body::after {
       <div class="logo-sub">AI Fitness Coach</div>
     </div>
 
-    <!-- 账号：游客可直接使用，登录后数据归到账号名下 -->
+    <div class="profile-summary" id="profile-summary" aria-live="polite">
+      <span id="profile-summary-text">训练档案</span>
+      <button class="profile-toggle" type="button" aria-expanded="false" aria-controls="profile-editor" onclick="toggleProfileEditor(this)">编辑资料</button>
+    </div>
+
+    <!-- 档案区。原先这些字段散在侧栏里当直接子元素，于是组内是 16px 间距、
+         到了边界突然变成侧栏的 22px，节奏断了一档——看上去像两撮不属于
+         彼此的东西。现在收进同一个分组，整段一个节奏。 -->
+    <div class="profile-fields" id="profile-fields">
+      <div id="profile-editor" class="field-group profile-editor">
+        <div class="field">
+          <label for="height">身高 Height (cm)</label>
+          <input id="height" type="number" value="180" min="100" max="250">
+        </div>
+
+        <div class="field">
+          <label for="weight">体重 Weight (kg)</label>
+          <input id="weight" type="number" value="80" min="30" max="200">
+        </div>
+
+        <!-- 年龄和性别只服务于热量目标（Mifflin-St Jeor 的性别常数项男女相差
+             166 kcal），不参与动作编排。性别默认「不填」并且是合法的默认值：
+             不填就按两性中值估算，误差约 ±83 kcal——小于活动系数分档的跨度。
+             把「不填」放在第一位而不是逼用户二选一，是因为营养估算用得上的
+             信息，不值得让用户先回答一个涉及身份的问题。 -->
+        <div class="row">
+          <div class="field">
+            <label for="age">年龄 Age</label>
+            <input id="age" type="number" value="30" min="10" max="100">
+          </div>
+          <div class="field">
+            <label for="sex">性别 Sex</label>
+            <select id="sex">
+              <option value="不填" selected>不填</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="years">训练年限 Years</label>
+            <input id="years" type="number" value="1" min="0" max="30" step="0.5">
+          </div>
+          <div class="field">
+            <label for="goal">目标 Goal</label>
+            <select id="goal">
+              <option value="增肌" selected>增肌</option>
+              <option value="减脂">减脂</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="days">每周天数 / Week</label>
+          <input id="days" type="number" value="4" min="1" max="7">
+        </div>
+
+        <div class="field">
+          <label>训练场景 Scene</label>
+          <div class="tag-group" id="scene-tags">
+            <button type="button" class="tag active" data-val="居家">居家</button>
+            <button type="button" class="tag" data-val="健身房">健身房</button>
+            <button type="button" class="tag" data-val="户外">户外</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="injuries-input">伤病史 Injuries</label>
+          <input id="injuries-input" type="text" placeholder="如：下背偶尔酸痛、左肩做过手术">
+        </div>
+
+        <div class="field">
+          <label for="habits-input">运动习惯与爱好 Habits</label>
+          <input id="habits-input" type="text" placeholder="如：晨练、跑步、瑜伽、每周三次">
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-generate" id="btn-generate" onclick="generatePlan()">
+      ▸ 生成计划
+    </button>
+
+    <!-- 账号区：放最底部。
+         它原本在品牌正下方、占 110px，还是一个卡片里套一个描边按钮——
+         双重边框。但登录是一次性动作，把侧栏最贵的位置留给它，等于让
+         主流程（填档案 → 生成计划）往下挤。移到底部压成一行：动作挤在
+         身份右边，说明折到第二行。 -->
     <div class="account-block" id="account-block">
       <div class="account-state" id="account-state" aria-live="polite">
+        <span class="account-dot" aria-hidden="true"></span>
         <span class="account-label" id="account-label">游客模式</span>
+        <!-- 动作和身份同一个 grid：挤在右侧同一行，不另占高度。
+             它曾经是这个 grid 的兄弟节点，于是 CSS 里的
+             `grid-column: 3; grid-row: 1` 从来没生效过——动作被甩到
+             第三行，孤零零挂在左下角，和上面的文字对不齐。 -->
+        <div class="account-actions" id="account-actions">
+          <button class="account-btn" type="button" id="btn-show-login"
+                  aria-expanded="false" aria-controls="auth-form"
+                  onclick="toggleAuthForm(this)">登录 / 注册</button>
+          <button class="account-btn" type="button" id="btn-logout"
+                  hidden onclick="handleLogout()">退出登录</button>
+        </div>
         <span class="account-hint" id="account-hint">数据只保存在本机浏览器</span>
-      </div>
-
-      <div class="account-actions" id="account-actions">
-        <button class="account-btn" type="button" id="btn-show-login"
-                aria-expanded="false" aria-controls="auth-form"
-                onclick="toggleAuthForm(this)">登录 / 注册</button>
-        <button class="account-btn account-btn-quiet" type="button" id="btn-logout"
-                hidden onclick="handleLogout()">退出登录</button>
       </div>
 
       <form class="auth-form" id="auth-form" hidden onsubmit="return false;">
@@ -2440,65 +3010,6 @@ body::after {
         </p>
       </form>
     </div>
-
-    <div class="profile-summary" id="profile-summary" aria-live="polite">
-      <span id="profile-summary-text">训练档案</span>
-      <button class="profile-toggle" type="button" aria-expanded="false" aria-controls="profile-editor" onclick="toggleProfileEditor(this)">编辑资料</button>
-    </div>
-
-    <div id="profile-editor" class="field-group profile-editor">
-      <div class="field">
-        <label for="height">身高 Height (cm)</label>
-        <input id="height" type="number" value="180" min="100" max="250">
-      </div>
-
-      <div class="field">
-        <label for="weight">体重 Weight (kg)</label>
-        <input id="weight" type="number" value="80" min="30" max="200">
-      </div>
-
-      <div class="row">
-        <div class="field">
-          <label for="years">训练年限</label>
-          <input id="years" type="number" value="1" min="0" max="30" step="0.5">
-        </div>
-        <div class="field">
-          <label for="goal">目标 Goal</label>
-          <select id="goal">
-            <option value="增肌" selected>增肌</option>
-            <option value="减脂">减脂</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field">
-        <label for="days">每周天数 / Week</label>
-        <input id="days" type="number" value="4" min="1" max="7">
-      </div>
-    </div>
-
-    <div class="field">
-      <label>训练场景 Scene</label>
-      <div class="tag-group" id="scene-tags">
-        <button type="button" class="tag active" data-val="居家">居家</button>
-        <button type="button" class="tag" data-val="健身房">健身房</button>
-        <button type="button" class="tag" data-val="户外">户外</button>
-      </div>
-    </div>
-
-    <div class="field">
-      <label for="injuries-input">伤病史 Injuries</label>
-      <input id="injuries-input" type="text" placeholder="如：下背偶尔酸痛、左肩做过手术">
-    </div>
-
-    <div class="field">
-      <label for="habits-input">运动习惯与爱好 Habits</label>
-      <input id="habits-input" type="text" placeholder="如：晨练、跑步、瑜伽、每周三次">
-    </div>
-
-    <button class="btn-generate" id="btn-generate" onclick="generatePlan()">
-      ▸ 生成计划
-    </button>
   </aside>
 
   <!-- ═══════════════ MAIN ═══════════════ -->
@@ -2511,6 +3022,21 @@ body::after {
       </div>
       <span class="session-badge">IRON MIND COACH</span>
     </header>
+
+    <!-- 注册成功后的确认条。
+         注册是自动登录直接进应用的（业界主流，注册完再要求登录一次是重复劳动），
+         但"直接掉进一个空应用"会让人怀疑账号到底建没建成——尤其新账号本来就没数据。
+         所以进应用的第一眼要有一条明确的成败回执，而不是只在侧栏某一行小字里交代。 -->
+    <div class="welcome-banner" id="welcome-banner" role="status" hidden>
+      <span class="welcome-banner-icon" aria-hidden="true">✓</span>
+      <div class="welcome-banner-body">
+        <strong class="welcome-banner-title" id="welcome-banner-title">账号已创建</strong>
+        <p class="welcome-banner-text" id="welcome-banner-text"></p>
+      </div>
+      <button class="welcome-banner-close" type="button" id="welcome-banner-close"
+              aria-label="关闭提示">×</button>
+    </div>
+
     <div class="tabs feature-tabs" role="tablist" aria-label="教练功能">
       <button id="tab-plan" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-plan" tabindex="0" type="button"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>训练计划</button>
       <button id="tab-saved" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-saved" tabindex="-1" type="button"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>我的计划</button>
@@ -2575,11 +3101,6 @@ body::after {
             <div class="sys-stat-item"><span class="ss-dot"></span> 智能安全检测</div>
             <div class="sys-stat-item"><span class="ss-dot"></span> 支持多轮对话</div>
           </div>
-
-          <div class="history-panel" id="history-panel" style="display:none">
-            <h4>最近生成的历史</h4>
-            <div id="history-list"></div>
-          </div>
         </div>
         </div>
         <div id="plan-error" class="error-panel" role="alert" hidden></div>
@@ -2590,12 +3111,12 @@ body::after {
     <section class="tab-content feature-panel" id="panel-saved" role="tabpanel" aria-labelledby="tab-saved">
       <div class="saved-plans-head">
         <h3>我的计划</h3>
-        <p>保存过的训练计划都在这里。登录后跟账号走，换设备也能找回。</p>
+        <p>生成过的计划都会自动收在这里，可以重命名或删掉。登录后跟账号走，换设备也能找回。</p>
       </div>
       <div id="saved-plans-list" class="saved-plans-list"></div>
       <div id="saved-plans-empty" class="saved-plans-empty" hidden>
-        <p class="saved-plans-empty-title">还没有保存的计划</p>
-        <p class="saved-plans-empty-hint">到「训练计划」生成一份，然后点「保存这份计划」，它就会出现在这里。</p>
+        <p class="saved-plans-empty-title">还没有计划</p>
+        <p class="saved-plans-empty-hint">到「训练计划」生成一份，它会自动出现在这里。</p>
       </div>
     </section>
 
@@ -2665,7 +3186,7 @@ body::after {
           <button class="btn-secondary" id="qa-new-session-btn" type="button" onclick="newQaSession()" hidden>新对话</button>
         </div>
       </header>
-      <div class="qa-coach-context" id="qa-coach-context" aria-live="polite" aria-label="当前教练上下文"></div>
+      <div class="qa-coach-context" id="qa-coach-context" aria-live="polite" aria-label="当前教练信息"></div>
 
       <div class="qa-composer" id="qa-composer">
         <label class="query-field-label" for="qa-query">健身问题</label>
@@ -2673,7 +3194,7 @@ body::after {
         <div id="file-upload-area" role="button" tabindex="0" aria-controls="file-input" aria-describedby="qa-upload-help" onclick="document.getElementById('file-input').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('file-input').click()}" ondragover="this.style.borderColor='var(--forge-amber)';this.style.background='var(--forge-amber-dim)';return false" ondragleave="this.style.borderColor='var(--steel-light)';this.style.background='var(--bg-card)';return false" ondrop="handleFileDrop(event);this.style.borderColor='var(--steel-light)';this.style.background='var(--bg-card)';return false">
           <span aria-hidden="true">&#128206;</span>
           <span>添加资料（可选）</span>
-          <span id="qa-upload-help">文件格式：PDF、Word、MD、TXT，单个不超过 20MB</span>
+          <span id="qa-upload-help">文件格式：PDF、Word、纯文本，单个不超过 20MB</span>
           <input type="file" id="file-input" accept=".pdf,.docx,.doc,.md,.txt" hidden onchange="uploadFile()"/>
         </div>
         <div id="uploaded-files" aria-live="polite"></div>
@@ -2686,7 +3207,7 @@ body::after {
 
       <div id="qa-output" class="qa-output" aria-live="polite">
         <div class="qa-welcome" id="qa-welcome">
-          <div class="qa-coach-lead"><span class="qa-hero-kicker">COACHING PROMPT</span><h3>从一个具体场景开始</h3><p>告诉我你正在做什么、哪里不舒服或想达成什么目标。我会先给结论，再说明阶段、依据与安全边界。</p></div>
+          <div class="qa-coach-lead"><span class="qa-hero-kicker">教练对话</span><h3>从一个具体场景开始</h3><p>告诉我你正在做什么、哪里不舒服或想达成什么目标。我会先给结论，再说明阶段、依据与安全边界。</p></div>
           <div class="qa-topic-list">
             <button type="button" class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">硬拉时下背酸，今天该怎么调整？</button>
             <button type="button" class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">减脂期训练前后怎么安排碳水？</button>
@@ -2765,8 +3286,16 @@ body::after {
         <div id="chart-volume" class="chart-box" hidden></div>
         <div id="chart-exercise" class="chart-box" hidden></div>
         <div id="chart-completion" class="chart-box" hidden></div>
+        <div id="chart-muscle" class="chart-box" hidden></div>
         <div id="progress-fallback" hidden></div>
         <div id="chart-note" class="chart-note" hidden></div>
+        <div id="records-panel" class="records-panel" hidden>
+          <div class="result-header">
+            <h3>个人纪录</h3>
+            <p class="section-hint">力量、负重、单次训练量分开记——它们是三种不同的进步</p>
+          </div>
+          <div id="records-list"></div>
+        </div>
       </div>
       <div class="feature-card" id="advice-panel">
         <div class="result-header">
@@ -2781,6 +3310,18 @@ body::after {
         </div>
         <div id="advice-status" role="status" aria-live="polite"></div>
         <div id="advice-error" role="alert" hidden></div>
+      </div>
+      <div class="feature-card" id="memory-panel">
+        <div class="result-header">
+          <h3>AI 记忆</h3>
+          <p class="section-hint">生成计划时，AI 会参考下面这些记录。点每条右上角的 × 可以单独删掉它，改动在下次生成计划时生效。</p>
+        </div>
+        <div id="memory-list"></div>
+        <div class="log-actions">
+          <button class="btn-ghost" id="btn-clear-memory" type="button" hidden>清空全部记忆</button>
+        </div>
+        <div id="memory-status" role="status" aria-live="polite"></div>
+        <div id="memory-error" role="alert" hidden></div>
       </div>
     </section>
   </main>
@@ -2818,19 +3359,21 @@ function updateProfileSummary() {
 
 function toggleProfileEditor(button) {
   const editor = document.getElementById(button.getAttribute("aria-controls"));
-  const panel = button.closest(".profile-panel");
   const open = button.getAttribute("aria-expanded") === "true";
   editor.hidden = open;
   editor.classList.toggle("is-open", !open);
-  panel.classList.toggle("profile-expanded", !open);
   button.setAttribute("aria-expanded", String(!open));
   if (!open) editor.querySelector("input, select, textarea")?.focus();
 }
 
 function activateTab(tabId, { focus = false } = {}) {
-  const tabs = [...document.querySelectorAll('[role="tab"]')];
   const tab = document.getElementById(tabId);
-  if (!tab || !tabs.includes(tab)) return;
+  // 只在**这个页签自己所属的 tablist** 里切换，不能全文档扫描 role="tab"。
+  // 页面上不止一组页签（登录页那组也是），全文档扫描会让它们互相踩：
+  // 点一次登录页的页签，主界面的每个面板都被置成 hidden，登录进去就是一片空白。
+  const list = tab?.closest('[role="tablist"]');
+  if (!tab || !list) return;
+  const tabs = [...list.querySelectorAll('[role="tab"]')];
   tabs.forEach(candidate => {
     const selected = candidate === tab;
     candidate.classList.toggle("active", selected);
@@ -2850,7 +3393,10 @@ function activateTab(tabId, { focus = false } = {}) {
 
 function switchTab(name) { activateTab(`tab-${name}`); }
 
-const tabList = document.querySelector('[role="tablist"]');
+// 必须点名主界面那一组。用 querySelector('[role="tablist"]') 取"第一个"会拿到
+// 登录页那组（它在 DOM 里更靠前），主界面的页签就一个监听器都绑不上——
+// 表现是点任何页签都没反应。用字段名限定，避免依赖元素在文档里的先后。
+const tabList = document.querySelector(".feature-tabs[role='tablist']");
 tabList?.addEventListener("click", event => {
   const tab = event.target.closest('[role="tab"]');
   if (tab) activateTab(tab.id);
@@ -3040,15 +3586,39 @@ async function postAuth(path, username, password) {
    藏起来用户就会以为必须先注册。 */
 const GUEST_PASS_KEY = 'ironmind_guest_pass';
 
+/* 本机提示"上次是登录状态"。
+   会话 cookie 是 HttpOnly（见 auth_api._set_session_cookie），JS 读不到，
+   所以登录态必须等 /api/auth/session 往返一次才知道。没有这个提示的话，
+   已登录用户每次刷新都会先看到登录页再跳进应用——把闪屏从"未登录用户"
+   挪到了"已登录用户"身上，等于没解决。有提示就能乐观地先渲染应用，
+   等会话回来再纠正（万一已过期，会被送回登录页）。 */
+const AUTH_HINT_KEY = 'ironmind_auth_hint';
+
 function showAuthGate() {
   const gate = document.getElementById('auth-gate');
+  const shell = document.getElementById('app-shell');
+  // 两个节点必须一起切。只切一个会留下"门开着但应用也在下面"或
+  // "门关了但底下什么都没有"这两种状态，两者都很难查，而且从截图上
+  // 看不出是哪一个。
+  // 同时摘掉 head 里加的首帧标记：它那两条规则优先级比 hidden 高，
+  // 留着会让 showAuthGate() 变成哑操作（应用照旧显示）。
+  document.documentElement.classList.remove('auth-passed');
   if (gate) gate.hidden = false;
+  if (shell) shell.hidden = true;
+  // 每次重新打开都回到「登录」态：上一次可能停在注册页签，
+  // 而下次进来的人大概率是要登录已有账号
+  setGateMode('login');
   document.getElementById('gate-username')?.focus();
 }
 
 function hideAuthGate() {
   const gate = document.getElementById('auth-gate');
+  const shell = document.getElementById('app-shell');
+  // 交回给 hidden 属性管：head 里那段的唯一作用是撑过首帧，
+  // 留着会让后面 showAuthGate() 失效（它的 display:none 优先级更高）。
+  document.documentElement.classList.remove('auth-passed');
   if (gate) gate.hidden = true;
+  if (shell) shell.hidden = false;
 }
 
 function setGateStatus(message, kind) {
@@ -3056,6 +3626,58 @@ function setGateStatus(message, kind) {
   if (!el) return;
   el.textContent = message || '';
   if (kind) el.dataset.kind = kind; else delete el.dataset.kind;
+}
+
+/* 登录页的当前模式。表单是同一份，但"登录"和"注册"是两件不同的事：
+   标题、副标题、主按钮文案、密码框的 autocomplete 都要跟着变。
+   没有这个状态时，用户点完「注册」界面毫无变化，不知道自己会提交成什么；
+   新用户填完账号密码点「登录」也只会撞上"用户名或密码不正确"。 */
+let gateMode = 'login';
+
+const GATE_COPY = {
+  login: {
+    title: '欢迎回来',
+    sub: '登录后，训练计划、长期记忆与训练日志都跟着账号走，换设备也能找回。',
+    submit: '登录',
+    passwordAutocomplete: 'current-password',
+  },
+  register: {
+    title: '创建账号',
+    sub: '注册后，计划、长期记忆与训练记录都归到账号名下，换设备也能找回。',
+    submit: '创建账号',
+    passwordAutocomplete: 'new-password',
+  },
+};
+
+function setGateMode(mode) {
+  gateMode = mode === 'register' ? 'register' : 'login';
+  const copy = GATE_COPY[gateMode];
+
+  const title = document.getElementById('gate-title');
+  const sub = document.getElementById('gate-sub');
+  const submit = document.getElementById('gate-submit');
+  if (title) title.textContent = copy.title;
+  if (sub) sub.textContent = copy.sub;
+  if (submit) submit.textContent = copy.submit;
+
+  const password = document.getElementById('gate-password');
+  if (password) {
+    // 注册时若仍是 current-password，浏览器会试着填一个已有密码，
+    // 而不是提示生成新密码——这正是注册场景下最不该发生的事
+    password.setAttribute('autocomplete', copy.passwordAutocomplete);
+    password.setAttribute('placeholder', '至少 8 位');
+  }
+
+  // 两个选项的选中态必须同步，否则用户看到的是"点了没反应"
+  for (const [id, value] of [['gate-login', 'login'], ['gate-register', 'register']]) {
+    const tab = document.getElementById(id);
+    if (!tab) continue;
+    tab.setAttribute('aria-checked', String(value === gateMode));
+  }
+
+  // 切换模式会改变提交语义，上一条错误信息不再成立
+  setGateStatus('');
+  document.getElementById('gate-username')?.focus();
 }
 
 /* 回车提交。
@@ -3076,38 +3698,82 @@ function bindEnterToSubmit(pairs) {
 
 // 游客放行记在本机：刷新不该反复弹登录页，否则等于把游客挡住了
 function enterAsGuest() {
-  try { localStorage.setItem(GUEST_PASS_KEY, '1'); } catch (e) {}
+  try {
+    localStorage.setItem(GUEST_PASS_KEY, '1');
+    // 选了游客就是明确表示不用账号态。留着登录提示会让"下次刷新先按登录
+    // 处理"，多绕一次会话往返才知道其实没登录。
+    localStorage.removeItem(AUTH_HINT_KEY);
+  } catch (e) {}
   hideAuthGate();
 }
 
-// 登录页与侧栏共用同一套登录/注册逻辑，只是字段与状态行不同
+// 登录页与侧栏共用同一套登录/注册逻辑，只是字段与状态行不同。
+// mode 省略时用当前页签的模式——回车键走的就是这条路。
 async function gateAuth(mode) {
+  const action = mode === 'register' ? 'register' : 'login';
   const username = document.getElementById('gate-username')?.value?.trim() || '';
   const password = document.getElementById('gate-password')?.value || '';
   if (!username || !password) { setGateStatus('请填写用户名与密码', 'error'); return; }
-  if (mode === 'register' && password.length < 8) {
+  if (action === 'register' && password.length < 8) {
     setGateStatus('密码至少 8 位', 'error'); return;
   }
-  const buttons = ['gate-login', 'gate-register'].map(id => document.getElementById(id));
-  buttons.forEach(b => { if (b) b.disabled = true; });
-  setGateStatus(mode === 'register' ? '注册中…' : '登录中…');
+  const submit = document.getElementById('gate-submit');
+  const tabs = ['gate-login', 'gate-register'].map(id => document.getElementById(id));
+  // 提交期间锁住整个表单：这段要做一次 scrypt（约 80ms）加一次网络往返，
+  // 不锁的话用户会连点，制造并发注册这类无谓的错误路径
+  if (submit) submit.disabled = true;
+  tabs.forEach(b => { if (b) b.disabled = true; });
+  setGateStatus(action === 'register' ? '注册中…' : '登录中…');
   try {
-    await postAuth(`/api/auth/${mode}`, username, password);
+    await postAuth(`/api/auth/${action}`, username, password);
     await loadSession();
     document.getElementById('gate-password').value = '';
     setGateStatus('');
+    // 记下"这台机器上次是登录态"，下次刷新直接进应用而不是先闪一下登录页
+    try {
+      localStorage.setItem(AUTH_HINT_KEY, '1');
+      // 登录/注册成功意味着这台机器不再是游客态了。留着游客标记会让
+      // 日后的登出形同虚设：登出只清 hint，刷新时游客标记又把应用放行了。
+      localStorage.removeItem(GUEST_PASS_KEY);
+    } catch (e) {}
     hideAuthGate();
     // 注册时顺手认领本机数据，与侧栏注册走同一条路径
-    const claimed = mode === 'register' ? await claimLocalGuestData() : '';
-    showStatus('log-status', claimed
-      ? `已登录为 ${currentUser ? currentUser.username : username}，${claimed}`
-      : `已登录为 ${currentUser ? currentUser.username : username}`);
+    const claimed = await claimLocalGuestData();
+    const who = currentUser ? currentUser.username : username;
+    // 注册和登录要说不同的话：注册完却提示"已登录为 X"，等于没告诉用户
+    // 账号是不是真建成了。侧栏那份一直是分开写的，这里之前合并掉了。
+    showStatus('log-status', action === 'register'
+      ? (claimed ? `已创建并登录为 ${who}，${claimed}` : `已创建并登录为 ${who}`)
+      : `已登录为 ${who}，正在刷新数据…`);
+    if (action === 'register') showWelcomeBanner(who, claimed);
     refreshUserScopedViews();
   } catch (e) {
     setGateStatus(e.message, 'error');
   } finally {
-    buttons.forEach(b => { if (b) b.disabled = false; });
+    if (submit) submit.disabled = false;
+    tabs.forEach(b => { if (b) b.disabled = false; });
   }
+}
+
+/* 注册成功后的确认条。
+   注册是自动登录直接进应用的（业界主流），但"直接掉进一个空应用"会让人
+   怀疑账号到底建没建成——尤其新账号本来就没有任何数据。所以第一眼要给一条
+   明确的回执，并顺带指出下一步该做什么，而不是让用户自己猜。 */
+function showWelcomeBanner(username, claimed) {
+  const box = document.getElementById('welcome-banner');
+  const text = document.getElementById('welcome-banner-text');
+  const title = document.getElementById('welcome-banner-title');
+  if (!box || !text) return;
+  if (title) title.textContent = `账号「${username}」已创建，并已为你登录`;
+  text.textContent = claimed
+    ? `本机的训练数据已经归到这个账号名下（${claimed}）。接下来在左侧补全训练档案，就能生成第一份计划。`
+    : '接下来在左侧补全训练档案，就能生成第一份计划。档案里填得越具体，排出来的计划越能照着做。';
+  box.hidden = false;
+}
+
+function hideWelcomeBanner() {
+  const box = document.getElementById('welcome-banner');
+  if (box) box.hidden = true;
 }
 
 function renderSession() {
@@ -3116,6 +3782,7 @@ function renderSession() {
   const logout = document.getElementById('btn-logout');
   const showLogin = document.getElementById('btn-show-login');
   const form = document.getElementById('auth-form');
+  const block = document.getElementById('account-block');
 
   if (currentUser) {
     if (label) label.textContent = `已登录 · ${currentUser.username}`;
@@ -3123,11 +3790,15 @@ function renderSession() {
     if (logout) logout.hidden = false;
     if (showLogin) showLogin.hidden = true;
     if (form) form.hidden = true;
+    // 圆点变实心橙。状态用形状＋颜色一起表达，不只靠一行小字：
+    // 侧栏底部现在是折叠线附近的位置，扫一眼就能分清游客还是账号态。
+    if (block) block.classList.add('is-account');
   } else {
     if (label) label.textContent = '游客模式';
     if (hint) hint.textContent = '数据只保存在本机浏览器';
     if (logout) logout.hidden = true;
     if (showLogin) showLogin.hidden = false;
+    if (block) block.classList.remove('is-account');
   }
   // 演示数据是共享的固定身份，登录态下切换它会让用户以为自己的数据丢了
   const demoBtn = document.getElementById('btn-load-demo');
@@ -3241,10 +3912,23 @@ async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
   } catch (e) { /* 网络失败也要让界面回到游客态，否则用户被卡在假的登录态里 */ }
   currentUser = null;
+  try {
+    localStorage.removeItem(AUTH_HINT_KEY);
+    // 游客放行标记也必须清。留着它，登出后一刷新就会被 <head> 那段脚本
+    // 当成游客放行进应用——登出等于没生效（实测过：登出后门是显示的，
+    // 刷新后门又没了）。
+    localStorage.removeItem(GUEST_PASS_KEY);
+  } catch (e) {}
   renderSession();
   setAuthStatus('');
-  showStatus('log-status', '已退出登录，回到游客模式');
+  // 注册回执是一次性的：登出后再进来（游客或其他账号）不该还挂着
+  // "账号已创建"
+  hideWelcomeBanner();
   refreshUserScopedViews();
+  // 退出后回登录页。留在应用里变成游客态是旧行为——那时首屏没有独立登录页，
+  // 现在有出口就该走出口，否则用户不知道自己是退出了还是没登录过。
+  setGateStatus('');
+  showAuthGate();
 }
 
 // 身份变化后重新拉取按用户归属的数据（训练日志、图表统计）
@@ -3256,10 +3940,6 @@ function refreshUserScopedViews() {
 // ── Multi-turn QA session (legacy, kept for qa-specific UI) ──
 let qaSessionId = globalSessionId;  // Q&A shares the global session
 let qaTurnCount = 0;
-
-// Load history on page load
-document.addEventListener('DOMContentLoaded', () => { loadHistory(); });
-
 
 // Stable view-state helpers: toggle visibility without replacing page shells.
 function setViewState(view, state) {
@@ -3373,45 +4053,64 @@ function updatePlanStage(eventData) {
   }
 }
 
-// ── History ──
-/* 保存到服务端。失败时如实告知并保留按钮可重试——不能因为一次网络抖动
-   就让用户以为计划已经存好了。 */
-async function savePlanToServer(planData, button, hint) {
-  const original = button.textContent;
-  button.disabled = true;
-  button.textContent = '保存中…';
+// ── 计划的自动收录与列表 ──
+/* 计划交付后自动存进「我的计划」，返回是否成功。
+
+   复用 POST /api/plans 而不是在后端交付路径上挂钩：那个接口本身就带交付
+   闸门（只收 safe_delivered / review_approved），从这里走不可能把未交付的
+   计划插进去；而交付路径是安全关键路径，动它的代价与风险都高得多。
+
+   身份沿用 athlete_key：游客也能存（owner_key 就是本机标识），登录后服务端
+   会以登录身份为准。 */
+async function autoSavePlan(planData) {
   try {
     const resp = await fetch('/api/plans', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plan: planData, athlete_key: athleteKey }),
     });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      const detail = data.error || data.detail || {};
-      throw new Error(detail.message || `保存失败（${resp.status}）`);
-    }
-    button.textContent = '已保存 ✓';
-    button.classList.add('is-saved');
-    // 告诉用户"存到哪去了"。只把按钮改成"已保存"是不够的——
-    // 计划进了库，但入口在另一个 tab，不说就等于没保存。
-    if (hint) {
-      hint.replaceChildren();
-      const jump = el('button', 'link-btn', '已存入「我的计划」 · 去看看 →');
-      jump.type = 'button';
-      jump.onclick = () => activateTab('tab-saved');
-      hint.appendChild(jump);
-    }
-    loadSavedPlans();
-    return true;
+    return resp.ok;
   } catch (e) {
-    button.textContent = original;
-    button.disabled = false;
-    button.classList.remove('is-saved');
-    showStatus('log-status', `计划保存失败：${e.message}`);
     return false;
   }
 }
+
+/* 把早期存在浏览器本地的历史（ironmind_history）一次性搬进「我的计划」。
+
+   合并前的那份列表只存在于本机 localStorage、上限 10 条，且换浏览器就没了。
+   直接删掉会让用户以为计划丢了，所以迁到服务端再清本地。
+
+   幂等：迁完写标记键，重复进页面不会重复插入。单条失败就保留本地那份、
+   下次再试——宁可多试几次，也不要静默丢一条。 */
+async function migrateLocalHistory() {
+  const MARK = 'ironmind_history_migrated';
+  try {
+    if (localStorage.getItem(MARK)) return;
+    const raw = JSON.parse(localStorage.getItem('ironmind_history') || '[]');
+    if (!Array.isArray(raw) || !raw.length) {
+      localStorage.setItem(MARK, '1');
+      return;
+    }
+    const pending = [];
+    for (const entry of raw) {
+      if (!entry || !entry.plan) continue;
+      if (!await autoSavePlan(entry.plan)) pending.push(entry);
+    }
+    if (!pending.length) {
+      localStorage.removeItem('ironmind_history');
+      localStorage.setItem(MARK, '1');
+    } else {
+      // 只留没迁成功的。留下已成功的那批，下次进页面会重复插入。
+      localStorage.setItem('ironmind_history', JSON.stringify(pending));
+    }
+  } catch (e) {
+    // 迁移失败不该影响页面可用性：用户照常生成计划，只是旧记录晚一点才出现
+  }
+}
+
+// 一次拉多少。计划现在是自动收录的，条数会持续增长；取 50 是因为再多
+// 一屏也读不过来，而截断会明说（见下方提示），不静默吞掉。
+const SAVED_PLANS_LIMIT = 50;
 
 async function loadSavedPlans() {
   const list = document.getElementById('saved-plans-list');
@@ -3421,7 +4120,7 @@ async function loadSavedPlans() {
   // 没有计划时若整块消失，用户看到的是一个空白页——那比空状态更让人困惑。
   const showEmpty = () => { list.replaceChildren(); list.hidden = true; empty.hidden = false; };
   try {
-    const resp = await fetch(`/api/plans?athlete_key=${encodeURIComponent(athleteKey)}&limit=20`);
+    const resp = await fetch(`/api/plans?athlete_key=${encodeURIComponent(athleteKey)}&limit=${SAVED_PLANS_LIMIT}`);
     if (!resp.ok) { showEmpty(); return; }
     const data = await resp.json();
     const plans = data.plans || [];
@@ -3442,6 +4141,10 @@ async function loadSavedPlans() {
       row.appendChild(open); row.appendChild(rename); row.appendChild(del);
       list.appendChild(row);
     });
+    if (plans.length >= SAVED_PLANS_LIMIT) {
+      // 截断要说出来。不说的话，用户会以为更早的计划不见了。
+      list.appendChild(el('p', 'section-hint', `仅显示最近 ${SAVED_PLANS_LIMIT} 份计划。`));
+    }
     list.hidden = false; empty.hidden = true;
   } catch (e) {
     showEmpty();
@@ -3468,7 +4171,8 @@ async function openSavedPlan(planId) {
   }
 }
 
-// 查看历史计划时不再显示"保存这份计划"——它已经在库里了
+// 从列表里打开计划时去掉那条「已存入「我的计划」· 去看看」——用户此刻
+// 就站在计划列表里，再让他"去看看"是句废话。
 function showPlanSaveBarHidden() {
   document.querySelectorAll('.plan-save-bar').forEach(n => n.remove());
 }
@@ -3562,55 +4266,6 @@ function showSavedPlanNotice(message) {
   setTimeout(() => notice.remove(), 4000);
 }
 
-function savePlanToHistory(profile, planData) {
-  try {
-    const history = JSON.parse(localStorage.getItem('ironmind_history') || '[]');
-    history.unshift({ date: new Date().toLocaleString('zh-CN'), goal: profile.goal, days: (planData.days || []).length, plan: planData, profile });
-    if (history.length > 10) history.length = 10;
-    localStorage.setItem('ironmind_history', JSON.stringify(history));
-  } catch(e) {}
-}
-
-function loadHistory() {
-  try {
-    const history = JSON.parse(localStorage.getItem('ironmind_history') || '[]');
-    const panel = document.getElementById('history-panel');
-    if (!panel || !history.length) { if (panel) panel.style.display = 'none'; return; }
-    panel.style.display = 'block';
-    const list = document.getElementById('history-list');
-    list.replaceChildren();
-    history.forEach((h, i) => {
-      const item = el('button', 'history-item', '');
-      item.type = 'button';
-      item.addEventListener('click', () => restorePlan(i));
-      const goal = el('span', 'hi-goals', `${h.goal || ''} · ${Number(h.days) || 0}天计划`);
-      const date = el('span', 'hi-date', h.date || '');
-      item.append(goal, date);
-      list.appendChild(item);
-    });
-  } catch(e) {}
-}
-
-function restorePlan(idx) {
-  try {
-    const history = JSON.parse(localStorage.getItem('ironmind_history') || '[]');
-    const h = history[idx];
-    if (!h) return;
-    // Fill sidebar
-    const p = h.profile;
-    document.getElementById('height').value = p.height || 180;
-    document.getElementById('weight').value = p.weight || 80;
-    document.getElementById('years').value = p.training_years || 1;
-    document.getElementById('goal').value = p.goal || '增肌';
-    document.getElementById('days').value = p.days_per_week || 4;
-    // Render plan
-      const output = document.getElementById('plan-output');
-      document.getElementById('plan-result').replaceChildren();
-      renderPlanResult(document.getElementById('plan-result'), h.plan);
-      output.scrollIntoView({ behavior: 'smooth' });
-  } catch(e) {}
-}
-
 // ── Plan Iteration ──
 function iteratePlan(action) {
   const q = document.getElementById('plan-query');
@@ -3650,6 +4305,8 @@ function getProfile() {
   return {
     height: parseFloat(document.getElementById('height').value) || 180,
     weight: parseFloat(document.getElementById('weight').value) || 80,
+    age: parseInt(document.getElementById('age')?.value, 10) || 30,
+    sex: document.getElementById('sex')?.value || '不填',
     training_years: parseFloat(document.getElementById('years').value) || 1,
     goal: document.getElementById('goal').value,
     available_equipment: equipment,
@@ -3684,12 +4341,12 @@ const SSE_TERMINAL_EVENTS = new Set(['done', 'error', 'cancelled']);
 async function consumeSse(response, { signal, isCurrent = () => true, onEvent, onTerminal }) {
   if (!response.ok || !response.body) {
     const detail = await response.text().catch(() => '');
-    const prefix = response.status === 422 ? '提交内容未通过校验' : response.status >= 500 ? '服务暂时不可用，请稍后重试' : '';
+    const prefix = response.status === 422 ? '提交的内容有问题' : response.status >= 500 ? '服务暂时不可用，请稍后重试' : '';
     throw new Error(prefix || detail || `请求失败（${response.status}）`);
   }
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.toLowerCase().includes('text/event-stream')) {
-    throw new Error('服务返回了无效的流式响应');
+    throw new Error('连接中断，返回的数据不完整，请重试');
   }
 
   const reader = response.body.getReader();
@@ -3707,11 +4364,11 @@ async function consumeSse(response, { signal, isCurrent = () => true, onEvent, o
     try {
       payload = JSON.parse(dataLines.join('\n'));
     } catch (_) {
-      throw new Error('服务返回了无法解析的流式数据');
+      throw new Error('返回的数据无法识别，请重试');
     }
     const { event, data } = payload || {};
-    if (typeof event !== 'string') throw new Error('流式事件缺少事件名称');
-    if (terminal) throw new Error('服务返回了重复的终态事件');
+    if (typeof event !== 'string') throw new Error('返回的数据格式异常，请重试');
+    if (terminal) throw new Error('服务重复返回了结果，请重试');
     if (!isCurrent()) {
       await reader.cancel().catch(() => {});
       throw new DOMException('请求已取消', 'AbortError');
@@ -3741,9 +4398,9 @@ async function consumeSse(response, { signal, isCurrent = () => true, onEvent, o
       }
     }
     if (!terminal && buffer.trim()) await processRecord(buffer.trim());
-    if (!terminal) throw new Error('流式响应意外结束，请重试');
+    if (!terminal) throw new Error('连接意外中断，请重试');
     if (terminal.event === 'error') {
-      const error = new Error(terminal.data?.message || '流式请求失败');
+      const error = new Error(terminal.data?.message || '请求失败');
       error.code = terminal.data?.code || 'STREAM_FAILED';
       throw error;
     }
@@ -3816,7 +4473,7 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
         streamBox?.querySelector('.cursor')?.remove();
         detailEl?.remove();
         detailEl = el('div', 'stage-detail', '');
-        appendText(detailEl, `${data?.safe ? '✓' : '⚠'} 安全审查 · ${data?.issues || 0} 问题 · 置信度 ${Math.round((data?.confidence || 0) * 100)}%`);
+        appendText(detailEl, `${data?.safe ? '✓' : '⚠'} 安全审查 · ${data?.issues || 0} 问题 · 把握 ${Math.round((data?.confidence || 0) * 100)}%`);
         (mode === 'plan' ? document.getElementById('plan-stream') : resultArea)?.appendChild(detailEl);
       } else if (event === 'writer_done_raw') {
         // 首轮草稿先渲染出来。计划生成要几十秒（含重写回路），
@@ -3850,19 +4507,24 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
         });
         resultArea.appendChild(iterBar);
 
-        // 保存到服务端：登录后跟账号走、换设备能找回；游客存在本机标识下。
-        // 本机 localStorage 那份仍保留——它不依赖网络，离线演示时是唯一的记录。
+        // 自动收进「我的计划」。以前要用户再点一次「保存这份计划」才找得到，
+        // 而生成过的计划本来就该在那里——多一步就有一批人不做，然后就找不到
+        // 自己刚生成的计划了。入口在另一个 tab，所以成功后给一条明确的去路。
         const saveBar = el('div', 'plan-save-bar', '');
         const saveHint = el('span', 'plan-save-hint', '');
-        const saveBtn = el('button', 'btn-primary', '保存这份计划');
-        saveBtn.type = 'button';
-        saveBtn.onclick = () => savePlanToServer(data, saveBtn, saveHint);
         saveBar.appendChild(saveHint);
-        saveBar.appendChild(saveBtn);
         resultArea.appendChild(saveBar);
-
-        savePlanToHistory(getProfile(), data);
-        loadHistory();
+        autoSavePlan(data).then(ok => {
+          if (ok) {
+            const jump = el('button', 'link-btn', '已存入「我的计划」 · 去看看 →');
+            jump.type = 'button';
+            jump.onclick = () => activateTab('tab-saved');
+            saveHint.replaceChildren(jump);
+          } else {
+            // 存不进去不影响看和练，但要说一句——不能让用户以为已经存好了
+            saveHint.textContent = '这次没能存入「我的计划」，刷新后可再试。';
+          }
+        });
       }
       resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -3913,31 +4575,42 @@ function renderReviewPending(container, review) {
     panel.appendChild(list);
   }
 
+  // 「动作库中未收录」不再显示给用户。
+  // 那是**我们自己的数据缺口**，不是用户的风险：用户既没法处理，也读不懂
+  // 为什么"库里有没收录"要占用风险面板的一行。后端那条注释写得很清楚，
+  // 这份清单本来就是给审核者看的（"审核者需要直接看到哪些动作名是模型编造的"），
+  // 而本版本没有面向用户的审核台。要看就进控制台，别摆在风险清单里。
   const unknown = Array.isArray(details.unknown_exercises) ? details.unknown_exercises : [];
   if (unknown.length) {
-    const row = el('div', 'review-pending-row', '');
-    row.appendChild(el('strong', '', '动作库中未收录：'));
-    appendText(row, unknown.join('、'));
-    panel.appendChild(row);
+    console.info('[计划待确认] 动作库未收录的动作（仅供排查）:', unknown.join('、'));
   }
 
+  // 禁止项并进「下一步」，不再单列。
+  // 单列时是一串祈使句——"不要开始训练计划；不要加大训练强度；不要自行替换或增加动作"，
+  // 读起来像系统在训人；而且它与"下一步"里已有的"不要执行或调整训练计划"重复。
+  // 同一件事说两遍，一遍还带着命令语气，是这一屏观感最差的地方。
+  // 现在把实质保留、语气改成陈述，并入下一步一句话说完。
   const prohibited = Array.isArray(details.prohibited_actions) ? details.prohibited_actions : [];
-  if (prohibited.length) {
-    const row = el('div', 'review-pending-row', '');
-    row.appendChild(el('strong', '', '禁止项：'));
-    appendText(row, prohibited.join('；'));
-    panel.appendChild(row);
-  }
-
   const row = el('div', 'review-pending-row', '');
   row.appendChild(el('strong', '', '下一步：'));
   appendText(row, details.next_step
     || '带着上面的明细咨询骨科或运动医学科；在获得专业意见前，不要执行或调整训练计划。');
   panel.appendChild(row);
 
-  // 审核编号对普通用户没有意义，但演示/排查时需要，因此弱化后置而非删除。
+  // 禁止项保留原意作为补充说明，但换成建议口吻挂在下一步下面。
+  if (prohibited.length) {
+    panel.appendChild(el('p', 'review-pending-footnote',
+      `在拿到专业意见之前，先别按这份计划训练、也别自己加量或换动作——`
+      + `改动会让上面的判断失效，等于回到没有检查过的状态。`));
+  }
+
+  // 审核编号只进控制台，不上界面。
+  // 对用户来说它是一串无意义的 UUID，出现在"风险"板块里只会加重"产品坏了"的观感；
+  // 但排查时确实要用，所以留着 —— 放在面板的 data 属性上（肉眼不可见、可查），
+  // 并同时打一条 console。
   if (details.review_id) {
-    panel.appendChild(el('div', 'review-pending-id', `审核编号：${details.review_id}`));
+    panel.dataset.reviewId = details.review_id;
+    console.info('[计划待确认] 审核编号（仅供排查）:', details.review_id);
   }
   container.appendChild(panel);
 }
@@ -3948,10 +4621,11 @@ function renderPlanExplanation(container, explain) {
   if (!container || !explain) return;
   const skill = explain.skill || {};
   const retrieval = explain.retrieval || {};
+  const habits = explain.habits?.habits || [];
   const safety = explain.safety || {};
 
   const hasAny = Object.keys(skill).length || Object.keys(retrieval).length
-    || safety.resolved?.length || safety.active?.length;
+    || habits.length || safety.resolved?.length || safety.active?.length;
   if (!hasAny) return;
 
   const toggle = el('button', 'explain-toggle', '▸ 这份计划是怎么来的？');
@@ -3970,6 +4644,18 @@ function renderPlanExplanation(container, explain) {
     panel.appendChild(sec);
   }
 
+  // ── 运动习惯 ──
+  // 用户填了习惯却看不出计划有没有理它，是这个项目被问过的问题。这里给一个
+  // 可见的答案——但只说"这些习惯进入了生成输入"，不声称模型已经照做，
+  // 因为后者没有可核验的依据。
+  if (habits.length) {
+    const sec = el('div', 'explain-section');
+    sec.appendChild(el('h4', null, '运动习惯'));
+    sec.appendChild(el('div', 'explain-line',
+      `已纳入生成参考：${habits.join(' · ')}`));
+    panel.appendChild(sec);
+  }
+
   // ── 动作筛选 ──
   if (Object.keys(retrieval).length) {
     const sec = el('div', 'explain-section');
@@ -3977,7 +4663,7 @@ function renderPlanExplanation(container, explain) {
     sec.appendChild(el('div', 'explain-line',
       `从动作库中检索到 ${retrieval.total} 个候选动作`));
     const paths = [];
-    if (retrieval.semantic) paths.push(`语义检索 ${retrieval.semantic}`);
+    if (retrieval.semantic) paths.push(`按描述匹配 ${retrieval.semantic}`);
     if (retrieval.structured) paths.push(`肌群精确匹配 ${retrieval.structured}`);
     if (paths.length) sec.appendChild(el('div', 'explain-line', paths.join(' · ')));
     if (retrieval.muscles?.length) {
@@ -3994,7 +4680,7 @@ function renderPlanExplanation(container, explain) {
   sec.appendChild(el('h4', null, '安全检查'));
   const bits = [`共检查 ${safety.rounds || 1} 轮`];
   if (typeof safety.confidence === 'number') {
-    bits.push(`置信度 ${Math.round(safety.confidence * 100)}%`);
+    bits.push(`把握 ${Math.round(safety.confidence * 100)}%`);
   }
   sec.appendChild(el('div', 'explain-line', bits.join(' · ')));
 
@@ -4013,7 +4699,7 @@ function renderPlanExplanation(container, explain) {
   }
   if (safety.degraded) {
     sec.appendChild(el('div', 'explain-line explain-warn',
-      '⚠ 本次生成期间模型服务不稳定，建议核对后再执行'));
+      '⚠ 本次生成期间 AI 不太稳定，建议核对后再执行'));
   }
   if (!safety.resolved?.length && !safety.active?.length) {
     sec.appendChild(el('div', 'explain-line', '未发现伤病冲突或强度问题'));
@@ -4090,8 +4776,9 @@ function renderPlanDays(container, days) {
     const exercises = Array.isArray(day?.exercises) ? day.exercises : [];
     const card = el('article', 'plan-day-column', '');
     card.style.animationDelay = `${.04 * index}s`;
-    const header = el('div', 'plan-day-header', `DAY ${day?.day ?? index + 1} · ${day?.focus || ''}`);
-    header.appendChild(el('span', '', `${exercises.length} EX`));
+    const header = el('div', 'plan-day-header', '');
+    header.appendChild(el('span', 'plan-day-title', `DAY ${day?.day ?? index + 1} · ${day?.focus || ''}`));
+    header.appendChild(el('span', 'plan-day-count', `${exercises.length} EX`));
     card.appendChild(header);
     const body = el('div', 'plan-day-body', '');
     const heading = el('div', 'plan-ex-heading', '');
@@ -4315,6 +5002,23 @@ function renderPlanNotice(warnings) {
   return box;
 }
 
+function renderPlanNutrition(container, nutrition) {
+  if (!container || !nutrition || !nutrition.daily_kcal) return;
+  const box = el('div', 'plan-nutrition');
+  box.appendChild(el('span', 'nutrition-label', '每日目标'));
+  const metric = (value, unit) => {
+    const node = el('span', 'nutrition-metric');
+    node.appendChild(el('b', 'nutrition-value', Number(value).toLocaleString('zh-CN')));
+    node.appendChild(el('span', 'nutrition-unit', unit));
+    return node;
+  };
+  box.appendChild(metric(nutrition.daily_kcal, 'kcal · 每日热量'));
+  box.appendChild(metric(nutrition.protein_g, 'g · 蛋白质'));
+  // 依据文本来自后端算出来的 basis：公式、参数、活动系数一览。
+  // 没有它，这个数字对用户就是一个无从检验的断言。
+  if (nutrition.basis) box.appendChild(el('span', 'nutrition-basis', nutrition.basis));
+  container.appendChild(box);
+}
 function renderPlanResult(container, data) {
   if (!container) return;
   const plan = data || {};
@@ -4335,7 +5039,7 @@ function renderPlanResult(container, data) {
   // 只数给用户看的那部分：内部条目（动作名词表缺口）不渲染，若计进条数，
   // 顶部就会写着"3 条提示"而点开一条都没有。
   const planWarnings = splitWarnings(plan.warnings).visible;
-  stats.appendChild(pill(plan.requires_review ? '建议留意' : (confidence >= .85 ? 'AI 可信度高' : 'AI 可信度良好'), plan.requires_review ? 'amber' : 'green'));
+  stats.appendChild(pill(plan.requires_review ? '建议留意' : (confidence >= .85 ? 'AI 把握大' : 'AI 把握较大'), plan.requires_review ? 'amber' : 'green'));
   // 不叫「安全提示」：多数条目是器械缺件这类配置问题，用「安全」二字会把它们
   // 和真正的伤病风险混为一谈，反而稀释后者的分量。
   if (planWarnings.length) stats.appendChild(pill(`${planWarnings.length} 条提示`, 'amber'));
@@ -4343,6 +5047,7 @@ function renderPlanResult(container, data) {
   stats.appendChild(pill(`${Array.isArray(plan.days) ? plan.days.length : 0} 天计划`));
   container.appendChild(stats);
 
+  renderPlanNutrition(container, plan.nutrition);
   const notice = renderPlanNotice(planWarnings);
   if (notice) container.appendChild(notice);
   // 放在计划卡片之前：用户正是读到这里时会产生「我凭什么信它」的疑问
@@ -4413,6 +5118,12 @@ function renderAnalysisResult(container, data) {
 // ═══════════════ API ACTIONS ═══════════════
 
 async function generatePlan() {
+  // 左侧档案栏在所有页签都在（它在页签容器之外），但进度与结果全都写进
+  // 训练计划页。从别的页签点这个按钮时若不先切过去，用户会对着一个
+  // 「处理中…」的按钮等上几分钟、期间看不到任何进度，然后什么都不发生。
+  activateTab('tab-plan');
+  document.getElementById('plan-output')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   const btn = document.getElementById('btn-generate');
   activeRequests.plan?.abort();
   const controller = new AbortController(); activeRequests.plan = controller;
@@ -4512,7 +5223,7 @@ async function uploadFile() {
   try {
     const resp = await fetch('/api/upload-document', { method: 'POST', body: formData });
     const result = await resp.json();
-    const message = result.error || '解析失败';
+    const message = result.error || '打不开这个文件';
     area.replaceChildren();
 
     if (result.error && !result.has_text) {
@@ -4914,7 +5625,7 @@ function renderProgressStats(stats) {
 }
 
 function clearCharts() {
-  ['chart-volume', 'chart-exercise', 'chart-completion'].forEach(id => {
+  ['chart-volume', 'chart-exercise', 'chart-completion', 'chart-muscle'].forEach(id => {
     const node = document.getElementById(id);
     if (!node) return;
     if (window.echarts) {
@@ -4928,6 +5639,10 @@ function clearCharts() {
   if (fb) { fb.replaceChildren(); fb.hidden = true; }
   const note = document.getElementById('chart-note');
   if (note) { note.textContent = ''; note.hidden = true; }
+  const rp = document.getElementById('records-panel');
+  if (rp) rp.hidden = true;
+  const rl = document.getElementById('records-list');
+  if (rl) rl.replaceChildren();
 }
 
 async function renderCharts(stats) {
@@ -4937,13 +5652,36 @@ async function renderCharts(stats) {
     drawVolumeChart(stats);
     drawExerciseChart(stats);
     drawCompletionChart(stats);
+    drawMuscleChart(stats);
+    renderRecords(stats);
     const fb = document.getElementById('progress-fallback');
     if (fb) { fb.replaceChildren(); fb.hidden = true; }
     const note = document.getElementById('chart-note');
-    if (note) { note.hidden = true; note.textContent = ''; }
+    if (note) {
+      const text = chartNoteText(stats);
+      note.textContent = text;
+      note.hidden = !text;
+    }
   } catch (e) {
     renderProgressFallback(stats);
   }
+}
+
+/* 图表下方的说明。这两类失真都来自「时间轴被抹平」：未结束的一周被当成整周、
+   没有记录的周被折线跨过去。图本身可以只画数据，但读数的人必须知道哪里是空的。 */
+function chartNoteText(stats) {
+  const parts = [];
+  const weeks = stats.weekly || [];
+  const missing = weeks.filter(w => !w.has_data).length;
+  const partial = weeks.some(w => w.is_partial && w.has_data);
+  if (missing) parts.push(`其中 ${missing} 周没有训练记录，折线在这些位置是断开的`);
+  if (partial) parts.push('最近一周尚未结束，容量仍在累计，不能与前面的整周直接比较');
+  // 动作库里查不到的动作没有进肌群分布——不说的话，图上少的那块没人知道
+  const unmatched = (stats.muscles || {}).unmatched_exercises || [];
+  if (unmatched.length) {
+    parts.push(`有 ${unmatched.length} 个动作在动作库里找不到对应肌群，未计入肌群分布`);
+  }
+  return parts.length ? `${parts.join('；')}。` : '';
 }
 
 function initChart(id) {
@@ -4957,25 +5695,67 @@ function initChart(id) {
 }
 
 const AXIS_STYLE = () => ({
-  axisLine: { lineStyle: { color: themeColor('--border', '#263340') } },
-  axisLabel: { color: themeColor('--text-muted', '#68727b'), fontSize: 11 },
-  splitLine: { lineStyle: { color: themeColor('--border', '#263340'), type: 'dashed' } },
+  axisLine: { lineStyle: { color: themeColor('--border', '#e3e3e8') } },
+  axisLabel: { color: themeColor('--text-muted', '#6e6e73'), fontSize: 11 },
+  splitLine: { lineStyle: { color: themeColor('--border', '#e3e3e8'), type: 'dashed' } },
 });
+
+/* 多序列图表的系列色板。
+   1RM 那张图此前没指定颜色，直接落到了 ECharts 的默认彩虹色板
+   （蓝/绿/黄/红/紫）——和整站的钢灰＋橙完全两套语言，是图表里最"模板感"
+   的一处。这里换成一版受控色板：首色就是主橙，其余按色相拉开。
+   浅色化后统一加深了一档：这套色在白底上都要够到 3.0:1 的图形门槛
+   （旧的橙/青绿/琥珀只有 2.2~2.8，在白底上是看不清的）。
+   第 4 色用洋红而不是琥珀：琥珀 #b45309 的色相是 26°，和主橙 #ea580c 的 21°
+   只差 5°，两条线在图上会混；换洋红后最小色相间隔从 5° 拉到 41°。 */
+const CHART_SERIES = ['#ea580c', '#0f766e', '#2563eb', '#be185d', '#7c3aed'];
 
 function drawVolumeChart(stats) {
   const chart = initChart('chart-volume');
   if (!chart) return;
   const weeks = stats.weekly || [];
+  // 填充用向下渐隐，而不是平铺的半透明色。
+  // 橙色以固定透明度铺在冷蓝底上会混出一块发闷的褐色，像褪色的旧图；
+  // 淡出到透明才有"光晕"的观感，也是这类折线图常见的处理。
+  const accentRgb = themeColor('--accent-rgb', '255,107,53');
+  const accent = themeColor('--accent-orange', '#ff6b35');
+  // 没有记录的周传 null 且不连：连过去会把「连着几周没练」画成平缓下滑，
+  // 那正好是这张图最该说清楚、却最容易被抹平的一件事。
+  const partialIdx = weeks.findIndex(w => w.is_partial);
   chart.setOption({
-    title: { text: '周训练容量趋势', textStyle: { color: themeColor('--text-primary', '#e9e6df'), fontSize: 13 } },
-    tooltip: { trigger: 'axis' },
+    title: { text: '周训练容量趋势', textStyle: { color: themeColor('--text-primary', '#1d1d1f'), fontSize: 13 } },
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: v => (v === null || v === undefined ? '无记录' : `${Math.round(v).toLocaleString()} kg`),
+    },
     grid: { left: 50, right: 20, top: 50, bottom: 30 },
     xAxis: Object.assign({ type: 'category', data: weeks.map(w => w.week_start.slice(5)) }, AXIS_STYLE()),
     yAxis: Object.assign({ type: 'value' }, AXIS_STYLE()),
     series: [{
-      type: 'line', smooth: true, data: weeks.map(w => Math.round(w.volume)),
-      itemStyle: { color: themeColor('--accent-orange', '#f2764a') },
-      areaStyle: { opacity: 0.12 },
+      type: 'line', smooth: true,
+      data: weeks.map(w => (w.has_data ? Math.round(w.volume) : null)),
+      connectNulls: false,
+      itemStyle: { color: accent },
+      // 未结束的一周用空心点：它和整周不是一回事，实心点会让两者看起来同等可信
+      symbol: (v, p) => (weeks[p.dataIndex] && weeks[p.dataIndex].is_partial ? 'emptyCircle' : 'circle'),
+      symbolSize: (v, p) => (weeks[p.dataIndex] && weeks[p.dataIndex].is_partial ? 9 : 6),
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: `rgba(${accentRgb},0.24)` },
+          { offset: 1, color: `rgba(${accentRgb},0)` },
+        ]),
+      },
+      markLine: partialIdx < 0 ? undefined : {
+        silent: true, symbol: 'none',
+        lineStyle: { type: 'dashed', color: themeColor('--border', '#e3e3e8'), width: 1.5 },
+        label: {
+          // rotate: 0 不能省：竖线的 markLine 标签默认跟着线转 90°，
+          // 落到右边缘就成了一列竖排的字，基本读不出来
+          formatter: '本周未结束', position: 'end', rotate: 0,
+          color: themeColor('--text-muted', '#6e6e73'), fontSize: 10,
+        },
+        data: [{ xAxis: partialIdx }],
+      },
     }],
   });
 }
@@ -4984,40 +5764,146 @@ function drawExerciseChart(stats) {
   const chart = initChart('chart-exercise');
   if (!chart) return;
   const exercises = (stats.exercises || []).filter(e => e.series.some(s => s.est_1rm > 0)).slice(0, 5);
+  // 统一横轴：各动作的排期本来就不同（周一练卧推、周四练推举），
+  // 按数组下标对齐会把后一条曲线的点画在前一条的日期位置上，
+  // 整条线在时间轴上是偏的——"趋势"图一旦错位就没有意义了。
+  // 先把所有出现过的日期并起来，再让每个动作按自己的日期取位。
+  const allDates = [...new Set(exercises.flatMap(e => e.series.map(s => s.date)))].sort();
   chart.setOption({
-    title: { text: '各动作估算 1RM 进步曲线', textStyle: { color: themeColor('--text-primary', '#e9e6df'), fontSize: 13 } },
+    title: { text: '各动作估算 1RM 进步曲线', textStyle: { color: themeColor('--text-primary', '#1d1d1f'), fontSize: 13 } },
     tooltip: { trigger: 'axis' },
-    legend: { textStyle: { color: themeColor('--text-secondary', '#9ba7b2') }, top: 24 },
+    color: CHART_SERIES,
+    legend: { textStyle: { color: themeColor('--text-secondary', '#48484a') }, top: 24 },
     grid: { left: 50, right: 20, top: 70, bottom: 30 },
-    xAxis: Object.assign({ type: 'category' }, AXIS_STYLE()),
+    xAxis: Object.assign({ type: 'category', data: allDates.map(d => d.slice(5)) }, AXIS_STYLE()),
     yAxis: Object.assign({ type: 'value' }, AXIS_STYLE()),
-    series: exercises.map(e => ({
-      name: e.name, type: 'line', smooth: true,
-      data: e.series.map(s => s.est_1rm || null),
-    })),
+    series: exercises.map(e => {
+      const byDate = new Map(e.series.map(s => [s.date, s.est_1rm || null]));
+      return {
+        name: e.name, type: 'line', smooth: true,
+        // 缺的日期是「这个动作当天没排」，不是「数据丢了」，趋势线本身应该连着
+        connectNulls: true,
+        data: allDates.map(d => (byDate.has(d) ? byDate.get(d) : null)),
+      };
+    }),
   });
-  // 各动作的训练日期不同，用最长的那条作为横轴标签
-  const longest = exercises.reduce((a, b) => (b.series.length > (a ? a.series.length : 0) ? b : a), null);
-  if (longest) {
-    chart.setOption({ xAxis: { data: longest.series.map(s => s.date.slice(5)) } });
-  }
 }
 
 function drawCompletionChart(stats) {
   const chart = initChart('chart-completion');
   if (!chart) return;
   const weeks = stats.weekly || [];
+  const cool = themeColor('--cool-blue', '#0f766e');
+  // 未结束的一周用淡一档的柱子：这根柱子的分母只有已过的几天，
+  // 和整周同色会让人以为「这周完成率就是 100%」。
+  const partialFill = (typeof echarts.color?.modifyAlpha === 'function')
+    ? echarts.color.modifyAlpha(cool, 0.35) : cool;
   chart.setOption({
-    title: { text: '每周完成率', textStyle: { color: themeColor('--text-primary', '#e9e6df'), fontSize: 13 } },
-    tooltip: { trigger: 'axis', valueFormatter: v => `${v}%` },
+    title: { text: '每周完成率', textStyle: { color: themeColor('--text-primary', '#1d1d1f'), fontSize: 13 } },
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: v => (v === null || v === undefined ? '无记录' : `${v}%`),
+    },
     grid: { left: 50, right: 20, top: 50, bottom: 30 },
     xAxis: Object.assign({ type: 'category', data: weeks.map(w => w.week_start.slice(5)) }, AXIS_STYLE()),
     yAxis: Object.assign({ type: 'value', max: 100 }, AXIS_STYLE()),
     series: [{
-      type: 'bar', data: weeks.map(w => Math.round(w.completion * 100)),
-      itemStyle: { color: themeColor('--cool-blue', '#6fa88b') },
+      type: 'bar',
+      data: weeks.map(w => (w.has_data ? Math.round(w.completion * 100) : null)),
+      itemStyle: {
+        color: p => (weeks[p.dataIndex] && weeks[p.dataIndex].is_partial ? partialFill : cool),
+      },
     }],
   });
+}
+
+/* 各肌群训练分布。
+   用横向条形：肌群名是 2~4 个汉字，竖着排会被迫斜写或截断；横向排列
+   还能顺带按占比排序，一眼看出哪块练得多、哪块空了。
+   主指标是组数而不是容量——自重动作（平板支撑、引体向上）容量恒为 0，
+   只看 kg 会把"练了核心"显示成"核心没练过"。 */
+function drawMuscleChart(stats) {
+  const chart = initChart('chart-muscle');
+  if (!chart) return;
+  const data = stats.muscles || {};
+  const groups = data.groups || [];
+  if (!groups.length) { document.getElementById('chart-muscle').hidden = true; return; }
+  // y 轴类目是从下往上排的，反转一次让占比最高的落在最上面
+  const ordered = groups.slice().reverse();
+  const accent = themeColor('--accent-orange', '#ff6b35');
+  chart.setOption({
+    title: {
+      text: '各肌群训练组数分布',
+      subtext: '按组数统计（自重动作也算），主肌群记 1 组、协同肌群记 0.5 组',
+      textStyle: { color: themeColor('--text-primary', '#1d1d1f'), fontSize: 13 },
+      subtextStyle: { color: themeColor('--text-muted', '#6e6e73'), fontSize: 11 },
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: params => {
+        const g = ordered[params[0].dataIndex];
+        if (!g) return '';
+        const vol = g.volume > 0 ? `${Math.round(g.volume).toLocaleString()} kg` : '—（自重）';
+        return `${g.group}<br/>训练组数：${g.sets} 组<br/>占比：${(g.share * 100).toFixed(1)}%<br/>涉及动作：${g.exercises} 个<br/>容量：${vol}`;
+      },
+    },
+    grid: { left: 62, right: 56, top: 64, bottom: 24 },
+    xAxis: Object.assign({ type: 'value', name: '组' }, AXIS_STYLE()),
+    yAxis: Object.assign({ type: 'category', data: ordered.map(g => g.group) }, AXIS_STYLE()),
+    series: [{
+      type: 'bar',
+      data: ordered.map(g => g.sets),
+      barMaxWidth: 20,
+      itemStyle: { color: accent, borderRadius: [0, 3, 3, 0] },
+      label: {
+        show: true, position: 'right',
+        formatter: p => `${(ordered[p.dataIndex].share * 100).toFixed(0)}%`,
+        color: themeColor('--text-secondary', '#48484a'), fontSize: 11,
+      },
+    }],
+  });
+}
+
+/* 个人纪录。
+   只列有重量的动作——自重动作的估算 1RM 恒为 0，"最佳 0kg"没有信息量。
+   面板顺序由后端定：最近刷新过纪录的排前面。 */
+function renderRecords(stats) {
+  const panel = document.getElementById('records-panel');
+  const box = document.getElementById('records-list');
+  if (!panel || !box) return;
+  box.replaceChildren();
+  const records = (stats.records || []).slice(0, 12);
+  panel.hidden = false;
+  if (!records.length) {
+    box.appendChild(el('div', 'records-empty',
+      '还没有可比较的负重记录。自重动作没有重量，不参与纪录比较。'));
+    return;
+  }
+  const grid = el('div', 'records-grid');
+  records.forEach(r => {
+    const card = el('div', r.is_recent_pr ? 'pr-card is-pr' : 'pr-card');
+    const head = el('div', 'pr-head');
+    head.appendChild(el('span', 'pr-name', r.name));
+    if (r.is_recent_pr) head.appendChild(el('span', 'pr-badge', '最近刷新'));
+    head.appendChild(el('span', 'pr-sessions', `练 ${r.sessions} 次`));
+    card.appendChild(head);
+    card.appendChild(prMetric('估算 1RM', `${r.best_1rm} kg`, r.best_1rm_date));
+    card.appendChild(prMetric('单组最重', `${r.best_weight} kg`, r.best_weight_date));
+    card.appendChild(prMetric('单次容量', `${Math.round(r.best_volume).toLocaleString()} kg`, r.best_volume_date));
+    grid.appendChild(card);
+  });
+  box.appendChild(grid);
+}
+
+function prMetric(label, value, date) {
+  const row = el('div', 'pr-metric');
+  row.appendChild(el('span', null, label));
+  const right = document.createElement('span');
+  right.appendChild(el('b', null, value));
+  if (date) right.appendChild(document.createTextNode(` · ${String(date).slice(5)}`));
+  row.appendChild(right);
+  return row;
 }
 
 // CDN 不可用或渲染异常时的降级：用同样的数据渲染成纯 DOM 表格。
@@ -5032,7 +5918,7 @@ function renderProgressFallback(stats) {
 
   const note = document.getElementById('chart-note');
   if (note) {
-    note.textContent = '图表资源不可用，已切换为数据表。';
+    note.textContent = '图表暂时加载不出来，已改用表格显示。';
     note.hidden = false;
   }
 
@@ -5045,8 +5931,13 @@ function renderProgressFallback(stats) {
     table.appendChild(head);
     weeks.forEach(w => {
       const tr = document.createElement('tr');
-      [w.week_start, String(w.sessions), Math.round(w.volume).toLocaleString(),
-       `${Math.round(w.completion * 100)}%`].forEach(v => tr.appendChild(el('td', null, v)));
+      // 没有记录的周显示「—」而不是 0：0 会被读成「这周练了但容量为零」
+      const cells = w.has_data
+        ? [String(w.sessions), Math.round(w.volume).toLocaleString(),
+           `${Math.round(w.completion * 100)}%`]
+        : ['—', '—', '—'];
+      const label = w.is_partial ? `${w.week_start}（未结束）` : w.week_start;
+      [label, ...cells].forEach(v => tr.appendChild(el('td', null, v)));
       table.appendChild(tr);
     });
     box.appendChild(table);
@@ -5064,6 +5955,39 @@ function renderProgressFallback(stats) {
       [e.name, `${e.first_weight}kg`, `${e.last_weight}kg`,
        `${e.trend_pct > 0 ? '+' : ''}${e.trend_pct}%`,
        e.avg_rpe === null ? '—' : String(e.avg_rpe)].forEach(v => tr.appendChild(el('td', null, v)));
+      table.appendChild(tr);
+    });
+    box.appendChild(table);
+  }
+
+  const groups = (stats.muscles || {}).groups || [];
+  if (groups.length) {
+    box.appendChild(el('h4', null, '各肌群训练组数'));
+    const table = el('table', 'fallback-table');
+    const head = document.createElement('tr');
+    ['肌群', '组数', '占比', '动作数'].forEach(h => head.appendChild(el('th', null, h)));
+    table.appendChild(head);
+    groups.forEach(g => {
+      const tr = document.createElement('tr');
+      [g.group, String(g.sets), `${(g.share * 100).toFixed(1)}%`, String(g.exercises)]
+        .forEach(v => tr.appendChild(el('td', null, v)));
+      table.appendChild(tr);
+    });
+    box.appendChild(table);
+  }
+
+  const records = stats.records || [];
+  if (records.length) {
+    box.appendChild(el('h4', null, '个人纪录'));
+    const table = el('table', 'fallback-table');
+    const head = document.createElement('tr');
+    ['动作', '估算 1RM', '单组最重', '单次容量'].forEach(h => head.appendChild(el('th', null, h)));
+    table.appendChild(head);
+    records.forEach(r => {
+      const tr = document.createElement('tr');
+      [r.name, `${r.best_1rm}kg`, `${r.best_weight}kg`,
+       `${Math.round(r.best_volume).toLocaleString()}kg`]
+        .forEach(v => tr.appendChild(el('td', null, v)));
       table.appendChild(tr);
     });
     box.appendChild(table);
@@ -5097,7 +6021,7 @@ function renderAdvice(data) {
   const summary = document.getElementById('advice-summary');
   const list = document.getElementById('advice-list');
   const applyBtn = document.getElementById('btn-apply-advice');
-  if (summary) summary.textContent = data.summary || '';
+  if (summary) renderAdviceSummary(summary, data);
   if (!list) return;
   list.replaceChildren();
 
@@ -5123,6 +6047,245 @@ function renderAdvice(data) {
   });
 
   if (applyBtn) applyBtn.hidden = !items.length;
+}
+
+// 渲染周报正文：有模型生成的 summary_detail 时画成分组小结，否则退回纯文本摘要。
+// summary_source === 'rule' 表示模型不可用，此时如实标注来源——用户有权知道
+// 这段话是模型写的还是规则拼的，不能让他误以为是 AI 说的。
+function renderAdviceSummary(node, data) {
+  node.replaceChildren();
+
+  if (data.summary_source === 'rule') {
+    node.appendChild(el('div', 'report-degraded', 'AI 暂不可用，以下是系统自动摘要'));
+  }
+
+  const detail = data.summary_detail;
+  if (!detail) {
+    node.appendChild(el('p', 'advice-summary-text', data.summary || ''));
+    return;
+  }
+
+  if (detail.headline) node.appendChild(el('p', 'report-headline', detail.headline));
+
+  const sections = [
+    ['highlights', '进步', 'report-list-good'],
+    ['concerns', '需要注意', 'report-list-warn'],
+    ['next_week', '下周建议', ''],
+  ];
+  sections.forEach(([key, title, cls]) => {
+    const rows = detail[key] || [];
+    if (!rows.length) return;
+    const block = el('div', cls ? `report-block ${cls}` : 'report-block');
+    block.appendChild(el('div', 'report-block-title', title));
+    const ul = el('ul', 'report-list');
+    rows.forEach(row => {
+      const li = document.createElement('li');
+      if (typeof row === 'string') {
+        li.appendChild(el('span', 'report-text', row));
+      } else {
+        li.appendChild(el('span', 'report-text', row.text || ''));
+        // evidence 是模型引用的原始数字，单独一行等宽展示，方便回图表核对
+        if (row.evidence) li.appendChild(el('span', 'report-evidence', `依据：${row.evidence}`));
+      }
+      ul.appendChild(li);
+    });
+    block.appendChild(ul);
+    node.appendChild(block);
+  });
+}
+
+// ── AI 记忆面板 ──────────────────────────────────────────────────────
+
+const MEMORY_KEY_LABELS = {
+  profile: '训练档案', goal: '训练目标', equipment: '可用器械',
+  habits: '运动习惯', training_adjustments: '已确认的调整',
+};
+
+function memoryKeyLabel(key) {
+  return MEMORY_KEY_LABELS[key] || key;
+}
+
+// 记忆值可能是字符串、数组，或一整份字典（profile 是画像快照）。
+// 直接 JSON.stringify 出来没人看得懂，按已知字段挑出可读的部分。
+// 训练调整条目是对象数组，直接 JSON.stringify 出来一屏全是花括号读不了。
+// 只挑「练什么 + 怎么调」两件用户真正要看的事。
+function formatAdjustment(item) {
+  const name = item.exercise_name || '—';
+  const type = adviceTypeLabel(item.type);
+  const s = item.suggested || {};
+  const cur = item.current || {};
+  let change = '';
+  if (s.weight && cur.weight) change = `　${cur.weight}kg → ${s.weight}kg`;
+  else if (s.weight) change = `　目标 ${s.weight}kg`;
+  else if (s.sets_delta) change = `　组数 ${s.sets_delta > 0 ? '+' : ''}${s.sets_delta}`;
+  else if (s.action === 'replace') change = '　换同肌群动作';
+  return `${name} · ${type}${change}`;
+}
+
+function formatMemoryValue(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (Array.isArray(value)) {
+    return value.map(v => {
+      if (v && typeof v === 'object') {
+        return v.exercise_name ? formatAdjustment(v) : JSON.stringify(v);
+      }
+      return String(v);
+    }).join('、') || '—';
+  }
+  if (typeof value === 'object') {
+    const labels = {
+      height: '身高', weight: '体重', training_years: '训练年限', goal: '目标',
+      days_per_week: '每周训练', available_equipment: '器械', injuries: '伤病', habits: '习惯',
+    };
+    const units = { height: ' cm', weight: ' kg', training_years: ' 年', days_per_week: ' 天/周' };
+    const parts = [];
+    Object.keys(labels).forEach(k => {
+      const v = value[k];
+      if (v === undefined || v === null || v === '') return;
+      const shown = Array.isArray(v) ? (v.join('、') || '无') : v;
+      parts.push(`${labels[k]}：${shown}${units[k] || ''}`);
+    });
+    return parts.length ? parts.join('　·　') : JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function formatMemoryAge(ageDays) {
+  if (ageDays === null || ageDays === undefined) return '记录时间未知';
+  if (ageDays === 0) return '今天记录';
+  return `${ageDays} 天前记录`;
+}
+
+async function loadMemory() {
+  const box = document.getElementById('memory-list');
+  if (!box) return;
+  showError('memory-error', '');
+  try {
+    const resp = await fetch(`/api/memory?athlete_key=${encodeURIComponent(athleteKey)}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '读取失败');
+    renderMemory(data);
+  } catch (e) {
+    box.replaceChildren(el('p', 'section-hint', `读取记忆失败：${e.message}`));
+  }
+}
+
+function renderMemory(data) {
+  const box = document.getElementById('memory-list');
+  const clearBtn = document.getElementById('btn-clear-memory');
+  if (!box) return;
+  box.replaceChildren();
+
+  const prefs = data.preferences || [];
+  const feedback = data.feedback || [];
+  const injuries = data.injuries || [];
+  const hasAny = prefs.length || feedback.length || injuries.length;
+
+  if (clearBtn) clearBtn.hidden = !hasAny;
+  if (!hasAny) {
+    box.appendChild(composedEmpty('—', '暂无记忆',
+      '生成一次训练计划、或确认采纳一条调整后，这里会显示 AI 记住的内容。'));
+    return;
+  }
+
+  // 用户填写与 AI 推断分开列——来源不同，可信度也不同
+  const userPrefs = prefs.filter(p => p.key !== 'training_adjustments');
+  const adjustments = prefs.filter(p => p.key === 'training_adjustments');
+
+  const groups = [
+    ['训练档案与偏好', userPrefs.map(memoryPrefItem)],
+    ['已确认的调整', adjustments.map(memoryPrefItem)],
+    ['伤病记录', injuries.length ? [memoryInjuryItem(injuries)] : []],
+    ['计划反馈', feedback.map(memoryFeedbackItem)],
+  ];
+
+  groups.forEach(([title, nodes]) => {
+    if (!nodes.length) return;
+    const group = el('div', 'memory-group');
+    group.appendChild(el('div', 'memory-group-title', `${title}（${nodes.length}）`));
+    nodes.forEach(n => group.appendChild(n));
+    box.appendChild(group);
+  });
+}
+
+function memoryPrefItem(pref) {
+  const row = el('div', 'memory-item' + (pref.stale ? ' is-stale' : ''));
+  const head = el('div', 'memory-item-head');
+  head.appendChild(el('span', 'memory-key', memoryKeyLabel(pref.key)));
+  if (pref.source_label) head.appendChild(el('span', 'memory-source', pref.source_label));
+  row.appendChild(head);
+  row.appendChild(el('div', 'memory-value', formatMemoryValue(pref.value)));
+  row.appendChild(el('div', 'memory-time',
+    formatMemoryAge(pref.age_days) + (pref.stale ? '　·　可能已过时' : '')));
+  row.appendChild(memoryDeleteButton(pref.key));
+  return row;
+}
+
+function memoryInjuryItem(injuries) {
+  const row = el('div', 'memory-item');
+  const head = el('div', 'memory-item-head');
+  head.appendChild(el('span', 'memory-key', '伤病史'));
+  head.appendChild(el('span', 'memory-source', '你在训练档案里填写的'));
+  row.appendChild(head);
+  row.appendChild(el('div', 'memory-value', injuries.join('、')));
+  row.appendChild(el('div', 'memory-time', '生成计划时作为硬约束，冲突动作会被拦下'));
+  return row;
+}
+
+function memoryFeedbackItem(fb) {
+  const row = el('div', 'memory-item');
+  const head = el('div', 'memory-item-head');
+  head.appendChild(el('span', 'memory-key', `计划 ${fb.plan_id || '—'}`));
+  if (fb.rating !== undefined && fb.rating !== null) {
+    head.appendChild(el('span', 'memory-source', `评分 ${fb.rating}`));
+  }
+  row.appendChild(head);
+  if (fb.comment) row.appendChild(el('div', 'memory-value', fb.comment));
+  if (fb.timestamp) row.appendChild(el('div', 'memory-time', String(fb.timestamp)));
+  return row;
+}
+
+function memoryDeleteButton(key) {
+  const btn = el('button', 'memory-del', '×');
+  btn.type = 'button';
+  btn.title = '删除这条记忆';
+  btn.setAttribute('aria-label', `删除记忆：${memoryKeyLabel(key)}`);
+  btn.addEventListener('click', () => deleteMemoryPreference(key));
+  return btn;
+}
+
+async function deleteMemoryPreference(key) {
+  showError('memory-error', '');
+  try {
+    const resp = await fetch(
+      `/api/memory/${encodeURIComponent(key)}?athlete_key=${encodeURIComponent(athleteKey)}`,
+      { method: 'DELETE' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '删除失败');
+    showStatus('memory-status', data.note || '已删除。');
+    await loadMemory();
+  } catch (e) {
+    showError('memory-error', `删除失败：${e.message}`);
+  }
+}
+
+async function clearMemory() {
+  if (!window.confirm('清空后 AI 将不再记得你的偏好与已确认的调整，且无法恢复。确定要清空吗？')) return;
+  showError('memory-error', '');
+  setBusy('btn-clear-memory', true, '清空中...');
+  try {
+    const resp = await fetch(
+      `/api/memory?athlete_key=${encodeURIComponent(athleteKey)}&confirm=DELETE`,
+      { method: 'DELETE' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '清空失败');
+    showStatus('memory-status', data.note || '已清空。');
+    await loadMemory();
+  } catch (e) {
+    showError('memory-error', `清空失败：${e.message}`);
+  } finally {
+    setBusy('btn-clear-memory', false);
+  }
 }
 
 function adviceTypeLabel(type) {
@@ -5212,6 +6375,7 @@ function initTrainingTabs() {
   bind('btn-refresh-stats', loadTrainingStats);
   bind('btn-generate-advice', generateAdvice);
   bind('btn-apply-advice', applyAdvice);
+  bind('btn-clear-memory', clearMemory);
   bind('btn-fill-from-plan', () => {
     if (!fillFromLastPlan()) {
       showError('log-error', '还没有可用的计划，先在「训练计划」里生成一份。');
@@ -5223,10 +6387,24 @@ function initTrainingTabs() {
   const fillBtn = document.getElementById('btn-fill-from-plan');
   if (fillBtn) fillBtn.hidden = !localStorage.getItem('ironmind_last_plan');
 
-  // 登录页与侧栏的输入框都支持回车提交
+  // 主按钮提交当前模式的表单
+  document.getElementById('gate-submit')?.addEventListener('click', () => gateAuth(gateMode));
+  document.getElementById('welcome-banner-close')
+    ?.addEventListener('click', hideWelcomeBanner);
+  // 页签之间支持左右方向键切换（role="tablist" 的常规键盘约定）
+  const tablist = document.querySelector('.login-tabs');
+  tablist?.addEventListener('keydown', event => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    setGateMode(gateMode === 'login' ? 'register' : 'login');
+  });
+
+  // 登录页与侧栏的输入框都支持回车提交。
+  // 登录页按**当前模式**提交——原先两个输入框都硬绑到 'login'，
+  // 于是切到注册页签后按回车仍然会去登录，必然得到"用户名或密码不正确"。
   bindEnterToSubmit([
-    ['gate-username', () => gateAuth('login')],
-    ['gate-password', () => gateAuth('login')],
+    ['gate-username', () => gateAuth(gateMode)],
+    ['gate-password', () => gateAuth(gateMode)],
     ['auth-username', () => handleLogin()],
     ['auth-password', () => handleLogin()],
   ]);
@@ -5236,14 +6414,25 @@ function initTrainingTabs() {
   // 先问服务端登录态再拉数据：否则会先用游客身份查一遍训练日志，
   // 登录用户会看到一瞬间的空图表，再被账号数据替换。
   loadSession().then(() => {
-    // 已登录（会话 Cookie 有效）直接进；否则先过登录页。
-    // 游客放行的标记存在本机，刷新不会再弹——否则等于把游客挡在门外。
-    let passed = false;
-    try { passed = localStorage.getItem(GUEST_PASS_KEY) === '1'; } catch (e) {}
-    if (!currentUser && !passed) showAuthGate();
-    else hideAuthGate();
+    // 放行判定。两条本机标记：游客放行、以及"上次登录过"的乐观提示。
+    // 游客标记必须保留——刷新反复弹登录页等于把游客挡在门外。
+    let guestPass = false, authHint = false;
+    try {
+      guestPass = localStorage.getItem(GUEST_PASS_KEY) === '1';
+      authHint = localStorage.getItem(AUTH_HINT_KEY) === '1';
+    } catch (e) {}
+    // 乐观提示只在会话确实有效时才算数；过期了就收回，
+    // 否则一个失效的提示会让登录页永远不再出现
+    if (authHint && !currentUser) {
+      try { localStorage.removeItem(AUTH_HINT_KEY); } catch (e) {}
+    }
+    if (currentUser || guestPass) hideAuthGate();
+    else showAuthGate();
     loadLogHistory();
     loadSavedPlans();
+    // 身份解析完再迁：迁移要按当前身份写进「我的计划」，早了会落到错的
+    // owner_key 上（游客 key 与登录后的 u:{id} 不是一回事）。
+    migrateLocalHistory().then(loadSavedPlans);
   });
 }
 
@@ -5255,6 +6444,7 @@ document.addEventListener('click', event => {
   if (btn.id === 'tab-progress') {
     if (!progressLoaded) progressLoaded = true;
     loadTrainingStats();
+    loadMemory();
   }
 });
 

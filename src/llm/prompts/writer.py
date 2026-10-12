@@ -76,7 +76,8 @@ WRITER_SYSTEM = """你是训练计划编写专家。根据检索到的动作库�
 
 
 def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str,
-                          training_context: str = "") -> list:
+                          training_context: str = "",
+                          long_term_context: str = "") -> list:
     """
     构造发送给 Writer Agent 的消息列表。
 
@@ -90,6 +91,9 @@ def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str,
         training_context: str      - 训练执行历史与已确认调整（可选）。仅作为生成
                                     输入，不影响后续安全检查——若与伤病冲突，
                                     FactChecker 依然会拦下并触发人工审核。
+        long_term_context: str     - 跨会话画像记忆（可选）：用户之前来过时存下的
+                                    目标/伤病/运动习惯/器械。它比本次表单更旧，
+                                    提示里交代了冲突时以本次画像为准。
 
     返回值：
         list                       - OpenAI 格式的 messages 列表
@@ -97,6 +101,7 @@ def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str,
     days = profile.get("days_per_week", 4)
     injuries = profile.get("injuries", [])
     equipment = profile.get("available_equipment", [])
+    habits = profile.get("habits", [])
 
     # 把关键约束提到最前面，LLM 不会漏掉
     constraints = [
@@ -106,6 +111,15 @@ def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str,
         constraints.append(f"伤病限制：用户有以下伤病 {injuries}，避免涉及这些部位的动作")
     if equipment:
         constraints.append(f"器械限制：只能用 {equipment}，不要推荐需要其他器械的动作")
+    # 运动习惯：它此前只落进长期记忆，生成计划时一个字都没用上——用户填了
+    # 「跑步、瑜伽、晨练」，计划里却完全看不出来。这里给它和伤病、器械同等的
+    # 约束地位，并说清期望的行为：配合而不是无视，也不是把习惯本身写进计划。
+    if habits:
+        constraints.append(
+            f"运动习惯：用户平时有 {habits}。请让计划与之配合——可作为热身或"
+            "有氧补充，或避免与相近部位在同一天重复刺激；不要把用户已有的习惯"
+            "当成计划内容重复安排。"
+        )
 
     canonical_goal = profile.get("goal", goal)
     constraints.extend([
@@ -113,6 +127,9 @@ def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str,
         "输出 JSON 的 goal 必须严格等于 canonical goal，不得输出其他 goal。",
     ])
     user_msg = "\n".join(constraints) + f"\n\n目标：{goal}\n用户画像：{profile}\n可用动作：{retrieved_exercises}"
+    if long_term_context:
+        user_msg += (f"\n\n【跨会话记忆：这个用户之前来过】\n{long_term_context}\n"
+                     "以上是历史记录。与本次表单冲突时，以本次表单为准。")
     if training_context:
         user_msg += (
             f"\n\n【该用户的实际训练执行情况（生成计划时必须参考）】\n{training_context}\n"

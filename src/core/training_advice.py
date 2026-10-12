@@ -102,7 +102,8 @@ advice_store = InMemoryAdviceStore()
 
 
 def build_advice(athlete_key: str, log_store, *, weeks: int = 8,
-                 store: InMemoryAdviceStore | None = None) -> dict:
+                 store: InMemoryAdviceStore | None = None,
+                 long_term=None) -> dict:
     """读取训练日志 → 聚合统计 → 推导建议 → 暂存为待确认工件。
 
     输入：
@@ -110,13 +111,22 @@ def build_advice(athlete_key: str, log_store, *, weeks: int = 8,
         log_store: TrainingLogStore 实例
         weeks: 参与分析的回溯周数
         store: 建议暂存，缺省用模块级单例
+        long_term: LongTermMemory 实例（可选）。仅用于给周报补一句用户处境，
+                   不参与任何数值计算。
 
     输出：
-        {"advice_id", "status", "summary", "items": [...], "stats": {...}}
+        {"advice_id", "status", "summary", "summary_source", "summary_detail",
+         "items": [...], "stats": {...}}
 
     为什么把 stats 一并返回：前端建议面板要显示「依据什么得出这个结论」，
     把统计数字摆在建议旁边能显著提升可信度，也让面试演示时一眼看出
     建议不是凭空生成的。
+
+    关于 summary 与 summary_detail：
+        summary 永远是短文本（有模型时是 headline，无模型时是规则摘要），
+        保证任何前端版本都能显示点什么。summary_detail 是结构化的周报正文，
+        仅在模型可用时非空；summary_source 显式标注它来自哪条路径——
+        降级不该是静默的，用户有权知道这段话是模型写的还是规则拼的。
 
     注意本函数只生成、不生效——生效必须经过 resolve_advice()。
     """
@@ -125,14 +135,112 @@ def build_advice(athlete_key: str, log_store, *, weeks: int = 8,
     stats = compute_stats(logs)
     items = rule_engine(stats)
 
-    artifact = store.create(athlete_key, items, _summarize(items, stats))
+    fallback_summary = _summarize(items, stats)
+    profile_context = _profile_context(long_term, athlete_key)
+    detail, source = _build_report(items, stats, profile_context)
+
+    # 有结构化正文时，短摘要取 headline 与它保持一致；否则退回规则摘要
+    summary = detail["headline"] if detail else fallback_summary
+
+    artifact = store.create(athlete_key, items, summary)
     return {
         "advice_id": artifact.advice_id,
         "status": artifact.status,
         "summary": artifact.summary,
+        "summary_source": source,
+        "summary_detail": detail,
         "items": artifact.items,
         "stats": stats,
     }
+
+
+def _build_report(items: list[dict], stats: dict,
+                  profile_context: str = "") -> tuple[dict | None, str]:
+    """尝试用 LLM 生成结构化周报正文。
+
+    返回值：``(detail, source)``。成功时 detail 为规范化后的字典、source 为
+    ``"llm"``；任何环节出问题都返回 ``(None, "rule")``，由调用方回退到
+    ``_summarize()``。
+
+    为什么吞掉所有异常：周报是**增强层**。项目已经有一条完整的确定性链路
+    （compute_stats → rule_engine → _summarize），它不依赖 LLM。模型不可用、
+    超时、返回结构不完整，都不该让用户连规则建议都拿不到——这与
+    knowledge_search 里 Re-rank 失败就返回未精排结果的取舍一致。
+
+    LLM 不产生数字：所有数值由 compute_stats 算好后注入提示词，模型只做
+    组织与解释（见 prompts/training_report.py）。
+    """
+    try:
+        from src.llm.prompts.training_report import build_training_report_messages
+        from src.llm.provider import LLMProvider
+
+        messages = build_training_report_messages(stats, items, profile_context)
+        detail = _normalize_report(LLMProvider().chat_with_json_mode(messages))
+    except Exception as exc:  # noqa: BLE001 - 增强层失败不阻断主链路
+        logger.warning("训练周报生成失败，回退规则摘要：%s", exc)
+        return None, "rule"
+
+    if detail is None:
+        # 模型返回了内容但结构不可用（例如 JSON 解析失败时的 {"raw": ...}），
+        # 同样是降级，不能把半成品当周报端出去
+        logger.warning("训练周报返回结构不完整，回退规则摘要")
+        return None, "rule"
+
+    return detail, "llm"
+
+
+def _normalize_report(detail) -> dict | None:
+    """校验并规范化模型返回的周报结构；不可用时返回 None。
+
+    结构不合格就整体判失败，而不是尽力修补——残缺的周报比诚实的规则摘要
+    更容易误导用户。
+    """
+    if not isinstance(detail, dict):
+        return None
+
+    headline = detail.get("headline")
+    if not isinstance(headline, str) or not headline.strip():
+        return None
+
+    def _entries(key: str) -> list[dict]:
+        raw = detail.get(key)
+        if not isinstance(raw, list):
+            return []
+        out = []
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            text = entry.get("text")
+            if not text:
+                continue
+            out.append({"text": str(text).strip(),
+                        "evidence": str(entry.get("evidence") or "").strip()})
+        return out
+
+    raw_next = detail.get("next_week")
+    next_week = [str(x).strip() for x in raw_next
+                 if str(x).strip()] if isinstance(raw_next, list) else []
+
+    return {
+        "headline": headline.strip(),
+        "highlights": _entries("highlights"),
+        "concerns": _entries("concerns"),
+        "next_week": next_week,
+    }
+
+
+def _profile_context(long_term, athlete_key: str) -> str:
+    """读取长期记忆里的用户处境，供周报口吻贴合；失败返回空串。
+
+    刻意不抛异常：画像只是让周报更贴合，读不到不影响正文生成。
+    """
+    if long_term is None:
+        return ""
+    try:
+        return long_term.build_context_for_prompt(athlete_key) or ""
+    except Exception as exc:  # noqa: BLE001 - 画像缺失是可选降级
+        logger.debug("读取长期记忆失败，周报不含画像上下文：%s", exc)
+        return ""
 
 
 def resolve_advice(advice_id: str, accepted_item_ids: list[str], *,

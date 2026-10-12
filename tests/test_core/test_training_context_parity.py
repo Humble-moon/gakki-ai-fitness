@@ -88,7 +88,7 @@ def test_plan_node_forwards_training_context_to_planner():
     captured = {}
 
     def fake_plan(user_input, prof, conv_context="", plan_context="",
-                  training_context=""):
+                  training_context="", long_term_context=""):
         captured["training_context"] = training_context
         return {}
 
@@ -101,7 +101,7 @@ def test_write_node_forwards_training_context_to_writer():
     captured = {}
 
     def fake_write(retr, prof, cfg, plan_context="", user_query="",
-                   training_context=""):
+                   training_context="", long_term_context=""):
         captured["training_context"] = training_context
         yield ("done", {})
 
@@ -109,6 +109,73 @@ def test_write_node_forwards_training_context_to_writer():
     list(write_node(deps, {"retrieved": {}, "profile": {}, "plan": {},
                            "training_context": STUB_CONTEXT}))
     assert captured["training_context"] == STUB_CONTEXT
+
+
+# ----------------------------------------------------------------------
+# 跨会话画像记忆：同一条链，同一类守卫
+#
+# 这段上下文（目标/伤病/运动习惯/器械）此前被 ingest 读出来、只喂给教练
+# 开场白，Planner 和 Writer 都拿不到——用户"有跑步习惯、以前伤过腰"对计划
+# 完全没有影响。修的就是这条断链，所以守卫要覆盖到同一批环节。
+# ----------------------------------------------------------------------
+
+STUB_LONG_TERM = "用户偏好：{'goal': '增肌'}\n运动习惯：['晨练', '跑步']\n伤病史：['腰突']"
+
+
+def test_plan_node_forwards_long_term_context_to_planner():
+    captured = {}
+
+    def fake_plan(user_input, prof, conv_context="", plan_context="",
+                  training_context="", long_term_context=""):
+        captured["long_term_context"] = long_term_context
+        return {}
+
+    deps = SimpleNamespace(planner=SimpleNamespace(plan=fake_plan))
+    plan_node(deps, {"query": "q", "profile": {},
+                     "long_term_context": STUB_LONG_TERM})
+    assert captured["long_term_context"] == STUB_LONG_TERM
+
+
+def test_write_node_forwards_long_term_context_to_writer():
+    captured = {}
+
+    def fake_write(retr, prof, cfg, plan_context="", user_query="",
+                   training_context="", long_term_context=""):
+        captured["long_term_context"] = long_term_context
+        yield ("done", {})
+
+    deps = SimpleNamespace(writer=SimpleNamespace(write_plan_stream=fake_write))
+    list(write_node(deps, {"retrieved": {}, "profile": {}, "plan": {},
+                           "long_term_context": STUB_LONG_TERM}))
+    assert captured["long_term_context"] == STUB_LONG_TERM
+
+
+@pytest.mark.parametrize("obj,name", [
+    (PlannerAgent.plan, "PlannerAgent.plan"),
+    (WriterAgent.write_plan, "WriterAgent.write_plan"),
+    (WriterAgent.write_plan_stream, "WriterAgent.write_plan_stream"),
+    (build_planner_messages, "build_planner_messages"),
+    (build_writer_messages, "build_writer_messages"),
+])
+def test_every_stage_of_the_chain_accepts_long_term_context(obj, name):
+    param = inspect.signature(obj).parameters.get("long_term_context")
+    assert param is not None, (
+        f"{name} 必须接受 long_term_context，否则跨会话画像注入在此处断裂"
+    )
+    assert param.default == "", f"{name} 的 long_term_context 默认值应为空串"
+
+
+def test_both_backends_read_long_term_with_the_same_key():
+    """两个后端必须用同一个身份键读长期记忆。
+
+    写侧用 long_term_user_key 落盘（见 plan_finalization.persist_long_term_profile），
+    读侧各写各的键就会读不回自己写的那份——这个坑项目里已经踩过一次。
+    """
+    import src.core.orchestrator as orch_mod
+    source = inspect.getsource(orch_mod)
+    graph_source = inspect.getsource(__import__("src.graph.nodes", fromlist=["x"]))
+    assert "long_term_user_key" in source, "命令式后端必须用共享的身份键读记忆"
+    assert "long_term_user_key" in graph_source, "图后端必须用共享的身份键读记忆"
 
 
 @pytest.mark.parametrize("obj,name", [

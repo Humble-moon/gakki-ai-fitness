@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -216,23 +217,30 @@ def test_plan_stage_does_not_clear_workspace_root():
     assert "plan-stream" in body
 
 
-def test_review_pending_done_renders_only_safe_review_panel_and_skips_history():
+def test_review_pending_done_renders_only_safe_review_panel_and_skips_autosave():
     start = HTML.index("onTerminal: (event, data) =>")
     end = HTML.index("// ═══════════════ RENDER PLAN", start)
     terminal = HTML[start:end]
     assert "data?.delivery_status === 'review_pending'" in terminal
     assert "renderReviewPending(resultArea, data?.review)" in terminal
     assert "data?.delivery_status !== 'safe_delivered'" in terminal
-    assert "savePlanToHistory" in terminal
+    # 交付的守卫必须挡在自动收录之前：被扣下待审的计划不进「我的计划」。
+    # 顺序是这条安全语义的全部依据——把断言拆开就能看出顺序错了。
+    assert "autoSavePlan" in terminal
+    assert terminal.index("data?.delivery_status !== 'safe_delivered'") \
+        < terminal.index("autoSavePlan"), "守卫必须在自动收录之前"
 
     start = HTML.index("function renderReviewPending")
     end = HTML.index("function renderPlanResult", start)
     panel = HTML[start:end]
     assert ".innerHTML" not in panel
-    assert "审核编号" in panel
     assert "风险原因" in panel
-    assert "禁止项" in panel
     assert "下一步" in panel
+    # 界面上不该出现这三样：审核编号（无意义的 UUID）、动作库未收录（我们的数据缺口，
+    # 不是用户的风险）、禁止项（一串祈使句，且与「下一步」重复）。
+    assert "审核编号：${" not in panel, "审核编号不该出现在界面上"
+    assert "'动作库中未收录：'" not in panel, "动作库缺口不该占风险清单的一行"
+    assert "'禁止项：'" not in panel, "禁止项应并入下一步，不再单列"
 
 
 def test_plan_result_uses_safe_dynamic_dom_and_responsive_cards():
@@ -262,13 +270,16 @@ def test_plan_generation_clears_only_plan_layers():
     assert "showProgress('plan-status')" in body
 
 
-def test_plan_history_renders_into_result_layer():
-    start = HTML.index("function restorePlan")
-    end = HTML.find("// ── Plan Iteration", start)
-    body = HTML[start:end]
+def test_saved_plan_renders_into_result_layer_with_safe_dom():
+    """打开一份旧计划要渲染进 #plan-result，且用安全 DOM 构造。
+
+    合并后「打开旧计划」只剩 openSavedPlan 一条路（原来的 restorePlan
+    连同本机历史一起删掉了），所以这条契约挂在它上面。
+    """
+    body = _fn_body("openSavedPlan")
     assert "plan-result" in body
-    assert "renderPlanResult(document.getElementById('plan-result')" in body
-    assert "plan-output.innerHTML" not in body
+    assert "renderPlanResult(area, plan)" in body
+    assert ".innerHTML" not in body
 
 
 def test_no_result_root_destructive_clear():
@@ -617,11 +628,21 @@ def test_interactive_rows_have_focus_and_press_feedback():
 
 
 def test_chart_containers_have_depth():
-    """大块图表区域不能是纯平坦色块。"""
+    """大块图表区域不能是纯平坦色块。
+
+    深浅两套主题表达"深度"的方式不同，断言只锁意图、不锁手法：
+    深色主题用内阴影（inset）压出凹陷，浅色主题用一档很轻的外阴影
+    （0 1px 3px）把卡片从底面上托起来。浅底上再加深色内阴影会把图表框
+    涂脏，所以浅色化时换成了外阴影——这条断言也必须跟着改口径，
+    否则它锁的就是"必须还是深色主题"，而不是"必须有层次"。
+    """
     start = HTML.index(".chart-box {")
     end = HTML.index("}", start)
-    assert "radial-gradient" in HTML[start:end]
-    assert "inset" in HTML[start:end]
+    block = HTML[start:end]
+    assert "radial-gradient" in block
+    shadow = next((ln for ln in block.splitlines() if "box-shadow" in ln), "")
+    assert shadow, ".chart-box 缺少 box-shadow，会退化成平坦色块"
+    assert "none" not in shadow, "box-shadow: none 等于没有层次"
 
 
 # ---------- 界面声明必须与实际行为一致 ----------
@@ -769,7 +790,19 @@ def test_review_panel_does_not_promise_a_human_reviewer():
     fn = _fn_body("renderReviewPending")
     assert "等待专业审核" not in fn
     assert "不是故障" in fn, "要明确告知这是安全机制生效，而非产品故障"
-    assert "review-pending-id" in fn, "审核编号应弱化后置，而不是当作主要信息"
+
+
+def test_review_panel_keeps_internals_out_of_the_ui():
+    """内部实现细节只进控制台，不上界面。
+
+    三样东西撤出界面：审核编号（一串 UUID，用户读不懂，还加重"产品坏了"的观感）、
+    动作库未收录（我们自己的数据缺口，用户既没法处理也不关心）、禁止项祈使句
+    （像系统在训人，且与"下一步"重复）。但排查时要用，所以走 console + data 属性。
+    """
+    fn = _fn_body("renderReviewPending")
+    assert "console.info" in fn, "撤出界面的信息应至少留在控制台，方便排查"
+    assert "dataset.reviewId" in fn, "审核编号应挂到 data 属性而不是渲染成文本"
+    assert "review-pending-footnote" in fn, "禁止项的实质应改成建议口吻保留"
 
 
 def test_review_panel_renders_issue_children_as_text():
@@ -845,12 +878,196 @@ def test_auth_gate_exists_with_a_visible_guest_exit():
                        "gate-login", "gate-register", "gate-guest", "gate-status"):
         assert f'id="{element_id}"' in HTML, f"缺少登录页元素 #{element_id}"
 
-    assert 'id="auth-gate" hidden' in HTML, "登录页初始应隐藏，由脚本按登录态决定"
     assert 'id="gate-password" type="password"' in HTML, "密码框必须是 password 类型"
     assert "先随便看看" in HTML, "游客入口的文案要说明这是可以随便逛的"
 
     for helper in ("showAuthGate", "hideAuthGate", "enterAsGuest", "gateAuth"):
         assert f"function {helper}(" in HTML, f"缺少 {helper}"
+
+
+def test_first_paint_is_the_login_page_not_the_app():
+    """首帧必须是登录页，应用壳默认隐藏。
+
+    原先两处是反的（登录页 hidden、应用壳常驻），结果是未登录用户先看到
+    整个应用界面一闪、再被登录页盖住——这也是"登录门像功能页的一部分"
+    这个观感的来源。现在把初始态写在 HTML 属性上，不依赖脚本。
+    """
+    assert 'id="auth-gate"' in HTML
+    assert 'id="auth-gate" hidden' not in HTML, "登录页不该默认隐藏：首帧就是它"
+    assert 'id="app-shell" hidden' in HTML, "应用壳应默认隐藏，由脚本按登录态放行"
+
+
+def test_hidden_is_forced_globally_and_scoped_overrides_use_important():
+    """全局 [hidden] 带 !important，放行规则必须也是 !important 才压得住。
+
+    这是一处踩过的坑：文件的 `[hidden] { display: none !important }` 会让
+    任何普通声明都失效，包括想"把 hidden 元素重新显示出来"的那条。
+    漏掉 !important 的表现是首帧全白——登录页被隐藏了，应用却没被放出来，
+    而在样式表里检查这条规则完全看不出问题。
+    """
+    assert re.search(r"\[hidden\]\s*\{\s*display:\s*none\s*!important", HTML), \
+        "全局 [hidden] 规则变了，.auth-passed 的放行规则需要重新评估"
+    assert ".auth-passed .app-shell[hidden]" in HTML, "缺少首帧放行应用壳的规则"
+    rule = HTML[HTML.index(".auth-passed .app-shell[hidden]"):]
+    rule = rule[:rule.index("}")]
+    assert "!important" in rule, \
+        "放行规则漏了 !important，会被全局 [hidden] 规则吃掉，首帧全白"
+
+
+def test_gate_and_shell_are_toggled_together():
+    """开/关登录页时必须同时切两个节点。
+
+    只切一个会留下"门开着但应用也在"或"门关了但底下什么都没有"，
+    两者都很难查，而且从截图上分不出来。
+    """
+    for fn_name in ("showAuthGate", "hideAuthGate"):
+        body = _fn_body(fn_name)
+        assert "auth-gate" in body, f"{fn_name} 没有操作登录页"
+        assert "app-shell" in body, f"{fn_name} 没有操作应用壳"
+
+
+def test_head_script_decides_first_frame_before_paint():
+    """放行标记要在 <head> 里同步读，避免游客刷新时闪一下登录页。
+
+    放到页面底部的主脚本就晚了——那时登录页已经画出来了。
+    """
+    head = HTML[:HTML.index("</head>")]
+    assert "ironmind_guest_pass" in head or "GUEST_PASS_KEY" in head, \
+        "head 里没有读游客放行标记"
+    assert "auth-passed" in head, "head 里没有为首帧加放行 class"
+    assert ".auth-passed" in HTML, "缺少 .auth-passed 的样式规则"
+
+
+def test_logout_returns_to_the_login_page():
+    """退出登录要回登录页，并清掉"上次登录过"的本机提示。
+
+    留着提示会让下次刷新乐观地进应用，再因为会话已失效被弹回来。
+    """
+    body = _fn_body("handleLogout")
+    assert "AUTH_HINT_KEY" in body, "退出时要清掉登录提示"
+    assert "showAuthGate()" in body, "退出后应回到登录页"
+
+
+def test_logout_also_clears_the_guest_pass():
+    """登出必须一并清掉游客放行标记，否则刷新会绕过登录页。
+
+    踩过的坑：只清 AUTH_HINT_KEY 时，曾点过游客（guest_pass=1）再登录的用户，
+    登出后一刷新就被 <head> 那段脚本当成游客放行了——登出形同虚设。
+    """
+    body = _fn_body("handleLogout")
+    assert "GUEST_PASS_KEY" in body, \
+        "登出没清游客标记，刷新会绕过登录页（登出等于没生效）"
+
+
+def test_login_page_has_login_and_register_modes():
+    """登录与注册是两种模式，必须有可见的模式状态。
+
+    原先注册是藏在游客按钮下面的小字链接，新用户填完账号密码点「登录」
+    只会得到"用户名或密码不正确"，没有任何"我还没账号"的出口。
+    """
+    for element_id in ("gate-login", "gate-register", "gate-submit", "gate-title", "gate-sub"):
+        assert f'id="{element_id}"' in HTML, f"缺少登录页元素 #{element_id}"
+    assert "function setGateMode(" in HTML, "缺少模式切换函数"
+    assert "GATE_COPY" in HTML, "缺少按模式区分的文案表"
+    # 用 radiogroup：这是"二选一的模式"，不是"切出另一块面板"。
+    # 曾经用过 role="tab" + aria-controls="gate-panel"，而那个 id 根本不存在。
+    assert 'role="radiogroup"' in HTML, "登录/注册应做成单选组（role=radiogroup）"
+    assert 'aria-controls="gate-panel"' not in HTML, \
+        "aria-controls 指向了不存在的元素"
+
+
+def test_tab_activation_is_scoped_to_its_own_tablist():
+    """页签切换只能在自己的 tablist 里生效，不能全文档扫描。
+
+    踩过的坑（登录后内容区一片空白）：activateTab 原本扫
+    `document.querySelectorAll('[role=\"tab\"]')`，页签容器也用
+    `querySelector('[role=\"tablist\"]')` 取"第一个"。登录页那组在 DOM 里更靠前，
+    于是——
+      ① 主界面的页签一个监听器都绑不上（绑到了登录页那组），点任何页签没反应；
+      ② 点一次登录页的页签，主界面每个面板都被置成 hidden，登录进去全空白。
+    """
+    body = _fn_body("activateTab")
+    assert "closest(" in body, "activateTab 没有按所属 tablist 限定范围"
+    assert "document.querySelectorAll(" not in body, \
+        "activateTab 仍在全文档扫描页签，会被页面上的其他页签组带偏"
+
+    # 页签容器的取法也必须点名，不能靠"第一个"
+    assert re.search(r"querySelector\(\"?\.feature-tabs", HTML), \
+        "页签容器没有点名主界面那一组，会取到登录页的"
+
+
+def test_login_mode_selector_reflects_selection():
+    """登录页的模式选择器要用 aria-checked 表达选中态。"""
+    assert "aria-checked" in _fn_body("setGateMode"), \
+        "setGateMode 没有同步选中态"
+    assert '.login-tab[aria-checked="true"]' in HTML, \
+        "样式没有跟进 aria-checked"
+
+
+def test_switching_mode_updates_copy_and_password_autocomplete():
+    """切模式时标题、主按钮文案、密码框 autocomplete 都要跟着变。
+
+    注册时若仍是 current-password，浏览器会尝试填入一个已有密码，
+    而不是提示生成新密码——注册场景下最不该发生的事。
+    """
+    body = _fn_body("setGateMode")
+    for token in ("gate-title", "gate-sub", "gate-submit", "autocomplete", "aria-checked"):
+        assert token in body, f"setGateMode 没有更新 {token}"
+
+
+def test_enter_key_submits_the_current_mode_not_always_login():
+    """回车必须按当前模式提交。
+
+    原先两个输入框都硬绑到 gateAuth('login')，切到注册页签后按回车
+    仍然去登录，必然得到"用户名或密码不正确"——新用户按回车 100% 撞墙。
+    """
+    init = HTML[HTML.index("bindEnterToSubmit([") :]
+    init = init[: init.index("]);") + 3]
+    assert "gateAuth(gateMode)" in init, \
+        "登录页的回车没有按当前模式提交"
+    assert "gateAuth('login')" not in init, \
+        "登录页的回车仍被硬绑到 login"
+
+
+def test_submit_button_is_wired_to_the_current_mode():
+    """主按钮要提交当前模式的表单，而不是固定登录。"""
+    assert re.search(
+        r"getElementById\('gate-submit'\)[^;]*gateAuth\(gateMode\)", HTML
+    ), "主按钮没有按当前模式提交"
+
+
+def test_register_shows_a_creation_receipt():
+    """注册成功后要有明确的"账号已创建"回执。
+
+    注册是自动登录直接进应用的（业界主流：注册完再要求登录一次是重复劳动），
+    但用户会直接掉进一个空应用，没有任何"账号建成了"的确认——新账号本来就没数据，
+    看起来像没成功。所以主内容区第一眼要有一条回执，并指出下一步。
+    """
+    for element_id in ("welcome-banner", "welcome-banner-title",
+                       "welcome-banner-text", "welcome-banner-close"):
+        assert f'id="{element_id}"' in HTML, f"缺少注册回执元素 #{element_id}"
+    assert "function showWelcomeBanner(" in HTML, "缺少注册回执的显示逻辑"
+    assert "function hideWelcomeBanner(" in HTML, "缺少注册回执的关闭逻辑"
+
+    gate = _fn_body("gateAuth")
+    assert "showWelcomeBanner(" in gate, "注册成功后没有显示回执"
+
+
+def test_register_and_login_say_different_things():
+    """注册与登录的成功文案必须区分。
+
+    踩过的坑：登录页那份把两种措辞合并了，注册成功后提示的是"已登录为 X"，
+    等于没告诉用户账号是不是真建成了（侧栏那份一直是分开写的）。
+    """
+    gate = _fn_body("gateAuth")
+    assert "已创建并登录为" in gate, "注册成功没有说明「账号已创建」"
+    assert "已登录为" in gate, "登录成功文案缺失"
+
+
+def test_logout_clears_the_registration_receipt():
+    """登出要收掉注册回执，否则换个身份进来还挂着"账号已创建"。"""
+    assert "hideWelcomeBanner()" in _fn_body("handleLogout"), \
+        "登出没有收起注册回执"
 
 
 def test_guest_pass_is_remembered_locally():
@@ -880,13 +1097,13 @@ def test_saved_plans_panel_and_save_action_exist():
     """
     for element_id in ("panel-saved", "saved-plans-list", "saved-plans-empty"):
         assert f'id="{element_id}"' in HTML
-    for helper in ("savePlanToServer", "loadSavedPlans", "openSavedPlan", "deleteSavedPlan"):
+    for helper in ("autoSavePlan", "migrateLocalHistory", "loadSavedPlans",
+                   "openSavedPlan", "deleteSavedPlan"):
         assert f"function {helper}(" in HTML, f"缺少 {helper}"
 
-    fn = _fn_body("savePlanToServer")
-    # 失败必须让按钮回到可重试状态，不能假装存好了
-    assert "button.disabled = false" in fn
-    assert "catch" in fn
+    fn = _fn_body("autoSavePlan")
+    # 存不进去要如实返回失败，调用方据此提示——不能假装存好了
+    assert "catch" in fn and "return resp.ok" in fn
 
 
 def test_saved_plan_view_switches_back_to_the_plan_tab():
@@ -947,3 +1164,161 @@ def test_enter_key_submits_login_forms():
         assert f"'{field}'" in init, f"{field} 应绑定回车提交"
     fn = _fn_body("bindEnterToSubmit")
     assert "preventDefault" in fn, "要阻止隐式提交导致页面刷新"
+
+
+# ----------------------------------------------------------------------
+# 侧栏信息架构
+# ----------------------------------------------------------------------
+
+def _sidebar_html():
+    start = HTML.index('<aside class="sidebar')
+    return HTML[start:HTML.index("</aside>", start)]
+
+
+def test_account_block_sits_after_the_primary_action():
+    """账号区在侧栏最底部，主流程（档案 → 生成计划）排在它前面。
+
+    原先它在品牌正下方、占 110px，还是一个卡片里套一个描边按钮（边框套边框）。
+    但登录是一次性动作，把最贵的位置留给它，等于让主流程往下挤。
+    """
+    sb = _sidebar_html()
+    assert sb.index('id="account-block"') > sb.index('id="btn-generate"'), \
+        "账号区应在「生成计划」之后（侧栏底部）"
+    assert sb.index('id="account-block"') > sb.index('id="profile-editor"'), \
+        "账号区应在档案表单之后"
+
+
+def test_account_actions_are_buttons():
+    """账号区的动作是按钮，不是下划线文字链接。
+
+    曾经写成文字链接，理由是"设置项不该和「生成计划」一样重"。但渲染出来
+    只是左下角一行孤零零的小字：既不像能点，也和上面的输入框对不齐——
+    「退出登录」尤其像掉了样式的残留。改回按钮；不抢主行动靠中性色。
+    """
+    sb = _sidebar_html()
+    assert ".account-link" not in sb, "账号动作不该再用文字链接样式"
+    for btn_id in ("btn-show-login", "btn-logout"):
+        m = re.search(r'<button class="([^"]*)"[^>]*id="%s"' % btn_id, sb)
+        assert m, f"{btn_id} 应仍是 button 元素"
+        assert "account-btn" in m.group(1), f"{btn_id} 应该用按钮样式"
+    assert ".account-link" not in HTML, "文字链接的样式规则应已删除，别留死代码"
+
+
+def test_account_actions_share_the_identity_row():
+    """动作块必须在 .account-state 这个 grid 内部，才能和身份同一行。
+
+    它曾经是 grid 的兄弟节点，于是 CSS 里那两条
+    `grid-column: 3; grid-row: 1` 从来没生效过：动作被甩到第三行，
+    孤零零挂在左下角，和上面的身份文字对不齐。结构不对，样式写对也没用。
+    """
+    sb = _sidebar_html()
+    state_at = sb.index('id="account-state"')
+    actions_at = sb.index('id="account-actions"')
+    hint_at = sb.index('id="account-hint"')
+    assert state_at < actions_at < hint_at, \
+        "账号动作应嵌在 .account-state 里（hint 之前）"
+
+
+def test_primary_cta_cannot_be_squashed_by_an_overflowing_sidebar():
+    """「生成计划」在侧栏溢出时必须保持完整高度。
+
+    侧栏是「height:100vh + overflow-y:auto」的纵向 flex 容器。内容一旦超出
+    视口，flex 项默认被压缩；而这个按钮带 overflow:hidden（扫光要裁剪），
+    自动最小尺寸因此失效、能被一路压到 0——实测 57px 高塌成 32px，
+    内边距仍是 16+16，文字被裁掉，主行动看起来像"被挡住了"。
+    """
+    start = HTML.index(".btn-generate {")
+    rule = HTML[start:HTML.index("}", start)]
+    assert "flex-shrink: 0" in rule, \
+        "主按钮必须禁止 flex 压缩，否则侧栏一溢出就被压扁"
+
+
+def test_profile_summary_is_hidden_on_desktop():
+    """桌面端不显示档案摘要卡——它与下面的表单完全重复。
+
+    表单在桌面本来就常显，同样的 180cm/80kg/增肌/每周4练 再列一遍只是噪声，
+    而且和表单叠在一起像两张卡片。窄屏保留：那里表单折叠，它是概览与展开入口。
+    """
+    start = HTML.index(".profile-summary {")
+    block = HTML[start:HTML.index("}", start)]
+    assert "display: none" in block, "桌面端应隐藏档案摘要"
+    # 窄屏媒体查询里必须恢复
+    mobile = HTML[HTML.index("@media (max-width: 767px)"):]
+    mobile = mobile[:mobile.index(".profile-toggle")]
+    assert ".profile-summary" in mobile, "窄屏应恢复摘要卡（它是唯一的展开入口）"
+
+
+def test_all_profile_fields_live_in_one_group():
+    """档案字段全在 #profile-editor 里，折叠只需要一个开关。
+
+    原先训练场景/伤病史/运动习惯散在 #profile-editor 外面，得再靠
+    `.sidebar > .field` 单独收一遍——两套机制容易不同步，展开后只出来一半。
+    """
+    sb = _sidebar_html()
+    editor = sb[sb.index('id="profile-editor"'):]
+    editor = editor[:editor.index("</div>", editor.index('id="habits-input"'))]
+    for field_id in ("height", "weight", "years", "goal", "days",
+                     "injuries-input", "habits-input"):
+        assert f'id="{field_id}"' in editor, f"{field_id} 应在档案分组内"
+    assert 'id="scene-tags"' in editor, "训练场景应在档案分组内"
+    assert "profile-expanded" not in HTML, "第二套折叠机制应已移除"
+
+
+def test_sidebar_scrolls_on_its_own():
+    """侧栏约束成视口高度并自己滚动，页面滚动时它留在原地。
+
+    侧栏内容比常见视口高（7 个字段），不这么做的话「生成计划」会被折叠线切掉。
+    """
+    start = HTML.index(".sidebar {")
+    block = HTML[start:HTML.index("}", start)]
+    assert "height: 100vh" in block and "overflow-y: auto" in block
+    assert "position: sticky" in block
+
+
+# ----------------------------------------------------------------------
+# 档案字段：年龄与性别
+#
+# 这两个字段只服务于热量目标（Mifflin-St Jeor 的性别常数项男女相差 166 kcal），
+# 不参与动作编排。前端必须真的把它们送上去，否则后端只能走粗估退路。
+# ----------------------------------------------------------------------
+
+def test_profile_form_collects_age_and_sex():
+    assert 'id="age"' in HTML, "档案表单缺少年龄字段"
+    assert 'id="sex"' in HTML, "档案表单缺少性别字段"
+    # 「不填」必须是可选项且是默认项：营养估算用得上的信息，不值得让用户
+    # 先回答一个涉及身份的问题。
+    assert '<option value="不填" selected>' in HTML, \
+        "性别的默认值应为「不填」，而不是替用户预选一个"
+
+
+def test_get_profile_sends_age_and_sex():
+    fn = _fn_body("getProfile")
+    assert "document.getElementById('age')" in fn, "getProfile 没带上年龄"
+    assert "document.getElementById('sex')" in fn, "getProfile 没带上性别"
+
+
+def test_plan_result_renders_the_nutrition_block():
+    """热量目标是算出来的，但用户得看得见。"""
+    assert "function renderPlanNutrition(" in HTML, "缺少热量块渲染函数"
+    assert "renderPlanNutrition(container, plan.nutrition)" in _fn_body("renderPlanResult"), \
+        "计划结果区没有渲染 nutrition"
+
+
+def test_nutrition_block_shows_the_basis_not_just_the_number():
+    """依据文本与数字同等重要。
+
+    这个数字是确定性算出来的，但如果界面上只有数字，它对用户就是一个
+    无从检验的断言——依据就是它敢做成确定性的理由。
+    """
+    fn = _fn_body("renderPlanNutrition")
+
+    assert "nutrition-value" in fn and "nutrition-basis" in fn
+    assert "nutrition.basis" in fn
+
+
+def test_explanation_panel_lists_the_habits_that_were_considered():
+    """用户问过"我填的习惯到底有没有被用上"，面板要给得出答案。"""
+    fn = _fn_body("renderPlanExplanation")
+
+    assert "explain.habits" in fn, "可解释面板没有读取 habits"
+    assert "运动习惯" in fn, "可解释面板没有展示运动习惯"

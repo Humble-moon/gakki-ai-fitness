@@ -346,7 +346,7 @@ class HITLReview:
         if rule_issues:
             return ReviewDecision(
                 needs_review=True,
-                reason=f"规则引擎检测到 {len(rule_issues)} 个伤病-动作冲突",
+                reason=f"发现 {len(rule_issues)} 处动作与你的伤病史冲突",
                 severity="danger",
                 suggestions=rule_issues,
             )
@@ -376,7 +376,7 @@ class HITLReview:
             )
             return ReviewDecision(
                 needs_review=True,
-                reason=f"语义匹配检测到伤病风险 (置信度 {best['similarity']:.2f})",
+                reason="你的描述与已知的伤病情况相符，需要专业人员确认",
                 severity=best["severity"],
                 suggestions=suggestions,
             )
@@ -391,7 +391,7 @@ class HITLReview:
         if confidence < HITL_CONFIDENCE_THRESHOLD or has_danger:
             return ReviewDecision(
                 needs_review=True,
-                reason=f"置信度 {confidence:.2f} 低于阈值或有危险建议",
+                reason="计划中有需要专业人员确认的内容",
                 severity="danger" if has_danger else "warning",
                 suggestions=[i["issue"] for i in issues]
             )
