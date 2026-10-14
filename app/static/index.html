@@ -3196,7 +3196,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         <div class="row">
           <div class="field">
             <label for="years">训练年限 Years</label>
-            <input id="years" type="number" value="1" min="0" max="30" step="0.5">
+            <!-- step="any" 而不是 0.5：训练年限是用户自报的估计值，没有理由
+                 只接受半年的整数倍。写 0.5 时，输入 1.3 会被浏览器判为无效
+                 （:invalid），上下箭头也只能按 0.5 跳。any 让任意数字都能填。 -->
+            <input id="years" type="number" value="1" min="0" max="100" step="any">
           </div>
           <div class="field">
             <label for="goal-btn">目标 Goal</label>
@@ -4763,7 +4766,7 @@ const PROFILE_FIELD_RULES = [
   { id: 'height', label: '身高', min: 100, max: 250, unit: 'cm' },
   { id: 'weight', label: '体重', min: 30, max: 200, unit: 'kg' },
   { id: 'age', label: '年龄', min: 10, max: 100, unit: '岁' },
-  { id: 'years', label: '训练年限', min: 0, max: 30, unit: '年', aliases: ['training_years'] },
+  { id: 'years', label: '训练年限', min: 0, max: 100, unit: '年', aliases: ['training_years'] },
   { id: 'days', label: '每周训练天数', min: 1, max: 7, unit: '天', aliases: ['days_per_week'] },
 ];
 

@@ -46,8 +46,11 @@ class UserProfileInput(BaseModel):
     sex: SexInput = Field("不填", description="性别（仅用于热量估算）")
     # 性别，默认「不填」。见上面 SexInput 的说明。
 
-    training_years: float = Field(..., ge=0, le=30, description="训练年限")
-    # 训练年限，合法范围 0~30 年
+    training_years: float = Field(..., ge=0, le=100, description="训练年限")
+    # 训练年限，合法范围 0~100 年。上限从 30 放宽：用户自报值，练了三十几年的人
+    # 真实存在，卡在 30 属于无谓限制。改这里必须同步 app/server.py 的三个请求模型
+    # 与前端 PROFILE_FIELD_RULES——三处是有意重复的，漂移会退化成"前端放行、
+    # 后端 422、用户只看到一句笼统失败"。
 
     goal: TrainingGoal
     # 训练目标，正则约束只能为 "增肌" 或 "减脂"

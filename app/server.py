@@ -180,8 +180,9 @@ class PlanRequest(BaseModel):
     # 年龄，合法范围 10~100。可选：只影响热量估算，没填就退回按体重粗估
     sex: SexInput = "不填"
     # 性别，仅用于热量公式。可选且允许「不填」——不填时按两性中值估算
-    training_years: float = Field(1.0, ge=0, le=30)
-    # 训练年限，默认 1.0，合法范围 0~30 年
+    training_years: float = Field(1.0, ge=0, le=100)
+    # 训练年限，默认 1.0，合法范围 0~100 年。上限从 30 放宽：这是用户自报值，
+    # 练了三十几年的人真实存在，卡在 30 属于无谓限制。
     goal: TrainingGoal = "增肌"
     # 训练目标，默认 "增肌"
     available_equipment: list[str] = ["哑铃", "杠铃"]
@@ -220,8 +221,8 @@ class AnalysisRequest(BaseModel):
     # 年龄，合法范围 10~100。可选：只影响热量估算，没填就退回按体重粗估
     sex: SexInput = "不填"
     # 性别，仅用于热量公式。可选且允许「不填」——不填时按两性中值估算
-    training_years: float = Field(1.0, ge=0, le=30)
-    # 训练年限，合法范围 0~30 年
+    training_years: float = Field(1.0, ge=0, le=100)
+    # 训练年限，合法范围 0~100 年
     goal: TrainingGoal = "增肌"
     # 训练目标
     available_equipment: list[str] = ["哑铃"]
@@ -253,8 +254,8 @@ class QuestionRequest(BaseModel):
     # 年龄，合法范围 10~100。可选：只影响热量估算，没填就退回按体重粗估
     sex: SexInput = "不填"
     # 性别，仅用于热量公式。可选且允许「不填」——不填时按两性中值估算
-    training_years: float = Field(1.0, ge=0, le=30)
-    # 训练年限，合法范围 0~30 年
+    training_years: float = Field(1.0, ge=0, le=100)
+    # 训练年限，合法范围 0~100 年
     goal: TrainingGoal = "增肌"
     available_equipment: list[str] = ["哑铃"]
     days_per_week: int = Field(4, ge=1, le=7)
