@@ -1352,3 +1352,86 @@ def test_limitation_caution_has_its_own_topic_and_precedes_injury():
 
     # 分类标记要剥离后再展示，否则用户会看到"[调整]"这种内部记号
     assert "|调整)" in HTML, "strip 正则没跟上新增的 [调整] 标记"
+
+
+# ── 训练档案字段的提交前校验 ──
+#
+# 这一组来自一次实机报错：用户在「年龄」里填了 2，点生成，只得到一句
+# 「请求失败: 提交的内容有问题」。两处毛病叠在一起：
+#   ① input 上的 min="10" 从来没生效过——type="number" 的 min/max 只在原生
+#      表单提交时由浏览器校验，而这个页面是 JS 收值发 fetch，不是 <form> 提交；
+#   ② 422 的响应体里带着精确的字段名（{"detail":[{"loc":["body","age"],...}]}），
+#      却被 `prefix || detail` 短路掉了，于是无论错在哪一格提示都一样。
+# 结果就是：明明只错一格，用户却只能挨个试。
+
+
+def _frontend_field_rules():
+    """解析 HTML 里的 PROFILE_FIELD_RULES。"""
+    start = HTML.index("const PROFILE_FIELD_RULES")
+    body = HTML[start:HTML.index("];", start)]
+    rules = {}
+    for entry in re.findall(r"\{\s*id:\s*'([^']+)'(.*?)\}", body, re.S):
+        field_id, rest = entry
+        lo, hi = re.search(r"min:\s*(-?\d+),\s*max:\s*(-?\d+)", rest).groups()
+        aliases = re.findall(r"'([A-Za-z_][A-Za-z0-9_]*)'", rest)
+        rules[field_id] = (int(lo), int(hi), aliases)
+    return rules
+
+
+def _backend_range(props, name):
+    """从后端 schema 里取字段上下限（Optional 字段的约束嵌在 anyOf 里）。"""
+    prop = props.get(name) or {}
+    for candidate in [prop] + list(prop.get("anyOf") or []):
+        if "minimum" in candidate and "maximum" in candidate:
+            return candidate["minimum"], candidate["maximum"]
+    raise AssertionError(f"后端字段 {name} 读不到上下限")
+
+
+def test_frontend_field_ranges_match_backend():
+    """前端先拦一遍的范围必须与后端请求模型一致。
+
+    两边是**有意重复**的：前端拦为了即时反馈，后端拦为了不信任客户端。
+    但重复意味着会漂移——后端调了范围而前端没跟上，就会退化成"前端放行、
+    后端 422、用户只看到一句笼统的失败"，正是上面那次报错。
+    这条用例把两份约束钉在一起，改一边不改另一边会红。
+    """
+    from app.server import PlanRequest
+
+    props = PlanRequest.model_json_schema()["properties"]
+    rules = _frontend_field_rules()
+    assert rules, "没解析到 PROFILE_FIELD_RULES，契约测试失去意义"
+
+    for field_id, (lo, hi, aliases) in rules.items():
+        name = next((n for n in [field_id] + aliases if n in props), None)
+        assert name, f"前端校验了 {field_id}，但后端 PlanRequest 里没有这个字段"
+        assert _backend_range(props, name) == (lo, hi), (
+            f"{field_id} 前端限制 {lo}~{hi}，后端 {name} 却是 "
+            f"{_backend_range(props, name)}——两边漂移了"
+        )
+
+
+def test_all_profile_submitting_paths_validate_before_sending():
+    """三个提交入口都必须先校验，否则会各自退化成同样的 422。
+
+    只修计划生成那一处是不够的：动作分析和知识问答发的是同一份画像，
+    后端也用的是同一套约束，漏掉哪个入口，那个入口就重现同一个毛病。
+    """
+    for fn in ("generatePlan", "analyzeExercise", "askQuestion"):
+        assert "validateProfileFields()" in _fn_body(fn), \
+            f"{fn} 没有做提交前校验"
+
+
+def test_validation_error_detail_is_not_discarded():
+    """422 必须解析出字段名，而不是被一句笼统文案短路掉。"""
+    assert "describeValidationDetail" in _fn_body("describeHttpError")
+    detail = _fn_body("describeValidationDetail")
+    assert "loc" in detail, "没从 FastAPI 的 loc 里取字段名"
+    # 旧的短路写法必须已经消失：它会在 422 时把 detail 整个丢掉
+    assert "'提交的内容有问题' :" not in HTML, "422 又被笼统文案短路了"
+
+
+def test_invalid_field_gets_inline_message():
+    """校验失败要就地标红并聚焦，而不是只弹一条全局提示。"""
+    body = _fn_body("validateProfileFields")
+    assert "markFieldError" in body
+    assert "focus(" in body, "出错字段要自动聚焦过去"

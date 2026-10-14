@@ -318,6 +318,31 @@ body {
 
 .field input::placeholder { color: var(--chalk-faint); }
 
+/* 字段级校验提示：红字挂在出错的那一格下方，而不是集中弹一条 toast——
+   用户要的是"哪一格错了"，位置本身就是一半的信息。
+   颜色复用 --danger，与 .plan-notice / .review-issue-sev 同一套语义色。 */
+.field-error {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--danger);
+}
+
+.field input.is-invalid,
+.field select.is-invalid,
+.field textarea.is-invalid {
+  border-color: var(--danger);
+  background: rgba(var(--danger-rgb), 0.05);
+}
+
+/* 聚焦时也要保持红色：.field input:focus 的规则在后面且优先级相同，
+   不显式覆盖的话，用户一点进出错字段，红边就被橙色 focus 框顶掉了。 */
+.field input.is-invalid:focus,
+.field select.is-invalid:focus,
+.field textarea.is-invalid:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(var(--danger-rgb), 0.15);
+}
+
 .row { display: flex; gap: 12px; }
 .row .field { flex: 1; }
 
@@ -4725,6 +4750,95 @@ function getProfile() {
   };
 }
 
+// ═══════════════ 训练档案字段校验 ═══════════════
+/* 这些 input 上都写了 min/max，但**它们从来没有生效过**。
+   type="number" 的 min/max 只在原生表单提交时由浏览器校验，而这个页面不是
+   <form> 提交——是 JS 收值发 fetch。于是「年龄 2」被原样发出去，后端按
+   ge=10 拒掉，用户只看到一句笼统的「提交的内容有问题」，不知道该改哪一格。
+
+   范围必须与后端请求模型一致（app/server.py 的 PlanRequest / AnalysisRequest /
+   QuestionRequest 三者约束相同）。这里是有意重复：前端拦是为了即时反馈，
+   后端拦是为了不信任客户端。改一处就要改两处。 */
+const PROFILE_FIELD_RULES = [
+  { id: 'height', label: '身高', min: 100, max: 250, unit: 'cm' },
+  { id: 'weight', label: '体重', min: 30, max: 200, unit: 'kg' },
+  { id: 'age', label: '年龄', min: 10, max: 100, unit: '岁' },
+  { id: 'years', label: '训练年限', min: 0, max: 30, unit: '年', aliases: ['training_years'] },
+  { id: 'days', label: '每周训练天数', min: 1, max: 7, unit: '天', aliases: ['days_per_week'] },
+];
+
+function profileFieldMessage(rule) {
+  return `${rule.label}需在 ${rule.min}~${rule.max} ${rule.unit}之间`;
+}
+
+function ruleForFieldKey(key) {
+  return PROFILE_FIELD_RULES.find(
+    r => r.id === key || (r.aliases || []).includes(key));
+}
+
+function markFieldError(id, message) {
+  const input = document.getElementById(id);
+  const field = input?.closest('.field');
+  if (!input || !field) return;
+  input.classList.add('is-invalid');
+  input.setAttribute('aria-invalid', 'true');
+  let hint = field.querySelector('.field-error');
+  if (!hint) {
+    hint = el('div', 'field-error', '');
+    hint.setAttribute('role', 'alert');
+    field.appendChild(hint);
+  }
+  hint.textContent = message;
+}
+
+function clearFieldError(id) {
+  const input = document.getElementById(id);
+  const field = input?.closest('.field');
+  if (!input || !field) return;
+  input.classList.remove('is-invalid');
+  input.removeAttribute('aria-invalid');
+  field.querySelector('.field-error')?.remove();
+}
+
+function clearAllFieldErrors() {
+  PROFILE_FIELD_RULES.forEach(rule => clearFieldError(rule.id));
+}
+
+/* 校验档案里的数值字段，返回第一条错误（无错返回 null）。
+   只详细报第一处并聚焦过去：一次把五格全标红，用户反而不知从哪改起。
+   空值不在这里拦——可空字段交给后端默认值，必填字段另有默认值兜底。 */
+function validateProfileFields() {
+  let first = null;
+  PROFILE_FIELD_RULES.forEach(rule => {
+    clearFieldError(rule.id);
+    const input = document.getElementById(rule.id);
+    if (!input) return;
+    const raw = String(input.value ?? '').trim();
+    if (raw === '') return;
+    const value = Number(raw);
+    let message = null;
+    if (!Number.isFinite(value)) {
+      message = `${rule.label}请填写数字`;
+    } else if (value < rule.min || value > rule.max) {
+      message = profileFieldMessage(rule);
+    }
+    if (!message) return;
+    markFieldError(rule.id, message);
+    if (!first) {
+      first = message;
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input.focus({ preventScroll: true });
+    }
+  });
+  return first;
+}
+
+// 用户回头改对了就撤掉红字，不必等到再次提交
+PROFILE_FIELD_RULES.forEach(rule => {
+  const input = document.getElementById(rule.id);
+  input?.addEventListener('input', () => clearFieldError(rule.id));
+});
+
 // ── 自绘下拉的初始化 ──
 initSelects();
 document.querySelectorAll('#profile-editor input, #profile-editor select').forEach(field => {
@@ -4740,11 +4854,51 @@ function switchTab(name) { activateTab(`tab-${name}`); }
 // ═══════════════ SSE STREAMING ═══════════════
 const SSE_TERMINAL_EVENTS = new Set(['done', 'error', 'cancelled']);
 
+/* 把非 2xx 响应翻成能给用户看的话。
+   后端的 422 是 FastAPI 的校验错误，长这样：
+     {"detail":[{"loc":["body","age"],
+                 "msg":"Input should be greater than or equal to 10",
+                 "input":2}]}
+   loc 的末项就是出错字段——这是整条响应里最有用的信息。此前它被
+   `prefix || detail` 短路掉了：422 时 prefix 非空，于是无论错在哪一格，
+   用户看到的都是同一句「提交的内容有问题」，只能挨个试。
+
+   前端已按同一套范围做前置校验（PROFILE_FIELD_RULES），这里保留是因为
+   它兜的正是前端不知道的那些错误：后端将来新增字段、或改了范围而前端没跟上。 */
+function describeValidationDetail(rawText) {
+  let payload;
+  try {
+    payload = JSON.parse(rawText);
+  } catch {
+    return '';
+  }
+  const items = Array.isArray(payload?.detail) ? payload.detail : [];
+  if (!items.length) return '';
+  const messages = [];
+  for (const item of items.slice(0, 3)) {
+    const loc = Array.isArray(item?.loc) ? item.loc : [];
+    const key = String(loc[loc.length - 1] ?? '');
+    const rule = ruleForFieldKey(key);
+    messages.push(rule ? profileFieldMessage(rule) : `${key || '提交内容'}填写有误`);
+  }
+  return messages.join('；');
+}
+
+function describeHttpError(status, rawText) {
+  if (status === 422) {
+    return describeValidationDetail(rawText) || '提交的内容有问题，请检查填写的信息';
+  }
+  if (status >= 500) return '服务暂时不可用，请稍后重试';
+  const text = String(rawText || '').trim();
+  // 纯文本错误可以直接透出；JSON 别原样甩给用户看
+  if (text && !text.startsWith('{') && !text.startsWith('[')) return text.slice(0, 300);
+  return `请求失败（${status}）`;
+}
+
 async function consumeSse(response, { signal, isCurrent = () => true, onEvent, onTerminal }) {
   if (!response.ok || !response.body) {
-    const detail = await response.text().catch(() => '');
-    const prefix = response.status === 422 ? '提交的内容有问题' : response.status >= 500 ? '服务暂时不可用，请稍后重试' : '';
-    throw new Error(prefix || detail || `请求失败（${response.status}）`);
+    const raw = await response.text().catch(() => '');
+    throw new Error(describeHttpError(response.status, raw));
   }
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.toLowerCase().includes('text/event-stream')) {
@@ -5537,6 +5691,14 @@ async function generatePlan() {
   activateTab('tab-plan');
   document.getElementById('plan-output')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  // 在清空上一次结果之前先校验：数值越界就当场说清是哪一格，而不是发出去
+  // 换来一句笼统的 422，还顺手把用户已有的结果清掉了。
+  const invalid = validateProfileFields();
+  if (invalid) {
+    setRequestState('plan', 'error', `无法生成：${invalid}`);
+    return;
+  }
+
   const btn = document.getElementById('btn-generate');
   activeRequests.plan?.abort();
   const controller = new AbortController(); activeRequests.plan = controller;
@@ -5576,6 +5738,11 @@ function appendQaTurn(role, text) {
 async function analyzeExercise() {
   const output = document.getElementById('analysis-output');
   if (!output) return;
+  const invalid = validateProfileFields();
+  if (invalid) {
+    setRequestState('analysis', 'error', `无法分析：${invalid}`);
+    return;
+  }
   activeRequests.analysis?.abort();
   const controller = new AbortController(); activeRequests.analysis = controller;
   const isCurrent = () => activeRequests.analysis === controller;
@@ -5703,6 +5870,11 @@ async function askQuestion() {
   const input = document.getElementById('qa-query');
   const question = input?.value?.trim();
   if (!question || activeRequests.qa) return;
+  const invalid = validateProfileFields();
+  if (invalid) {
+    setRequestState('qa', 'error', `无法提问：${invalid}`);
+    return;
+  }
   lastQaQuestion = question;
   const controller = new AbortController();
   activeRequests.qa = controller;
