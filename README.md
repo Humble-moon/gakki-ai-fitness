@@ -130,7 +130,7 @@ PDF 另有一个可选的 MinerU 后端（`DOC_PARSER_BACKEND=mineru`，默认�
 | 成本与数据 | 当日 LLM 成本上限（Redis 计数，跨进程有效）；个人数据导出与删除 |
 | 记忆 | 短期滑动窗口 + 长期记忆（带时间戳） |
 | 评测 | 206 条 Golden Dataset + 三组消融实验 + E2E/RAGAS + Serving 压测 |
-| 前端 | FastAPI + SSE + 暗黑工业风 HTML/CSS/JS |
+| 前端 | 单文件 HTML/CSS/JS（`app/static/index.html`，无构建步骤，无前端框架）+ SSE 流式；苹果式浅色主题，系统字体栈 + 单一强调色 |
 | 部署 | Docker Compose（PostgreSQL + Neo4j + Redis + MinIO） |
 
 ## 快速开始
@@ -247,7 +247,7 @@ python scripts/verify_project_facts.py --json
 ```
 ├── app/                          # FastAPI 后端 + 前端
 │   ├── server.py                 # API 入口（SSE 流式）
-│   └── static/index.html         # IRONMIND 暗黑工业风 UI
+│   └── static/index.html         # IRONMIND UI（整站唯一前端文件，样式与脚本内联）
 ├── src/
 │   ├── agents/                   # 四 Agent（Planner/Retriever/Writer/FactChecker）
 │   ├── harness/                  # 执行脚手架（预算配置/自主循环/超时）

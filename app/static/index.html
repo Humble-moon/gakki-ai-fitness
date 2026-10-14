@@ -4202,6 +4202,12 @@ async function openSavedPlan(planId) {
     const plan = await resp.json();
     const area = document.getElementById('plan-result');
     if (!area) return;
+    // 必须先清空。renderPlanResult 是 append 而不是 replace，容器里还留着
+    // 「Ready to Forge」空态引导区（它在 #plan-result 内部，见 HTML 结构）。
+    // 生成路径在开跑时就 replaceChildren() 清过一次，这条路没有，于是从
+    // 「我的计划」打开一份计划时，空态与计划会上下叠在一起——用户会以为
+    // 计划没加载完整。
+    area.replaceChildren();
     showPlanSaveBarHidden();
     renderPlanResult(area, plan);
     // 必须先切回「训练计划」再滚动。计划渲染在 panel-plan 里，而用户此刻
