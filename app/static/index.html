@@ -3635,8 +3635,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
           <label class="bm-field"><span>大腿围 cm</span>
             <input type="number" id="bm-thigh" step="0.1" min="10" max="150" placeholder="—"></label>
         </div>
-        <label class="query-field-label" for="bm-notes">备注</label>
-        <input id="bm-notes" type="text" maxlength="512" placeholder="如：晨起空腹">
+        <!-- 备注用 .bm-field，与上面 9 个字段同一套结构。
+             原来挂的是 .query-field-label（标题字体、15px、600 粗）+ 一个**没有
+             任何 class 的裸 input**——裸 input 会退回浏览器默认样式，于是这一格
+             顶着一圈与全站无关的黑框、字号也不一样，在浅色主题里格外突兀。
+             .bm-field 自带「标签在上、小字次级色 + 输入框」的整套样式，
+             直接复用即可，不必新写规则。 -->
+        <label class="bm-field" for="bm-notes"><span>备注</span>
+          <input id="bm-notes" type="text" maxlength="512" placeholder="如：晨起空腹"></label>
         <div class="log-actions">
           <button class="btn-generate" id="btn-save-bm" type="button" onclick="saveBodyMeasurement()">▸ 记录这次体测</button>
         </div>
