@@ -326,6 +326,41 @@ class TrainingLogRequest(BaseModel):
     # 动作明细列表
 
 
+class BodyMeasurementRequest(BaseModel):
+    """
+    体测记录提交请求体。
+
+    说明：所有测量项都可选——现实中很少有人每次把八项量齐，强制必填
+         只会让人放弃记录。全空提交由接口层拒绝，避免留下无意义的空行。
+    """
+    athlete_key: str = ""
+    # 稳定运动员标识（前端 localStorage）
+    measure_date: Optional[str] = None
+    # 测量日期 "YYYY-MM-DD"；缺省为今天（本地日历日）
+
+    weight: Optional[float] = Field(None, ge=20, le=400, allow_inf_nan=False)
+    # 体重（kg）。上下界按人体实际范围取，NaN 由 allow_inf_nan 拦下，
+    # 理由同 TrainingLogEntryInput.weight。
+    body_fat_pct: Optional[float] = Field(None, ge=1, le=70, allow_inf_nan=False)
+    # 体脂率（%）
+    muscle_mass: Optional[float] = Field(None, ge=0, le=200, allow_inf_nan=False)
+    # 肌肉量（kg）
+
+    chest: Optional[float] = Field(None, ge=20, le=250, allow_inf_nan=False)
+    # 胸围（cm）
+    waist: Optional[float] = Field(None, ge=30, le=250, allow_inf_nan=False)
+    # 腰围（cm）
+    hip: Optional[float] = Field(None, ge=30, le=250, allow_inf_nan=False)
+    # 臀围（cm）
+    arm: Optional[float] = Field(None, ge=10, le=100, allow_inf_nan=False)
+    # 臂围（cm）
+    thigh: Optional[float] = Field(None, ge=10, le=150, allow_inf_nan=False)
+    # 大腿围（cm）
+
+    notes: str = Field("", max_length=512)
+    # 自由备注，如"晨起空腹"
+
+
 class TrainingAdviceRequest(BaseModel):
     """调整建议生成请求体。"""
     athlete_key: str = ""
@@ -583,6 +618,7 @@ async def upload_document(
 
 _training_log_store = None
 _plan_store = None
+_body_measure_store = None
 
 
 def _get_training_log_store():
@@ -601,6 +637,15 @@ def _get_plan_store():
         from src.storage.plan_store import PlanStore
         _plan_store = PlanStore()
     return _plan_store
+
+
+def _get_body_measure_store():
+    """惰性构造体测记录存储——同 _get_training_log_store，避免导入时连库。"""
+    global _body_measure_store
+    if _body_measure_store is None:
+        from src.storage.body_measure_store import BodyMeasureStore
+        _body_measure_store = BodyMeasureStore()
+    return _body_measure_store
 
 
 def _storage_unavailable():
@@ -681,6 +726,101 @@ async def list_training_logs(athlete_key: str = "", weeks: int = 12,
     return {"logs": logs, "count": len(logs)}
 
 
+@app.post("/api/body-measurements")
+async def create_body_measurement(req: BodyMeasurementRequest,
+                                  principal: Principal = Depends(get_current_principal)):
+    """
+    POST /api/body-measurements - 记录一次体测
+
+    请求体：BodyMeasurementRequest
+    返回：JSON {"measurement_id"}
+
+    说明：至少要有一项有效测量才落库。全空提交不是"记录了一次体测"，
+    而是误触——存下来只会在趋势图上多一个空洞。
+    """
+    if not req.athlete_key and not principal.is_authenticated:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
+
+    measured = [req.weight, req.body_fat_pct, req.muscle_mass,
+                req.chest, req.waist, req.hip, req.arm, req.thigh]
+    if all(v is None for v in measured):
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "NO_MEASUREMENT", "message": "至少填写一项测量数据"}})
+
+    store = _get_body_measure_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _storage_unavailable()
+
+    measurement_id = store.save(
+        require_owner_key(principal, req.athlete_key),
+        measure_date=req.measure_date,
+        weight=req.weight, body_fat_pct=req.body_fat_pct,
+        muscle_mass=req.muscle_mass, chest=req.chest, waist=req.waist,
+        hip=req.hip, arm=req.arm, thigh=req.thigh, notes=req.notes,
+    )
+    if measurement_id is None:
+        return _storage_unavailable()
+    return {"measurement_id": measurement_id}
+
+
+@app.get("/api/body-measurements")
+async def list_body_measurements(athlete_key: str = "", weeks: int = 0,
+                                 principal: Principal = Depends(get_current_principal)):
+    """
+    GET /api/body-measurements - 查询历史体测记录
+
+    查询参数：
+        athlete_key: 运动员标识（必填）
+        weeks: 回溯周数；0 表示不限时间（默认）
+
+    返回：JSON {"measurements": [...], "count"}
+
+    默认不限时间：体测是低频记录，按月甚至按季度才量一次，
+    默认回溯 12 周会让多数用户看到空列表。
+    """
+    if not athlete_key and not principal.is_authenticated:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
+
+    store = _get_body_measure_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _storage_unavailable()
+
+    rows = store.get_measurements(
+        require_owner_key(principal, athlete_key),
+        weeks=max(1, min(weeks, 520)) if weeks else None,
+    )
+    return {"measurements": rows, "count": len(rows)}
+
+
+@app.delete("/api/body-measurements/{measurement_id}")
+async def delete_body_measurement(measurement_id: int, athlete_key: str = "",
+                                  principal: Principal = Depends(get_current_principal)):
+    """
+    DELETE /api/body-measurements/{measurement_id} - 删除一条体测记录
+
+    返回：JSON {"deleted": bool}
+
+    说明：删除范围限定在该身份名下。只按自增 id 删会让任何人凭一个可枚举的
+    整数抹掉别人的记录，因此 athlete_key 一并参与过滤；不匹配时返回
+    deleted=false 而非 404，不暴露"这个 id 存在但不属于你"。
+    """
+    if not athlete_key and not principal.is_authenticated:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "MISSING_ATHLETE_KEY", "message": "缺少身份信息"}})
+
+    store = _get_body_measure_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _storage_unavailable()
+
+    deleted = store.delete_one(require_owner_key(principal, athlete_key), measurement_id)
+    return {"deleted": deleted}
+
+
 @app.get("/api/user-data/export")
 def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
                      principal: Principal = Depends(get_current_principal)):
@@ -706,6 +846,7 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
         "athlete_key": athlete_key,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "training_logs": [],
+        "body_measurements": [],
         "saved_plans": [],
         "long_term_memory": {},
         "conversation": None,
@@ -722,6 +863,18 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
     except Exception as exc:  # noqa: BLE001 - 单源失败不该让整份导出失败
         logger.warning("[data-rights] 导出训练日志失败：%s", exc)
         payload["training_logs_error"] = str(exc)
+
+    try:
+        measure_store = _get_body_measure_store()
+        measure_store.ensure_table()
+        if measure_store.enabled:
+            # 体测记录与训练日志同属个人健康数据，必须一并可导出——
+            # 少导一类数据，这份「导出全部」就是假的。
+            payload["body_measurements"] = measure_store.get_measurements(
+                athlete_key, limit=10_000)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[data-rights] 导出体测记录失败：%s", exc)
+        payload["body_measurements_error"] = str(exc)
 
     try:
         plan_store = _get_plan_store()
@@ -772,8 +925,8 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     传来的 athlete_key 被忽略。游客模式沿用自证式 key（本机数据本机可见），
     这条审计日志记录实际删除的主体，便于事后追溯。
 
-    删除范围与导出对齐（训练日志 / 已保存计划 / 长期记忆 / 会话）。**不做部分成功**：
-    任一步抛错都如实返回失败与已完成的部分，不谎报"已全部删除"。
+    删除范围与导出对齐（训练日志 / 体测记录 / 已保存计划 / 长期记忆 / 会话）。
+    **不做部分成功**：任一步抛错都如实返回失败与已完成的部分，不谎报"已全部删除"。
     """
     if not athlete_key and not principal.is_authenticated:
         return JSONResponse(status_code=400, content={
@@ -797,6 +950,14 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     except Exception as exc:  # noqa: BLE001
         logger.error("[data-rights] 删除训练日志失败：%s", exc)
         result["errors"]["training_logs"] = str(exc)
+
+    try:
+        measure_store = _get_body_measure_store()
+        measure_store.ensure_table()
+        result["deleted"]["body_measurements"] = measure_store.delete_all(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[data-rights] 删除体测记录失败：%s", exc)
+        result["errors"]["body_measurements"] = str(exc)
 
     try:
         result["deleted"]["long_term_keys"] = orch.long_term.purge(athlete_key)

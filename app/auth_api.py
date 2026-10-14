@@ -64,9 +64,10 @@ def get_session_store() -> SessionStore:
     return _session_store
 
 
-# 数据认领要跨两类存储搬迁数据，因此这里也持有它们。
+# 数据认领要跨几类存储搬迁数据，因此这里也持有它们。
 # 不 import app.server 的实例：server 反过来 import 本模块，会形成循环导入。
 _training_log_store = None
+_body_measure_store = None
 _long_term_memory = None
 
 
@@ -76,6 +77,14 @@ def get_training_log_store():
         from src.storage.training_log_store import TrainingLogStore
         _training_log_store = TrainingLogStore()
     return _training_log_store
+
+
+def get_body_measure_store():
+    global _body_measure_store
+    if _body_measure_store is None:
+        from src.storage.body_measure_store import BodyMeasureStore
+        _body_measure_store = BodyMeasureStore()
+    return _body_measure_store
 
 
 def get_long_term_memory():
@@ -326,6 +335,7 @@ def claim_guest_data(
         raise _unavailable()
 
     trained = get_training_log_store()
+    measures = get_body_measure_store()
     memory = get_long_term_memory()
 
     result = {"owner_key": owner, "claimed": {}, "skipped": [], "notes": []}
@@ -338,6 +348,15 @@ def claim_guest_data(
         except Exception as exc:  # noqa: BLE001 - 单源失败不阻断其余来源
             logger.warning("[claim] 训练日志认领失败：%s", exc)
             result["claimed"]["training_logs_error"] = str(exc)
+
+        try:
+            measures.ensure_table()
+            if measures.enabled:
+                result["claimed"]["body_measurements"] = measures.rekey(
+                    body.guest_key, owner)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[claim] 体测记录认领失败：%s", exc)
+            result["claimed"]["body_measurements_error"] = str(exc)
 
         try:
             moved = memory.rekey(body.guest_key, owner)

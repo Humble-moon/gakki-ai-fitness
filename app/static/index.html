@@ -2425,6 +2425,77 @@ body {
    每项成绩要带自己的日期和单位，表格会把它们挤成三行小字。 */
 .records-panel { margin-top: 26px; }
 
+/* 体测记录：九个数值输入排成自适应网格。
+   用网格而不是一行一个——量体测是连续动作，纵向拉太长会让人放弃填完。 */
+.bm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px 12px;
+  margin: 4px 0 14px;
+}
+
+.bm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.bm-field input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+}
+
+.bm-field input:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+}
+
+.bm-list { margin-top: 20px; }
+
+.bm-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 11px 14px;
+  margin-bottom: 8px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: inset 3px 0 0 0 var(--border);
+  font-size: 13px;
+}
+
+.bm-date {
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 88px;
+}
+
+.bm-metric { color: var(--text-secondary); }
+.bm-metric b { color: var(--text-primary); font-weight: 600; }
+.bm-row-notes { color: var(--text-muted); font-size: 12px; }
+.bm-row-remove {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm, 8px);
+}
+.bm-row-remove:hover { color: var(--danger); background: var(--bg-card-hover); }
+
+
 .records-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -3141,7 +3212,7 @@ body {
 
           <div class="sys-status">
             <div class="sys-stat-item"><span class="ss-dot"></span> 动作库 <span class="ss-val">338</span> 个标准动作</div>
-            <div class="sys-stat-item"><span class="ss-dot"></span> 知识库 <span class="ss-val">162</span> 篇专业文献</div>
+            <div class="sys-stat-item"><span class="ss-dot"></span> 知识库 <span class="ss-val">165</span> 篇专业文献</div>
             <div class="sys-stat-item"><span class="ss-dot"></span> 智能安全检测</div>
             <div class="sys-stat-item"><span class="ss-dot"></span> 支持多轮对话</div>
           </div>
@@ -3340,6 +3411,40 @@ body {
           </div>
           <div id="records-list"></div>
         </div>
+      </div>
+      <div class="feature-card" id="body-measure-panel">
+        <div class="result-header">
+          <h3>体测记录</h3>
+          <p class="section-hint">力量涨了，人有没有跟着变——围度和体脂看这里</p>
+        </div>
+        <div class="bm-grid">
+          <label class="bm-field"><span>日期</span>
+            <input type="date" id="bm-date"></label>
+          <label class="bm-field"><span>体重 kg</span>
+            <input type="number" id="bm-weight" step="0.1" min="20" max="400" placeholder="—"></label>
+          <label class="bm-field"><span>体脂率 %</span>
+            <input type="number" id="bm-bodyfat" step="0.1" min="1" max="70" placeholder="—"></label>
+          <label class="bm-field"><span>肌肉量 kg</span>
+            <input type="number" id="bm-muscle" step="0.1" min="0" max="200" placeholder="—"></label>
+          <label class="bm-field"><span>胸围 cm</span>
+            <input type="number" id="bm-chest" step="0.1" min="20" max="250" placeholder="—"></label>
+          <label class="bm-field"><span>腰围 cm</span>
+            <input type="number" id="bm-waist" step="0.1" min="30" max="250" placeholder="—"></label>
+          <label class="bm-field"><span>臀围 cm</span>
+            <input type="number" id="bm-hip" step="0.1" min="30" max="250" placeholder="—"></label>
+          <label class="bm-field"><span>臂围 cm</span>
+            <input type="number" id="bm-arm" step="0.1" min="10" max="100" placeholder="—"></label>
+          <label class="bm-field"><span>大腿围 cm</span>
+            <input type="number" id="bm-thigh" step="0.1" min="10" max="150" placeholder="—"></label>
+        </div>
+        <label class="query-field-label" for="bm-notes">备注</label>
+        <input id="bm-notes" type="text" maxlength="512" placeholder="如：晨起空腹">
+        <div class="log-actions">
+          <button class="btn-generate" id="btn-save-bm" type="button" onclick="saveBodyMeasurement()">▸ 记录这次体测</button>
+        </div>
+        <div id="bm-status" role="status" aria-live="polite"></div>
+        <div id="bm-error" class="error-panel" role="alert" hidden></div>
+        <div id="bm-list"></div>
       </div>
       <div class="feature-card" id="advice-panel">
         <div class="result-header">
@@ -3975,10 +4080,11 @@ async function handleLogout() {
   showAuthGate();
 }
 
-// 身份变化后重新拉取按用户归属的数据（训练日志、图表统计）
+// 身份变化后重新拉取按用户归属的数据（训练日志、图表统计、体测记录）
 function refreshUserScopedViews() {
   if (typeof loadLogHistory === 'function') loadLogHistory();
   if (typeof loadTrainingStats === 'function') loadTrainingStats();
+  if (typeof loadBodyMeasurements === 'function') loadBodyMeasurements();
 }
 
 // ── Multi-turn QA session (legacy, kept for qa-specific UI) ──
@@ -5638,6 +5744,129 @@ function loadEcharts(timeoutMs) {
 }
 
 // ── 训练分析 ──
+// ═══════════════ 体测记录 ═══════════════
+// 字段顺序即界面顺序，也是历史列表的展示顺序。
+const BM_FIELDS = [
+  ['weight', 'bm-weight', '体重', 'kg'],
+  ['body_fat_pct', 'bm-bodyfat', '体脂', '%'],
+  ['muscle_mass', 'bm-muscle', '肌肉量', 'kg'],
+  ['chest', 'bm-chest', '胸围', 'cm'],
+  ['waist', 'bm-waist', '腰围', 'cm'],
+  ['hip', 'bm-hip', '臀围', 'cm'],
+  ['arm', 'bm-arm', '臂围', 'cm'],
+  ['thigh', 'bm-thigh', '大腿围', 'cm'],
+];
+
+function bmReadNumber(inputId) {
+  const raw = document.getElementById(inputId)?.value;
+  if (!raw || !String(raw).trim()) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function saveBodyMeasurement() {
+  const status = document.getElementById('bm-status');
+  const errorBox = document.getElementById('bm-error');
+  if (errorBox) { errorBox.hidden = true; errorBox.replaceChildren(); }
+
+  const body = { athlete_key: athleteKey };
+  const dateEl = document.getElementById('bm-date');
+  if (dateEl && dateEl.value) body.measure_date = dateEl.value;
+  const notesEl = document.getElementById('bm-notes');
+  if (notesEl && notesEl.value) body.notes = notesEl.value;
+  BM_FIELDS.forEach(([key, id]) => { body[key] = bmReadNumber(id); });
+
+  // 前端先拦一次：全空提交没有意义，就地告诉用户比等一个 400 快
+  if (BM_FIELDS.every(([key]) => body[key] === null)) {
+    if (errorBox) { appendText(errorBox, '至少填一项再记录。'); errorBox.hidden = false; }
+    return;
+  }
+
+  const btn = document.getElementById('btn-save-bm');
+  if (btn) btn.disabled = true;
+  try {
+    const resp = await fetch('/api/body-measurements', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '记录失败');
+    BM_FIELDS.forEach(([, id]) => {
+      const node = document.getElementById(id);
+      if (node) node.value = '';
+    });
+    if (notesEl) notesEl.value = '';
+    if (status) { status.replaceChildren(); appendText(status, '已记录'); }
+    await loadBodyMeasurements();
+  } catch (e) {
+    if (errorBox) { appendText(errorBox, e.message || '记录失败'); errorBox.hidden = false; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function loadBodyMeasurements() {
+  const list = document.getElementById('bm-list');
+  if (!list) return;
+  try {
+    const resp = await fetch(`/api/body-measurements?athlete_key=${encodeURIComponent(athleteKey)}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '读取失败');
+    renderBodyMeasurements(data.measurements || []);
+  } catch (e) {
+    list.replaceChildren();
+    list.appendChild(el('div', 'section-hint', e.message || '读取失败'));
+  }
+}
+
+function renderBodyMeasurements(rows) {
+  const list = document.getElementById('bm-list');
+  if (!list) return;
+  list.replaceChildren();
+  if (!rows.length) {
+    list.appendChild(el('div', 'section-hint',
+      '还没有体测记录。量一次记一次——围度的变化比体重更能说明问题。'));
+    return;
+  }
+  rows.forEach(row => {
+    const item = el('div', 'bm-row');
+    item.appendChild(el('span', 'bm-date', row.measure_date || '—'));
+    BM_FIELDS.forEach(([key, , label, unit]) => {
+      if (row[key] === null || row[key] === undefined) return;   // 没量的项不占位
+      const span = el('span', 'bm-metric');
+      const val = document.createElement('b');
+      appendText(val, String(row[key]));
+      span.appendChild(val);
+      appendText(span, ` ${unit} ${label}`);
+      item.appendChild(span);
+    });
+    if (row.notes) item.appendChild(el('span', 'bm-row-notes', row.notes));
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bm-row-remove';
+    setText(btn, '×');
+    btn.title = '删除这条记录';
+    btn.onclick = () => deleteBodyMeasurement(row.id);
+    item.appendChild(btn);
+    list.appendChild(item);
+  });
+}
+
+async function deleteBodyMeasurement(id) {
+  const errorBox = document.getElementById('bm-error');
+  try {
+    const resp = await fetch(
+      `/api/body-measurements/${id}?athlete_key=${encodeURIComponent(athleteKey)}`,
+      { method: 'DELETE' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '删除失败');
+    await loadBodyMeasurements();
+  } catch (e) {
+    if (errorBox) { appendText(errorBox, e.message || '删除失败'); errorBox.hidden = false; }
+  }
+}
+
 async function loadTrainingStats() {
   const emptyNode = document.getElementById('progress-empty');
   const statsBox = document.getElementById('progress-stats');
@@ -6506,6 +6735,7 @@ document.addEventListener('click', event => {
     if (!progressLoaded) progressLoaded = true;
     loadTrainingStats();
     loadMemory();
+    loadBodyMeasurements();
   }
 });
 

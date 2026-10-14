@@ -92,20 +92,47 @@ class _FakePlanStore:
         return len(self.rows)
 
 
+class _FakeBodyMeasureStore:
+    """体测记录替身：导出与删除两条路径用到的方法。
+
+    体测记录是后加的一类个人健康数据，必须与训练日志同等对待——
+    少导出或漏删除一类，这个端点声称的"全部数据"就不成立。
+    """
+
+    def __init__(self):
+        self.enabled = True
+        self.deleted: list = []
+        self.rows = [
+            {"id": 1, "measure_date": "2026-10-01", "weight": 70.0, "waist": 80.0},
+        ]
+
+    def ensure_table(self):
+        pass
+
+    def get_measurements(self, athlete_key, weeks=None, limit=200):
+        return list(self.rows)
+
+    def delete_all(self, athlete_key):
+        self.deleted.append(athlete_key)
+        return len(self.rows)
+
+
 @pytest.fixture
 def rig(monkeypatch):
     from app import server
 
     long_term, conversation, store = _FakeLongTerm(), _FakeConversation(), _FakeLogStore()
     plans = _FakePlanStore()
+    measures = _FakeBodyMeasureStore()
     long_term.prefs["athlete-abc"] = {"goal": "增肌"}
     monkeypatch.setattr(server.orch, "long_term", long_term, raising=False)
     monkeypatch.setattr(server.orch, "conversation", conversation, raising=False)
     monkeypatch.setattr(server, "_get_training_log_store", lambda: store)
     monkeypatch.setattr(server, "_get_plan_store", lambda: plans)
+    monkeypatch.setattr(server, "_get_body_measure_store", lambda: measures)
 
     client = TestClient(server.app)
-    return client, long_term, conversation, store, plans
+    return client, long_term, conversation, store, plans, measures
 
 
 class TestExport:
@@ -124,6 +151,7 @@ class TestExport:
         body = resp.json()
         assert body["athlete_key"] == "athlete-abc"
         assert len(body["training_logs"]) == 1
+        assert len(body["body_measurements"]) == 1
         assert body["long_term_memory"] == {"goal": "增肌"}
         assert body["conversation"]["session_id"] == "s-1"
         assert "exported_at" in body
@@ -144,7 +172,7 @@ class TestExport:
 
     def test_one_source_failure_does_not_kill_the_export(self, rig, monkeypatch):
         """单个存储导出失败时，其余部分仍要交给用户——半份数据好过没有。"""
-        client, _, _, store, _ = rig
+        client, _, _, store, _, _ = rig
         monkeypatch.setattr(store, "get_logs", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("pg down")))
         body = client.get("/api/user-data/export?athlete_key=athlete-abc").json()
         assert body["training_logs"] == []
@@ -161,14 +189,14 @@ class TestDeleteSafety:
 
     def test_refuses_without_explicit_confirmation(self, rig):
         """不可逆操作：没有 confirm=DELETE 时一个字节都不能删。"""
-        client, long_term, conversation, store, _ = rig
+        client, long_term, conversation, store, _, _ = rig
         resp = client.delete("/api/user-data?athlete_key=athlete-abc")
         assert resp.status_code == 400
         assert resp.json()["error"] == "confirmation_required"
         assert store.deleted == [] and long_term.purged == [] and conversation.purged == []
 
     def test_rejects_wrong_confirmation_value(self, rig):
-        client, long_term, _, store, _ = rig
+        client, long_term, _, store, _, _ = rig
         resp = client.delete("/api/user-data?athlete_key=athlete-abc&confirm=yes")
         assert resp.status_code == 400
         assert store.deleted == [] and long_term.purged == []
@@ -176,7 +204,7 @@ class TestDeleteSafety:
 
 class TestDeleteBehaviour:
     def test_deletes_all_sources(self, rig):
-        client, long_term, conversation, store, _ = rig
+        client, long_term, conversation, store, _, measures = rig
         resp = client.delete(
             "/api/user-data?athlete_key=athlete-abc&confirm=DELETE&session_id=s-1"
         )
@@ -184,15 +212,26 @@ class TestDeleteBehaviour:
         body = resp.json()
         assert body["ok"] is True
         assert body["deleted"] == {
-            "training_logs": 5, "long_term_keys": 3, "plans": 1, "conversation_keys": 2,
+            "training_logs": 5, "body_measurements": 1,
+            "long_term_keys": 3, "plans": 1, "conversation_keys": 2,
         }
         assert store.deleted == ["athlete-abc"]
+        assert measures.deleted == ["athlete-abc"]
         assert long_term.purged == ["athlete-abc"]
         assert conversation.purged == ["s-1"]
 
+    def test_deletes_body_measurements(self, rig):
+        """体测记录是个人健康数据，漏删就等于"删除我的数据"没删干净。"""
+        client, _, _, _, _, measures = rig
+        body = client.delete(
+            "/api/user-data?athlete_key=athlete-abc&confirm=DELETE"
+        ).json()
+        assert measures.deleted == ["athlete-abc"]
+        assert body["deleted"]["body_measurements"] == 1
+
     def test_deletes_saved_plans(self, rig):
         """计划现在是自动收录的，「删除我的数据」漏掉它就会留下半屏个人内容。"""
-        client, _, _, _, plans = rig
+        client, _, _, _, plans, _ = rig
         body = client.delete(
             "/api/user-data?athlete_key=athlete-abc&confirm=DELETE"
         ).json()
@@ -200,7 +239,7 @@ class TestDeleteBehaviour:
         assert body["deleted"]["plans"] == 1
 
     def test_session_optional(self, rig):
-        client, _, conversation, _, _ = rig
+        client, _, conversation, _, _, _ = rig
         body = client.delete(
             "/api/user-data?athlete_key=athlete-abc&confirm=DELETE"
         ).json()
@@ -210,7 +249,7 @@ class TestDeleteBehaviour:
     def test_partial_failure_is_reported_not_hidden(self, rig):
         """一个源删失败时必须如实上报——谎报"已全部删除"会让用户以为
         数据没了，实际还留在库里。"""
-        client, long_term, _, _, _ = rig
+        client, long_term, _, _, _, _ = rig
         long_term.raise_on_purge = True
         resp = client.delete("/api/user-data?athlete_key=athlete-abc&confirm=DELETE")
         assert resp.status_code == 500
@@ -222,7 +261,7 @@ class TestDeleteBehaviour:
         assert body["deleted"]["training_logs"] == 5
 
     def test_log_store_failure_is_reported(self, rig):
-        client, _, _, store, _ = rig
+        client, _, _, store, _, _ = rig
         store.raise_on_delete = True
         body = client.delete(
             "/api/user-data?athlete_key=athlete-abc&confirm=DELETE"

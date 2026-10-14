@@ -150,6 +150,24 @@ class Exercise(Base):
     # 向量嵌入，维度由 EMBEDDING_DIM 决定（DashScope text-embedding-v4: 1024）
     # 用于语义相似度搜索，pgvector 提供向量索引和余弦相似度计算
 
+    __table_args__ = (
+        Index(
+            "exercises_embedding_hnsw_idx",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+    # HNSW 近似最近邻索引（余弦距离）。此前它只存在于
+    # scripts/create_hnsw_indexes.sql 里、不在 ORM 模型中，带来两个后果：
+    #   1. 新库靠 create_all 建表时不会创建它，向量检索退化为全表扫描——
+    #      不报错，只是慢，小数据量下几乎看不出来；
+    #   2. alembic autogenerate 看到「库里有、模型里没有」，会把它判定为
+    #      多余索引并在迁移里 DROP 掉。
+    # 写进模型后两处都根治：DDL 由 ORM 单点生成，迁移也不会误删。
+    # m 与 ef_construction 沿用原脚本取值，当前数据量下够用。
+
 
 # ============================================================
 # 知识块表 (knowledge_chunks)
@@ -183,6 +201,17 @@ class KnowledgeChunk(Base):
 
     embedding = Column(Vector(EMBEDDING_DIM))
     # 向量嵌入（维度由 EMBEDDING_DIM 配置，当前 1024 维），与用户查询做相似度匹配实现语义检索
+
+    __table_args__ = (
+        Index(
+            "knowledge_chunks_embedding_hnsw_idx",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+    # HNSW 近似最近邻索引，同 Exercise.__table_args__ 的说明
 
 
 # ============================================================
@@ -347,6 +376,62 @@ class TrainingLogEntry(Base):
     )
     # 复合索引：单动作进步曲线的查询形态是
     # WHERE athlete_key = :k AND exercise_name = :n ORDER BY created_at
+
+
+# ============================================================
+# 体测记录表 (body_measurements)
+# 不定期的身体围度与成分快照，是"力量涨了但人有没有变"的另一半答案
+# ============================================================
+class BodyMeasurement(Base):
+    """体测记录表：某个时间点的身体围度与成分。
+
+    与 training_logs.body_weight 的分工：
+        那张表记的是"训练当天的体重"，依附于一次训练，字段只有体重一项；
+        这张表是独立的体测快照——不要求当天训练，且包含体脂、肌肉量与
+        各部位围度。两者不合并：一次深蹲训练顺手称的体重，和一次专门量的
+        体测，可信度与用途都不同，混在一起会让趋势线出现假的尖峰。
+
+    为什么围度字段是独立列而不是一个 JSON：
+        查询形态固定是"某个部位的围度随时间怎么变"，独立列可以直接
+        写 WHERE/SELECT 与建索引，JSON 里取字段则要每次解析。
+        代价是新增部位要改表——但人体围度的部位集合是稳定的。
+    """
+
+    __tablename__ = "body_measurements"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    athlete_key = Column(String(64), nullable=False, index=True)
+    # 与 training_logs 同一套身份维度，见该表关于 make_user_key 的说明
+    measure_date = Column(Date, nullable=False, index=True)
+    # 测量日期（本地日历日），与 created_at 的解耦理由同 training_logs
+
+    weight = Column(Float)
+    # 体重（kg）
+    body_fat_pct = Column(Float)
+    # 体脂率（%），可空——家用秤与体脂钳的读数量级差异大，不强求
+    muscle_mass = Column(Float)
+    # 肌肉量（kg），可空
+
+    chest = Column(Float)
+    # 胸围（cm）
+    waist = Column(Float)
+    # 腰围（cm）
+    hip = Column(Float)
+    # 臀围（cm）
+    arm = Column(Float)
+    # 臂围（cm，惯用侧）
+    thigh = Column(Float)
+    # 大腿围（cm，惯用侧）
+
+    notes = Column(String(512), default="")
+    # 自由备注，如"晨起空腹""饭后"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_body_measurements_athlete_date", "athlete_key", "measure_date"),
+    )
+    # 复合索引：趋势查询的固定形态是
+    # WHERE athlete_key = :k AND measure_date >= :since ORDER BY measure_date
 
 
 # ============================================================
