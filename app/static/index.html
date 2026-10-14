@@ -3557,11 +3557,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
           </div>
           <div class="field">
             <label for="log-session-rpe">整体疲劳度 RPE</label>
-            <input type="number" id="log-session-rpe" min="1" max="10" step="0.5" placeholder="1-10" />
+            <input type="number" id="log-session-rpe" min="1" max="10" step="any" placeholder="1-10" />
           </div>
           <div class="field">
             <label for="log-duration">时长（分钟）</label>
-            <input type="number" id="log-duration" min="0" step="5" placeholder="60" />
+            <input type="number" id="log-duration" min="0" step="any" placeholder="60" />
           </div>
         </div>
         <div class="log-entries-head">
@@ -6037,7 +6037,14 @@ function addLogEntryRow(entry) {
     const input = document.createElement('input');
     input.type = type;
     input.dataset.key = key;
-    if (type === 'number') { input.step = key === 'weight' ? '0.5' : '1'; input.min = '0'; }
+    if (type === 'number') {
+      // 组数与次数是整数；重量与 RPE 允许小数。
+      // RPE 原来写死 step='1'，而它的 placeholder 就写着 7.5——等于
+      // "提示你可以填 7.5，实际不让你填"，自相矛盾。重量原来锁 0.5 的
+      // 整数倍，7.3kg 这类微调配重也填不进去。两者都用 any 放开。
+      input.step = (key === 'sets' || key === 'reps') ? '1' : 'any';
+      input.min = '0';
+    }
     if (value !== '' && value !== null && value !== undefined) input.value = value;
     if (placeholder) input.placeholder = placeholder;
     f.appendChild(lb);

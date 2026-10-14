@@ -1456,3 +1456,27 @@ def test_decimal_fields_allow_any_step():
         assert 'step="any"' in tag(field_id), f"{field_id} 不允许输入小数"
     for field_id in ("age", "days"):
         assert 'step="any"' not in tag(field_id), f"{field_id} 不该允许小数"
+
+
+def test_training_log_allows_decimal_weight_and_rpe():
+    """训练日志：重量与 RPE 必须能填小数，组数与次数保持整数。
+
+    这组来自一个自相矛盾的写法——RPE 那格的 placeholder 写着「7.5」，
+    step 却写死 '1'，等于"提示你可以填 7.5，实际不让你填"。重量则锁在
+    0.5 的整数倍，7.3kg 这类微调配重进不去。
+
+    后端两个字段本来就是 float（rpe: ge=0 le=10），取值层用的也是
+    parseFloat——只有 HTML 的 step 在挡路。
+    """
+    body = _fn_body("addLogEntryRow")
+
+    # 组数/次数是整数，不该被放开
+    assert "key === 'sets'" in body and "key === 'reps'" in body, \
+        "组数/次数的整数限制丢了"
+    assert "'any'" in body, "重量与 RPE 没有放开小数"
+
+    # 整次训练的 RPE 与时长：同属"用户想填多少填多少"的一类
+    for field_id in ("log-session-rpe", "log-duration"):
+        m = re.search(rf'<input[^>]*id="{field_id}"[^>]*>', HTML)
+        assert m, f"找不到 {field_id}"
+        assert 'step="any"' in m.group(0), f"{field_id} 仍被限制粒度"
