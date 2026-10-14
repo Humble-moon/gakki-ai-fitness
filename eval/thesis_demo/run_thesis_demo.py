@@ -188,10 +188,6 @@ def phase2():
     thread_id, review_id = handoff["thread_id"], handoff["review_id"]
 
     # 全新进程：仅共享 SQLite 检查点，其余组件全部重建
-    from src.models.schemas import UserProfileInput
-    injured = UserProfileInput(height=175, weight=80, training_years=3, goal="增肌",
-                               available_equipment=["哑铃", "杠铃"],
-                               days_per_week=3, injuries=["腰椎间盘突出"])
     graph = build_coach_graph(_deps(RISKY_CONTEXT_EXERCISES), _checkpointer())
     config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 60}
 

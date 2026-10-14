@@ -103,7 +103,7 @@ def phase1() -> int:
     Path(HANDOFF_PATH).write_text(json.dumps({"thread_id": thread_id,
                                               "review_id": review_id}),
                                   encoding="utf-8")
-    print(f"[phase 1] 计划被安全门拦截，进入人工审核。")
+    print("[phase 1] 计划被安全门拦截，进入人工审核。")
     print(f"[phase 1] thread_id = {thread_id}")
     print(f"[phase 1] review_id = {review_id}")
     print(f"[phase 1] checkpoint 已写入 {DB_PATH}；进程随即退出（模拟重启）。")
@@ -125,7 +125,7 @@ def phase2() -> int:
 
     snapshot = graph.get_state(config)
     assert "review_gate" in (snapshot.next or ()), "run should still be paused at review_gate"
-    print(f"[phase 2] 新进程读取到暂停的执行，仍停在 review_gate。")
+    print("[phase 2] 新进程读取到暂停的执行，仍停在 review_gate。")
 
     state = graph.invoke(Command(resume={"decision": "approved", "review_id": review_id,
                                          "reviewer": "教练", "comment": "已评估，可执行"}),

@@ -29,6 +29,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Lint (ruff)
+        run: python -m ruff check .
+
       - name: Run offline test suite
         run: python -m pytest -q
 

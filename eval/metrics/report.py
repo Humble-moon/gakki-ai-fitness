@@ -19,7 +19,6 @@
 报告输出路径：默认 eval/EVAL_REPORT.md，可通过 --output 参数指定
 """
 
-import json
 import time
 from pathlib import Path
 from typing import Dict, List
@@ -62,8 +61,6 @@ def plot_ablation_comparison(ablation_results: Dict[str, dict], ks: List[int]):
 
     groups = list(ablation_results.keys())  # 消融组名称列表，如 ["A-VectorOnly", "B-AgenticRAG", "C-Full"]
     metrics = ["precision", "recall"]        # 两个子图分别画这两个指标
-    k5 = min(ks, key=lambda k: abs(k - 5))  # 找到最接近 5 的 K 值（如果 KS 列表不包含 5）
-    k_idx = ks.index(k5)
 
     # 1 行 2 列子图布局
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))

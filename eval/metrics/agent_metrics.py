@@ -25,8 +25,7 @@
     → 宁可误报多一些（高 FPR），也不能漏掉一个危险（高 FNR）
 """
 
-from typing import List, Dict, Tuple
-from collections import Counter
+from typing import List
 
 # Planner 支持的全部路由标签，顺序固定以保持混淆矩阵排列一致
 ROUTE_LABELS = ["muscle_building", "fat_loss", "exercise_analysis", "qa"]

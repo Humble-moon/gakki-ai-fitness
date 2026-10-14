@@ -24,12 +24,9 @@ fetch_knowledge.py —— 专业健身知识爬取管线
 ================================================================================
 """
 
-import json
 import logging
-import os
 import re
 import time
-import urllib.parse
 from pathlib import Path
 from typing import Optional
 
@@ -455,7 +452,7 @@ if __name__ == "__main__":
         logger.info(f"Saved: {filepath}")
 
     print()
-    print(f"爬取完成！")
+    print("爬取完成！")
     print(f"  PubMed: {pubmed_count} 篇")
     print(f"  WHO: {who_count} 篇")
     print(f"  总计: {pubmed_count + who_count} 篇")

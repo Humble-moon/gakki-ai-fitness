@@ -13,7 +13,8 @@
     3. 为生成的计划附加 plan_id 和 user_id 用于追踪
 - 输出格式：
     训练计划 JSON 结构含 days 列表，每天含 exercises 列表；
-    动作分析 JSON 结构含 issues_found、severity、suggestions、confidence
+    动作分析 JSON 结构含 issues_found、possible_causes、severity、
+    suggestions、alternatives、confidence
 ===========================================================================
 """
 
@@ -23,6 +24,121 @@ from typing import Generator
 from src.config import REWRITE_MODEL
 from src.llm.provider import LLMProvider
 from src.llm.prompts.writer import build_writer_messages
+
+
+# 动作分析保留的知识片段条数与单块截断长度。
+# 知识块动辄上千字，全量塞进去会让背景知识盖过用户自己的描述——
+# 用户说"深蹲时膝盖内侧疼"，主体应该是这句话，文档是佐证而不是主角。
+_KNOWLEDGE_TOP_K = 3
+_KNOWLEDGE_CHARS = 400
+
+
+def build_standard_reference(exercise_name: str, retrieved: dict) -> tuple[str, list[str]]:
+    """把检索结果整理成「标准动作规范」文本。返回 (文本, 实际引用的动作名)。
+
+    为什么要挑而不是全用：
+        检索器是给「生成训练计划」服务的——搜「杠铃深蹲」会返回 34 个深蹲变体
+        （泽奇深蹲、安德森深蹲、箱式深蹲……），排课时这是优点（有得挑），
+        诊断时是噪音：用户问的是"我这个深蹲哪里不对"，另外 33 个变体跟他没关系，
+        还会把真正要对比的那一条挤出注意力。
+
+    为什么保留 similarity/rrf_score 之外的信息但不保留它们本身：
+        那些字段是检索排序用的，对"诊断动作"没有任何价值，只会稀释 prompt。
+
+    匹配不到时：退回相似度最高的一条并显式标注，让模型知道自己在拿别的动作
+    作参照，而不是不声不响地拿它硬套。
+    """
+    exercises = retrieved.get("exercises") if isinstance(retrieved, dict) else None
+    rows = [e for e in exercises if isinstance(e, dict)] if isinstance(exercises, list) else []
+
+    exact = [e for e in rows if e.get("name") == exercise_name]
+    if exact:
+        picked, matched = exact[:1], True
+    else:
+        picked = sorted(rows, key=lambda e: e.get("similarity") or 0, reverse=True)[:1]
+        matched = False
+
+    if not picked:
+        return "（动作库中没有检索到该动作的资料）", []
+
+    lines = []
+    if not matched:
+        lines.append(f"注意：动作库中没有「{exercise_name}」，以下是最接近的动作，仅供参考。")
+    for item in picked:
+        lines.append(f"【{item.get('name', '?')}】")
+        if item.get("equipment"):
+            lines.append(f"器械：{item['equipment']}")
+        muscles = item.get("target_muscles")
+        if muscles:
+            lines.append(f"目标肌群：{'、'.join(muscles)}")
+        if item.get("description"):
+            lines.append(f"动作要领：{item['description']}")
+        errors = item.get("common_errors")
+        if errors:
+            lines.append(f"常见错误：{'、'.join(errors)}")
+    names = [i.get("name", "") for i in picked if i.get("name")]
+    return "\n".join(lines), names
+
+
+def build_knowledge_context(retrieved: dict) -> str:
+    """把知识库片段整理成「相关专业知识」文本。
+
+    这些片段来自 `data/knowledge/`——动作技术文档、伤病管理、FAQ。
+    此前动作分析完全不检索知识库（knowledge 恒为空），于是 LLM 手里
+    只有动作库里那句一句话描述和三个错误词，只能给出放之四海皆准的建议。
+    """
+    chunks = retrieved.get("knowledge") if isinstance(retrieved, dict) else None
+    if not isinstance(chunks, list) or not chunks:
+        return "（未检索到相关专业知识）"
+    lines = []
+    for chunk in chunks[:_KNOWLEDGE_TOP_K]:
+        if not isinstance(chunk, dict):
+            continue
+        title = chunk.get("title") or chunk.get("source_file") or "知识片段"
+        content = str(chunk.get("content") or "").strip().replace("\n", " ")
+        if not content:
+            continue
+        lines.append(f"【{title}】{content[:_KNOWLEDGE_CHARS]}")
+    return "\n".join(lines) if lines else "（未检索到相关专业知识）"
+
+
+def build_analysis_prompt(exercise_name: str, user_desc: str, retrieved: dict,
+                          profile: dict, conv_context: str = "") -> tuple[str, list[str]]:
+    """构造动作分析提示词。同步版与流式版共用，避免两处各写一份而漂移。
+
+    返回 (prompt, 实际引用的动作名列表)。
+    """
+    standard_reference, ref_names = build_standard_reference(exercise_name, retrieved)
+    knowledge = build_knowledge_context(retrieved)
+    prompt = f"""分析动作：{exercise_name}
+用户描述：{user_desc}
+用户水平：{profile.get('training_years', 1)}年经验
+
+标准动作规范：
+{standard_reference}
+
+相关专业知识：
+{knowledge}
+
+要求：
+- issues_found 必须扣住用户描述里的具体感受，不要写成通用清单
+- possible_causes 写可能导致该问题的原因，与 issues_found 一一对应
+- suggestions 要可执行（具体怎么调整），不要写"注意安全"这类空话
+- alternatives 找不到合适替代动作时给空数组
+
+输出 JSON：
+{{
+  "exercise_name": "{exercise_name}",
+  "issues_found": ["问题1", "问题2"],
+  "possible_causes": ["原因1", "原因2"],
+  "severity": "安全" | "注意" | "警告",
+  "suggestions": ["改进1", "改进2"],
+  "alternatives": ["替代动作1", "替代动作2"],
+  "confidence": 0.0-1.0
+}}"""
+    if conv_context:
+        prompt = f"{conv_context}\n\n{prompt}"
+    return prompt, ref_names
 
 
 class WriterAgent:
@@ -215,36 +331,30 @@ class WriterAgent:
         输入：
             exercise_name: str — 动作名称
             user_desc: str — 用户对自己动作的描述
-            retrieved: dict — 从 Retriever 获取的标准动作规范
+            retrieved: dict — 从 Retriever 获取的标准动作规范与知识片段
             profile: dict — 用户画像
         输出：
-            dict — 含 "exercise_name"、"issues_found"、"severity"、"suggestions"、"confidence"
+            dict — 含 "exercise_name"、"issues_found"、"possible_causes"、
+                   "severity"、"suggestions"、"alternatives"、"confidence"
 
         与 write_plan 的区别：不依赖外部 prompts 模块，直接在方法内构造内联 prompt，
         因为动作分析的提示词模板固定且简短，无需单独管理。
         setdefault 确保即使 LLM 漏掉了某个字段，返回结构也是完整的。
         """
-        prompt = f"""分析动作：{exercise_name}
-用户描述：{user_desc}
-用户水平：{profile.get('training_years', 1)}年经验
-标准动作规范：{retrieved}
-
-输出 JSON：
-{{
-  "exercise_name": "{exercise_name}",
-  "issues_found": ["问题1", "问题2"],
-  "severity": "安全" | "注意" | "警告",
-  "suggestions": ["改进1", "改进2"],
-  "confidence": 0.0-1.0
-}}"""
+        prompt, ref_names = build_analysis_prompt(exercise_name, user_desc, retrieved, profile)
         result = self.llm.chat_with_json_mode([{"role": "user", "content": prompt}])
         # 强制覆盖 exercise_name（防止 LLM 自行修改）
         result["exercise_name"] = exercise_name
         # setdefault：如果 LLM 输出中缺少这些字段，用默认值填充
         result.setdefault("issues_found", [])
+        result.setdefault("possible_causes", [])
         result.setdefault("severity", "安全")
         result.setdefault("suggestions", [])
+        result.setdefault("alternatives", [])
         result.setdefault("confidence", 0.5)
+        # 由 writer 给出实际引用的动作名，而不是让调用方猜——
+        # 它才知道 prompt 里到底喂了哪几条。
+        result["reference_exercises"] = ref_names
         return result
 
     def write_analysis_stream(self, exercise_name: str, user_desc: str,
@@ -257,21 +367,9 @@ class WriterAgent:
         - 手动剥离 markdown 代码块后解析 JSON
         - JSONDecodeError 时返回 {"raw": full_text} 兜底
         """
-        prompt = f"""分析动作：{exercise_name}
-用户描述：{user_desc}
-用户水平：{profile.get('training_years', 1)}年经验
-标准动作规范：{retrieved}
-
-输出 JSON：
-{{
-  "exercise_name": "{exercise_name}",
-  "issues_found": ["问题1", "问题2"],
-  "severity": "安全" | "注意" | "警告",
-  "suggestions": ["改进1", "改进2"],
-  "confidence": 0.0-1.0
-}}"""
-        if conv_context:
-            prompt = f"{conv_context}\n\n{prompt}"
+        prompt, ref_names = build_analysis_prompt(
+            exercise_name, user_desc, retrieved, profile, conv_context=conv_context
+        )
         full_text = ""
         stream = self.llm.chat_stream([{"role": "user", "content": prompt}], temperature=0.3)
         for chunk in stream:
@@ -289,8 +387,11 @@ class WriterAgent:
             result = {"raw": full_text}
         result["exercise_name"] = exercise_name
         result.setdefault("issues_found", [])
+        result.setdefault("possible_causes", [])
         result.setdefault("severity", "安全")
         result.setdefault("suggestions", [])
+        result.setdefault("alternatives", [])
         result.setdefault("confidence", 0.5)
+        result["reference_exercises"] = ref_names
         result["_degraded"] = provider_degraded
         yield ("done", result)

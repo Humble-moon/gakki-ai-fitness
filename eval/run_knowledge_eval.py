@@ -238,7 +238,7 @@ def generate_report(ablation_results, num_queries, output_path):
     lines.append(f"\n**生成时间**: {time.strftime('%Y-%m-%d %H:%M')}")
     lines.append(f"**评测数据集**: {num_queries} 条 LLM 生成的知识型问题")
     lines.append(f"**评测 K 值**: {', '.join(map(str, KS))}")
-    lines.append(f"**题目来源**: 基于 18 篇知识文档由 LLM 自动生成，人工审核验证\n")
+    lines.append("**题目来源**: 基于 18 篇知识文档由 LLM 自动生成，人工审核验证\n")
     lines.append("---\n")
     lines.append("## 1. 消融实验设计\n")
     lines.append("| 组 | 配置 | 描述 |")
@@ -285,7 +285,7 @@ def generate_report(ablation_results, num_queries, output_path):
 
     lines.append("---\n")
     lines.append("*报告由 eval/run_knowledge_eval.py 自动生成*")
-    lines.append(f"*题目由 scripts/build_knowledge_eval.py 基于 18 篇知识文档通过 LLM 自动生成*")
+    lines.append("*题目由 scripts/build_knowledge_eval.py 基于 18 篇知识文档通过 LLM 自动生成*")
 
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")
     logger.info(f"Report written to {output_path}")

@@ -55,7 +55,7 @@ knowledge_search.py — 知识库混合检索 + RRF 融合 + LLM 重排序（第
 """
 
 import logging
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 from src.storage.pg import PGClient
 from src.rag.embedding import EmbeddingService

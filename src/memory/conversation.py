@@ -29,7 +29,7 @@ import logging
 import re
 import threading
 from datetime import datetime, timezone
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 from src.storage.redis_client import RedisClient
 from src.llm.provider import LLMProvider

@@ -6,8 +6,13 @@ redis_client.py - Redis 缓存操作客户端
 被调用者：core.orchestrator（编排器，用于缓存训练计划和动作分析结果）。
 调用者：redis-py 库（Python Redis 客户端）。
 """
+import logging
+
 import redis
+
 from src.config import REDIS_HOST, REDIS_PORT
+
+logger = logging.getLogger(__name__)
 
 
 class RedisClient:

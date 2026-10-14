@@ -44,7 +44,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from eval.metrics.harness_metrics import evaluate_harness_loop, format_harness_report  # noqa: E402
+from eval.metrics.harness_metrics import evaluate_harness_loop  # noqa: E402
 
 #: 覆盖三类问题，让两条路径都有机会展示差异。
 #: 简单概念题理论上不该触发动作库查询，伤病题应当触发图谱。

@@ -46,12 +46,12 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Generator, Iterator
+from typing import Iterator
 
-from openai import OpenAI, APIStatusError, APIConnectionError, RateLimitError, APITimeoutError
+from openai import OpenAI, APIConnectionError, RateLimitError, APITimeoutError
 
 from src.config import (
-    LLM_CONFIGS, LLM_DEFAULT_MODEL, LLM_FALLBACK_CHAIN,
+    LLM_CONFIGS, LLM_FALLBACK_CHAIN,
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL,
 )
 from src.llm.cost_tracker import cost_tracker

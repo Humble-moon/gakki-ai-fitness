@@ -42,7 +42,9 @@ def test_finalize_is_fail_closed_for_missing_or_invalid_checks():
     assert result["requires_review"] is True
     cache, conversation, long_term = StoreSpy(), StoreSpy(), StoreSpy()
     assert pf.persist_if_safe(cache, conversation, long_term, {}, "q", result) is False
-    cache.assert_empty(); conversation.assert_empty(); long_term.assert_empty()
+    cache.assert_empty()
+    conversation.assert_empty()
+    long_term.assert_empty()
 
 
 def test_safe_result_persists_session_memory_without_regular_cache():
@@ -390,7 +392,9 @@ class TestDeliveryAndCacheGatesAreSeparate:
         cache, conversation, long_term = StoreSpy(), StoreSpy(), StoreSpy()
         assert pf.persist_if_safe(cache, conversation, long_term,
                                   {"goal": "增肌"}, "q", result) is False
-        cache.assert_empty(); conversation.assert_empty(); long_term.assert_empty()
+        cache.assert_empty()
+        conversation.assert_empty()
+        long_term.assert_empty()
 
     def test_unsafe_plan_still_writes_nothing(self):
         result = self._result(is_safe=False,
@@ -398,4 +402,6 @@ class TestDeliveryAndCacheGatesAreSeparate:
         cache, conversation, long_term = StoreSpy(), StoreSpy(), StoreSpy()
         assert pf.persist_if_safe(cache, conversation, long_term,
                                   {"goal": "增肌"}, "q", result) is False
-        cache.assert_empty(); conversation.assert_empty(); long_term.assert_empty()
+        cache.assert_empty()
+        conversation.assert_empty()
+        long_term.assert_empty()

@@ -90,7 +90,9 @@ def test_review_required_result_creates_pending_artifact_and_is_not_persisted():
     assert delivered["review"]["prohibited_actions"] == ["不要开始训练计划", "不要加大训练强度", "不要自行替换或增加动作"]
     assert "days" not in delivered
     assert orch._persist_if_safe({}, "q", delivered, "session") is False
-    orch.cache.assert_empty(); orch.conversation.assert_empty(); orch.long_term.assert_empty()
+    orch.cache.assert_empty()
+    orch.conversation.assert_empty()
+    orch.long_term.assert_empty()
 
 
 def test_safe_result_is_marked_safe_delivered():
@@ -124,7 +126,9 @@ def test_schema_invalid_result_is_fail_closed():
     result = orch._finalize_result({"days": []}, [safe_check()], 0)
     assert result["_persistence_allowed"] is False
     assert orch._persist_if_safe({}, "q", result) is False
-    orch.cache.assert_empty(); orch.conversation.assert_empty(); orch.long_term.assert_empty()
+    orch.cache.assert_empty()
+    orch.conversation.assert_empty()
+    orch.long_term.assert_empty()
 
 
 def test_prompt_conformant_plan_passes_final_gate():
@@ -211,7 +215,9 @@ def test_finalization_adds_goal_issue_and_blocks_persistence():
     assert result["_persistence_allowed"] is False
     assert result["active_issues"][-1]["code"] == "PLAN_GOAL_MISMATCH"
     assert orch._persist_if_safe({"goal": "增肌"}, "q", result) is False
-    orch.cache.assert_empty(); orch.conversation.assert_empty(); orch.long_term.assert_empty()
+    orch.cache.assert_empty()
+    orch.conversation.assert_empty()
+    orch.long_term.assert_empty()
 
 
 def test_sync_generation_raises_after_goal_mismatch_rewrite_budget():

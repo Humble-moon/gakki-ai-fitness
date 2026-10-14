@@ -1,6 +1,5 @@
 """Tests for the LangGraph → (event, data) SSE adapter."""
 
-import pytest
 
 from src.graph.events import build_inputs, graph_stream_events
 from src.llm.provider import QUOTA_EXHAUSTED

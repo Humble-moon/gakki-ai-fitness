@@ -47,9 +47,7 @@ from src.security.api_guard import (AdminAuthMiddleware, ApiKeyMiddleware,
                                     cors_allow_origins)
 from src.security.cost_guard import CostGuard
 from src.security.session import (
-    ANONYMOUS,
     Principal,
-    resolve_owner_key,
     user_owner_key,
 )
 from app.auth_api import (
@@ -70,7 +68,23 @@ STREAM_HEADERS = {
 }
 
 # 创建 FastAPI 应用实例
-app = FastAPI(title="AI Fitness Coach")
+#
+# 这里只补文档元信息，不关任何路由：`/docs`（Swagger UI）与 `/openapi.json`
+# 一直是 FastAPI 默认开启的，此前缺的只是标题之外的说明，点进去是一份没有
+# 描述、没有分组的端点清单。定位与运行契约以 docs/project-fact-baseline.md 为准，
+# 不要在这里写"生产级""多租户"这类与事实不符的措辞。
+app = FastAPI(
+    title="IRON MIND · AI Fitness Coach",
+    version="0.1.0",
+    description=(
+        "本地运行的 AI 健身私教。Multi-Agent 生成个性化训练计划，"
+        "GraphRAG 做伤病推理，混合检索的知识问答带来源引用。\n\n"
+        "**运行契约**：`localhost:8503`，游客可直接使用，也可注册本地账号"
+        "把数据归到自己名下；不是公网多租户服务。\n\n"
+        "**流式入口**：`/api/generate-plan`、`/api/analyze-exercise`、"
+        "`/api/ask-question` 以 SSE 返回，其余为普通 JSON 接口。"
+    ),
+)
 
 
 @app.get("/health/live")
@@ -1327,7 +1341,8 @@ async def admin_reingest(strategy: str = "combo", incremental: bool = True):
     全量模式: incremental=false 时重摄全部文档。
     """
     from src.rag.knowledge_ingestion import ingest
-    import threading, time as _time
+    import threading
+    import time as _time
 
     started_at = _time.time()
 

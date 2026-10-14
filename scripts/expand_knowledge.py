@@ -6,7 +6,6 @@ Usage:
     python scripts/expand_knowledge.py
     python scripts/expand_knowledge.py --dry-run
 """
-import json
 import sys
 from pathlib import Path
 

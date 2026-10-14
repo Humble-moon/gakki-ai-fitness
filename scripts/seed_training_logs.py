@@ -18,11 +18,10 @@
 """
 
 import argparse
-import json
 import logging
 import random
 import sys
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

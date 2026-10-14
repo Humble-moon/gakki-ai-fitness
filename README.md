@@ -26,7 +26,7 @@ Multi-Agent 协作生成个性化训练计划，GraphRAG 做伤病推理，混�
 
 ### 动作分析
 
-输入动作名与训练感受，检索标准动作规范，诊断问题并给出可执行的改进方案。
+输入动作名与训练感受，诊断问题并给出可执行的改进方案。走两路检索：动作库定位该动作的要领与常见错误，知识库取对应的技术文档与伤病资料——用户说「深蹲膝盖内侧疼」，髋活动度不足、膝关节保护这几篇会被一并带进上下文，而不是只拿着动作库里三个错误词硬猜。输出含问题、原因、改进建议与替代动作四段；没有合适替代动作时该段不显示。
 
 ![动作分析](docs/screenshots/analysis.png)
 
@@ -158,7 +158,12 @@ python -m src.rag.knowledge_ingestion --dir data/knowledge
 # 6. 启动服务
 python app/server.py
 # → 浏览器打开 http://localhost:8503
+# → 接口文档（Swagger UI）http://localhost:8503/docs
 ```
+
+## 参与开发
+
+静态检查、测试与事实基线的跑法见 [CONTRIBUTING.md](CONTRIBUTING.md)。系统**明确不做什么、做不到什么**见 [docs/known-limitations.md](docs/known-limitations.md)——那份文档比这份 README 更适合在被追问边界时引用。
 
 ## 执行脚手架（Harness）
 

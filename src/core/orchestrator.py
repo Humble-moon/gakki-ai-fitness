@@ -34,9 +34,8 @@ from src.skills.registry import SkillRegistry
 from src.a2a.messaging import MessageBus, Task, Artifact
 from src.models.schemas import UserProfileInput
 from src.storage.document_store import DocumentStore
-from src.agents.output_validation import validate_training_plan, OutputValidationError
 from src.core import plan_finalization
-from src.core.goal_contract import GoalConsistencyError, plan_goal_issue, plan_goal_matches, validate_requested_goal
+from src.core.goal_contract import GoalConsistencyError, plan_goal_matches, validate_requested_goal
 from src.core.plan_explanation import build_explanation
 from src.llm.prompts.advice import build_advice_messages
 from src.core.qa_agent import answer_with_agent_loop
@@ -388,6 +387,31 @@ class Orchestrator:
         """Normalize model keys and add only deterministic request metadata."""
         return plan_finalization.normalize_plan(result, profile=profile, plan_config=plan_config)
 
+    def _retrieve_analysis_context(self, exercise_name: str, user_desc: str) -> dict:
+        """动作分析的双路检索上下文：动作库 + 知识库。
+
+        为什么必须两路：
+            动作库给的是「这个动作是什么」——一句话描述加三个常见错误词；
+            知识库给的是「这个动作该怎么做、出问题了怎么办」——技术文档与 FAQ。
+            此前动作分析只走动作库，`knowledge` 恒为空列表，于是 `data/knowledge/`
+            里的「深蹲技术」「膝关节健康」「下背痛管理」这些文档明明在库，
+            一条都进不了 prompt，LLM 手里只剩三个错误词，只能给放之四海皆准的建议。
+
+        为什么兜底：知识检索是增强项。向量库未就绪或 embedding 服务抖动时，
+        它失败不该让整个动作分析挂掉——降级为仅动作库，比整个接口 500 好。
+        """
+        retrieved = self.retriever.retrieve({"subtasks": [exercise_name], "skill_config": {}})
+        if not isinstance(retrieved, dict):
+            return {"exercises": [], "knowledge": []}
+        try:
+            retrieved["knowledge"] = self.knowledge.search_with_fallback(
+                f"{exercise_name} {user_desc}"
+            )
+        except Exception as exc:
+            logger.warning(f"[analysis] 知识库检索失败，降级为仅动作库: {exc}")
+            retrieved["knowledge"] = []
+        return retrieved
+
     def analyze_exercise(self, exercise_name: str, user_desc: str,
                          profile: UserProfileInput) -> dict:
         """【同步版】分析单个动作的规范性和问题。
@@ -401,7 +425,7 @@ class Orchestrator:
         流程：Retriever 检索动作标准规范 → Writer 对比分析 → 返回诊断结果
         """
         profile_dict = profile.model_dump()
-        retrieved = self.retriever.retrieve({"subtasks": [exercise_name], "skill_config": {}})
+        retrieved = self._retrieve_analysis_context(exercise_name, user_desc)
         return self.writer.write_analysis(exercise_name, user_desc, retrieved, profile_dict)
 
     def analyze_exercise_stream(self, exercise_name: str, user_desc: str,
@@ -420,8 +444,9 @@ class Orchestrator:
             )
 
         yield ("stage", "[检索] 正在检索动作标准规范...")
-        retrieved = self.retriever.retrieve({"subtasks": [exercise_name], "skill_config": {}})
+        retrieved = self._retrieve_analysis_context(exercise_name, user_desc)
         yield ("retriever_done", {"count": len(retrieved.get("exercises", []))})
+        yield ("knowledge_done", {"count": len(retrieved.get("knowledge", []))})
 
         yield ("stage", "[分析] 正在分析动作问题...")
         full_text = ""
@@ -434,9 +459,15 @@ class Orchestrator:
                 yield ("writer_chunk", data)
             elif event == "done":
                 result = data
-        # 将检索到的参考动作名附加到结果中，供前端展示出处
-        ref_exercises = [e.get("name", "") for e in retrieved.get("exercises", [])[:5]]
-        result["reference_exercises"] = ref_exercises
+        # 参考动作名由 writer 填——只有它知道 prompt 里实际喂了哪几条。
+        # 此前这里是"取检索结果前 5 条"，而检索返回的是排课用的候选清单，
+        # 前 5 条未必是真正参与对比的那条，前端展示的出处因此可能是错的。
+        # writer 若因异常没填上，用精确匹配兜底，避免前端出现 undefined。
+        if not result.get("reference_exercises"):
+            result["reference_exercises"] = [
+                e.get("name", "") for e in retrieved.get("exercises", [])
+                if isinstance(e, dict) and e.get("name") == exercise_name
+            ] or [exercise_name]
 
         # === 多轮对话：保存助手回复 ===
         if session_id:

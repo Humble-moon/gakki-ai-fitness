@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from src.core.qa_agent import _BASE_SYSTEM, answer_with_agent_loop, build_qa_messages
 from src.core.qa_safety import SAFETY_SYSTEM_MESSAGE

@@ -26,7 +26,7 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -142,9 +142,11 @@ def _build_production_qa_prompt(
 
 def _check_ragas() -> bool:
     try:
-        import ragas
-        import langchain_openai
-        import datasets
+        # 这三个 import 只用「能不能导入」这一个事实，导入名本身不被引用。
+        # 它们不是多余导入，删掉就等于把依赖检查变成永远返回 True。
+        import ragas  # noqa: F401
+        import langchain_openai  # noqa: F401
+        import datasets  # noqa: F401
         return True
     except ImportError as e:
         logger.error(f"RAGAS dependency missing: {e}")
@@ -401,7 +403,6 @@ async def run_ragas_eval(
     if not _check_ragas():
         return {"error": "ragas not installed. Run: pip install ragas langchain-openai datasets pandas"}
 
-    import ragas
     from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextRelevance
     from ragas.llms import llm_factory
     from ragas.embeddings import OpenAIEmbeddings as RagasOpenAIEmbeddings
@@ -632,7 +633,7 @@ def print_ragas_report(result: dict):
     # v2: 按 query_type 分组展示
     by_type = result.get("by_type", {})
     if by_type:
-        print(f"\n  按 query_type 分组：")
+        print("\n  按 query_type 分组：")
         print(f"  {'Type':<18} {'Count':>5} {'Faith':>8} {'AnsRel':>8} {'CtxRel':>8}")
         print(f"  {'-'*18} {'-'*5} {'-'*8} {'-'*8} {'-'*8}")
         for qt, stats in sorted(by_type.items()):
@@ -641,7 +642,7 @@ def print_ragas_report(result: dict):
                   f"{stats['context_relevance']:>8.4f}")
 
     # 解读
-    print(f"\n  解读：")
+    print("\n  解读：")
     for metric, name, good, bad in [
         ("faithfulness", "Faithfulness", 0.80, 0.50),
         ("answer_relevancy", "Answer Relevancy", 0.80, 0.50),
@@ -657,12 +658,12 @@ def print_ragas_report(result: dict):
         print(f"  {name}: {val:.4f} → {status}")
 
     # v2: 与 v1 的差异说明
-    print(f"\n  v2 与 v1 的差异：")
-    print(f"  - 生成使用生产环境 QA prompt（含用户画像+伤病注入）")
-    print(f"  - 检索上下文注入了健身常识文档（消除常识误判为幻觉）")
-    print(f"  - 检索+生成阶段异步并行（总耗时大幅下降）")
-    print(f"  - 分层抽样确保 query 类型均衡")
-    print(f"  - per_query 增加了 query_type/difficulty/has_injury 标签")
+    print("\n  v2 与 v1 的差异：")
+    print("  - 生成使用生产环境 QA prompt（含用户画像+伤病注入）")
+    print("  - 检索上下文注入了健身常识文档（消除常识误判为幻觉）")
+    print("  - 检索+生成阶段异步并行（总耗时大幅下降）")
+    print("  - 分层抽样确保 query 类型均衡")
+    print("  - per_query 增加了 query_type/difficulty/has_injury 标签")
     print()
 
 

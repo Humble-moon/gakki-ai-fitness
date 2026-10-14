@@ -236,7 +236,6 @@ class TestToolRegistryV2:
         # 如果 data/knowledge 目录不存在，应该不崩溃且不包含 knowledge:// 资源
         resources = registry.list_resources()
         # 所有资源都应该是 exercise:// 或 knowledge://
-        knowledge_uris = [r for r in resources if r["uri"].startswith("knowledge://")]
         # 不存在 knowledge 资源时不应崩溃
         for r in resources:
             assert r["uri"].startswith(("exercise://", "knowledge://"))

@@ -533,14 +533,6 @@ def test_records_do_not_flag_first_ever_session_as_pr():
     assert rec["is_recent_pr"] is False
 
 
-def test_records_do_not_flag_first_ever_session_as_pr():
-    """只练过一次的动作不标 PR：否则新用户每加一个动作就点亮一次。"""
-    logs = [_log("2026-09-14", [_entry("卧推", 3, 5, 60.0)])]
-    rec = compute_records(logs)[0]
-    assert rec["best_1rm"] > 0          # 纪录本身照样记下来
-    assert rec["is_recent_pr"] is False
-
-
 def test_muscle_volume_lists_untrained_groups_as_zero():
     """没练到的肌群也要出现（0 组长度），否则"没练"和"没统计到"分不出来。
 

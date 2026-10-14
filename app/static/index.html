@@ -5125,11 +5125,16 @@ function renderAnalysisResult(container, data) {
   container.appendChild(header);
 
   const blocks = [
-    { title: '发现的问题', items: (data.issues_found||[]), accent: 'var(--danger)' },
-    { title: '改进建议',   items: (data.suggestions||[]),  accent: 'var(--forge-amber)' },
+    { title: '发现的问题', items: (data.issues_found||[]),    accent: 'var(--danger)' },
+    { title: '可能原因',   items: (data.possible_causes||[]), accent: 'var(--warn)' },
+    { title: '改进建议',   items: (data.suggestions||[]),     accent: 'var(--forge-amber)' },
+    // 替代动作没有就整块不出现——「暂无替代动作」是一句没有信息量的占位，
+    // 只会把结果卡片撑得更长。
+    { title: '替代动作',   items: (data.alternatives||[]),    accent: 'var(--cool-blue)', skipWhenEmpty: true },
   ];
 
   blocks.forEach((b, i) => {
+    if (b.skipWhenEmpty && !b.items.length) return;
     const div = el('div', 'analysis-block', '');
     div.style.animationDelay = (0.05 * i) + 's';
     const heading = document.createElement('h4');
@@ -5236,7 +5241,13 @@ async function analyzeExercise() {
           stageEl?.remove(); stageEl = el('div', 'live-stage', '');
           stageEl.appendChild(el('span', 'dot-pulse', '')); appendText(stageEl, data); output.appendChild(stageEl);
         } else if (event === 'retriever_done') {
-          const detail = el('div', 'stage-detail', ''); appendText(detail, `检索到 ${data?.count || 0} 个相关动作参考`); output.appendChild(detail);
+          // 不写「检索到 N 个参考」：检索器返回的是排课用的候选清单，
+          // 真正拿去做对比的只有匹配上的那一条，报总数会让人以为全用上了。
+          const detail = el('div', 'stage-detail', ''); appendText(detail, '已匹配标准动作规范'); output.appendChild(detail);
+        } else if (event === 'knowledge_done') {
+          if (data?.count) {
+            const detail = el('div', 'stage-detail', ''); appendText(detail, `已检索到 ${data.count} 条专业知识`); output.appendChild(detail);
+          }
         }
       },
       onTerminal: (event, data) => {

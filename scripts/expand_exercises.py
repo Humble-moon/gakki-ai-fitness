@@ -422,7 +422,7 @@ def generate_batch(llm: LLMProvider, batch: dict, retries: int = 2) -> list[dict
             exercises = json.loads(content.strip())
 
             if not isinstance(exercises, list):
-                print(f"  [错误] LLM 返回的不是数组")
+                print("  [错误] LLM 返回的不是数组")
                 full_prompt += "\n\n上次输出格式错误，请返回纯 JSON 数组。"
                 continue
         except json.JSONDecodeError as e:
@@ -459,7 +459,7 @@ def generate_batch(llm: LLMProvider, batch: dict, retries: int = 2) -> list[dict
             print(f"    ... 还有 {len(exercises) - 3} 个")
         return exercises
 
-    print(f"  [警告] 重试耗尽，返回空列表")
+    print("  [警告] 重试耗尽，返回空列表")
     return []
 
 

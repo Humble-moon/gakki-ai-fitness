@@ -101,7 +101,7 @@ def _parse_pdf_mineru(file_bytes: bytes, filename: str) -> Optional[ParsedDocume
 
 def _parse_pdf_pdfplumber(file_bytes: bytes, filename: str) -> ParsedDocument:
     from src.parsers.pdf_parser import (
-        parse_pdf, pages_to_full_text, detect_body_font_size,
+        parse_pdf, pages_to_full_text,
     )
     result = parse_pdf(file_bytes)
 

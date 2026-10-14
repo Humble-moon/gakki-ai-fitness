@@ -1,0 +1,21 @@
+# ruff 配置 —— 只做「能抓出真问题」的检查，不做排版重构。
+#
+# 规则集取 ruff 默认的 pycodestyle(E4/E7/E9) + pyflakes(F)：
+#   F  系列能抓出未定义名、未使用变量、重复定义这类真缺陷
+#      （本配置落地时就抓到 redis_client.py 的未定义 logger 和
+#        一个被覆盖而从未执行的测试函数）；
+#   E4/E7/E9 是导入与语法层面的硬错误。
+# 不启用 E1/E2/E3/W：那些是纯排版规则，仓库现有风格已统一，
+# 为一套新工具去重排全仓库只会产生与逻辑无关的大面积 diff。
+#
+# E402 豁免：eval/ 下多个脚本必须先 sys.path.insert(项目根) 再 from src... import，
+# 那是必要顺序而非失误，强行上移会让脚本无法独立运行。
+
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = [
+    "E402",  # 见文件头说明：sys.path 调整后再导入是有意为之
+]

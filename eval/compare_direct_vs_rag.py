@@ -189,6 +189,10 @@ def main():
             "answer_rag": answer_rag,
             "score_direct": score_direct,
             "score_rag": score_rag,
+            # 两条路径的生成耗时。脚本本来就在测，之前只是没写进结果，
+            # 于是既丢了数据又留下两个没人读的变量。
+            "direct_gen_time": direct_gen_time,
+            "rag_gen_time": rag_gen_time,
         }
         results.append(record)
 

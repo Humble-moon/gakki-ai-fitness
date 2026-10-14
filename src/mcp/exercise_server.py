@@ -20,7 +20,6 @@ import json
 import logging
 from collections import Counter
 from dataclasses import dataclass
-from typing import Optional
 
 from src.storage.pg import PGClient
 

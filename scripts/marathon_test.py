@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -252,7 +251,6 @@ def main() -> int:
             n += 1
             payload = dict(prof)
             payload["session_id"] = f"{prof['session_id']}-r{rnd}"
-            t0 = time.time()
             res = stream(payload)
             a = analyze(res)
             a["label"] = label

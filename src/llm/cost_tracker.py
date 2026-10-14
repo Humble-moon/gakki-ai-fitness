@@ -28,7 +28,6 @@ import atexit
 import logging
 import time
 from collections import defaultdict
-from typing import Optional
 
 from src.config import MODEL_PRICE_PER_1K
 
