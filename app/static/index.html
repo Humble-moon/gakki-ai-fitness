@@ -88,18 +88,29 @@
   --border-rgb: 227,227,232;
   --chalk-rgb: 29,29,31;
   --elevated-rgb: 255,255,255;
-  /* 承载白字的实心橙（主按钮、选中的标签）。
-     它和 --accent-orange 是两种角色：亮橙只配深色字（5.94），深橙才配白字（4.81）。 */
-  --accent-strong: #cf3f08;
-  /* 按钮/选中标签上的文字色。改成白字后橙底必须同时加深，两者是配套的：
-     白字压在原来的亮橙 #ff6b35 上只有 2.84:1，连大字门槛 3.0 都不到；
-     压在加深后的 #cf3f08 上是 4.81:1，通过 AA。只改其中一个就会破线。 */
+  /* 实心橙填充（主按钮、选中的标签）。刻意取成图表色板首色的那一支 #ea580c：
+     大面积填充时它自己就是背景，不必再压深，和侧栏顶线、计划卡左边框用的
+     亮橙 #ff6b35 同色系，整站的三处橙读起来是一支。
+     2026-10-14 由 #cf3f08 提亮至此：原深橙配白字过线（4.81）但观感偏暗。 */
+  --accent-strong: #ea580c;
+  /* 按钮/选中标签上的文字色：白。用户明确要的是「橙 + 白」而不是橙 + 黑。
+     代价在这一行：白字压在 #ea580c 上只有 3.56:1，够不到正文 AA 的 4.5，
+     只达到大字门槛 3.0。所以 .btn-generate 的字号定在 19px 粗体，正式落进
+     WCAG 的「大字」档（≥18.66px 粗体），3.56 才算合规——字号是这个组合
+     能否成立的一部分，不要单独调小它。
+     小字元素不在大字档：.tag.active 只有 11px、.login-btn-primary 15px，
+     它们的 3.56 低于 4.5。要让它们也达标，只能把底色压到 #d54409（白字
+     4.51），而那个亮度接近此前被否掉的暗橙——取舍是保住亮橙观感。 */
   --on-accent: #ffffff;
   --forge-amber-dim: rgba(var(--accent-rgb),0.14);
   --forge-amber-glow: rgba(var(--accent-rgb),0.22);
-  /* 主按钮 hover 用。浅底上 hover 要「压深」而不是「提亮」，而且必须比
-     --accent-strong 更深——否则白字对比会掉到线下（#b03a0a 对白字 6.08）。 */
-  --forge-ember: #b03a0a;
+  /* 主按钮 hover 用。字色由深墨改白之后，hover 方向跟着翻回「压深」：
+     白字要的是深底，提亮会把白字拽到线下（#f97316 只有 2.80，
+     连大字门槛 3.0 都不到）。压深到 #d54409 后白字 4.51，
+     反而比静止态的 3.56 更清楚。
+     —— hover 往哪边走由字色决定：深字按钮提亮，白字按钮压深。
+        改 --on-accent 时务必回来重看这一支。 */
+  --forge-ember: #d54409;
   --cool-blue: var(--status-safe);
   --cool-blue-dim: rgba(var(--safe-rgb),0.15);
   /* 「同色相深字压在同色相浅底」这个组合要单独一支更淡的底：
@@ -126,7 +137,11 @@
   --font-logo:    -apple-system, 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', sans-serif;
   --font-heading: -apple-system, 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', sans-serif;
   --font-body:    -apple-system, 'PingFang SC', 'Noto Sans SC', 'Helvetica Neue', sans-serif;
-  --font-mono:    ui-monospace, 'SF Mono', 'Menlo', 'Consolas', monospace;
+  /* 末尾必须挂中文字体。字体栈里只有等宽英文字体时，中文会掉进浏览器的
+     兜底字体（macOS 上通常落到宋体一类衬线体），和全站的 PingFang 黑体
+     不是一套字形——页面上所有「等宽小标签」里的中文都会显得别扭。
+     挂上中文字体后英文仍走等宽，中文回到 PingFang，两边各归其位。 */
+  --font-mono:    ui-monospace, 'SF Mono', 'Menlo', 'Consolas', 'PingFang SC', 'Noto Sans SC', monospace;
 
   --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -251,12 +266,16 @@ body {
 
 /* 字段标签原来是 9px + 最暗的灰（--chalk-faint），在暗底上基本读不出来；
    输入框描边用的 --steel 又和面板边框同色，整块表单像一排塌进去的暗格子。
-   标签提到 10px/次级灰，输入框换成比面板更深的底色 + 亮一档的描边，
-   靠"凹陷"把可输入区域框出来。 */
+   标签提到次级灰，输入框换成比面板更深的底色 + 亮一档的描边，
+   靠"凹陷"把可输入区域框出来。
+   2026-10-14 再调字号与字距：标签实际内容是「身高 Height (cm)」这类中英
+   混排，10px 的中文已经偏小，1px 字距又是拉丁字母的排版手法——中文被撑得
+   松散发飘。字号提到 11px、字距收到 0.5px；uppercase 对中文无副作用，
+   英文部分仍受益，保留。 */
 .field label {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 1.0px;
+  letter-spacing: 0.5px;
   color: var(--chalk-dim);
   font-family: var(--font-mono);
   font-weight: 400;
@@ -325,7 +344,11 @@ body {
   border: none;
   padding: 16px 32px;
   font-family: var(--font-heading);
-  font-size: 18px;
+  /* 19px 而不是 18px：WCAG 的「大字」档是 ≥18.66px 粗体，只有落进这一档，
+     白字压在 --accent-strong 上的 3.56 才够用（大字门槛 3.0）。18px 差
+     0.66px 掉回正文档，那里要 4.5，而这只橙拿不到——除非把它压暗到
+     #d54409，那又回到了被否掉的暗橙。这 1px 是「橙 + 白」成立的条件。 */
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.5px;
   cursor: pointer;
@@ -824,6 +847,11 @@ body {
 }
 .qa-coach-context strong { color: var(--chalk); font-weight: 600; }
 .qa-hero-kicker { color: var(--accent-ink); font: 600 11px var(--font-mono); letter-spacing: 2px; text-transform: uppercase; }
+/* 中文微标签。上面那支是给拉丁字母的：等宽 + 2px 字距 + 大写，英文缩写串
+   读起来利落；换成中文就全反了——字距把四个字撑得松散，等宽栈又没有中文
+   字形（靠浏览器兜底，和全站黑体不是一套）。中文标签走这支：正文字体、
+   几乎不加字距、字号提到 12px（11px 的中文笔画已经开始糊）。 */
+.qa-kicker-cn { color: var(--accent-ink); font-family: var(--font-body); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
 .qa-lead { max-width: 650px; color: var(--chalk); font-size: 16px; line-height: 1.7; }
 .qa-topic-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .qa-topic-list .eq-chip { border-color: rgba(var(--safe-rgb),.35); }
@@ -1374,8 +1402,10 @@ body {
   border: 1px solid var(--steel);
   border-radius: var(--radius-md);
 }
+/* 字距 1px → 0.5px：这里装的是「每日目标」这类纯中文，1px 是拉丁字母的
+   间距，压在中文上只会发飘。等宽字体栈末尾已挂中文字体，中文不再掉兜底。 */
 .plan-nutrition .nutrition-label {
-  font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.5px;
   color: var(--text-muted);
 }
 .plan-nutrition .nutrition-metric { display: flex; align-items: baseline; gap: 6px; }
@@ -1906,7 +1936,8 @@ body {
 .login-btn:active { transform: translateY(1px); }
 .login-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .login-btn-primary { background: var(--accent-strong); color: var(--on-accent); border: 1px solid transparent; }
-.login-btn-primary:hover { filter: brightness(1.06); }
+/* 与主按钮同理：白字按钮的 hover 要压深不是提亮（提亮会把白字拽到线下）。 */
+.login-btn-primary:hover { filter: brightness(0.92); }
 .login-btn-primary:disabled { opacity: .6; cursor: default; transform: none; }
 .login-btn-guest {
   background: transparent; color: var(--text-primary);
@@ -2032,7 +2063,7 @@ body {
    但它是生成计划之后最该被看到的一步动作，藏在这一档里等于没提示。 */
 .btn-primary {
   padding: 11px 22px;
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--on-accent);
   border: none;
   border-radius: var(--radius-sm);
@@ -2046,7 +2077,9 @@ body {
 .btn-primary:hover { filter: brightness(1.05); }
 .btn-primary:active { transform: scale(.98); }
 .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
-.btn-primary.is-saved { background: var(--status-safe); color: var(--on-accent); }
+/* 青绿底必须继续配白字：--on-accent 现在是深墨，而深墨压在 #0f766e 上
+   只有 3.07，白字有 5.47。这两个状态的底色不同，字色也就不能共用一个令牌。 */
+.btn-primary.is-saved { background: var(--status-safe); color: #ffffff; }
 
 .plan-title { margin: 0 0 12px; color: var(--text-primary); font-family: var(--font-heading); font-size: 20px; letter-spacing: 0.3px; }
 .saved-plans-head { margin-bottom: 16px; }
@@ -3207,7 +3240,7 @@ body {
 
       <div id="qa-output" class="qa-output" aria-live="polite">
         <div class="qa-welcome" id="qa-welcome">
-          <div class="qa-coach-lead"><span class="qa-hero-kicker">教练对话</span><h3>从一个具体场景开始</h3><p>告诉我你正在做什么、哪里不舒服或想达成什么目标。我会先给结论，再说明阶段、依据与安全边界。</p></div>
+          <div class="qa-coach-lead"><span class="qa-kicker-cn">教练对话</span><h3>从一个具体场景开始</h3><p>告诉我你正在做什么、哪里不舒服或想达成什么目标。我会先给结论，再说明阶段、依据与安全边界。</p></div>
           <div class="qa-topic-list">
             <button type="button" class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">硬拉时下背酸，今天该怎么调整？</button>
             <button type="button" class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">减脂期训练前后怎么安排碳水？</button>
