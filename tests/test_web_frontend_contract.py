@@ -1480,3 +1480,22 @@ def test_training_log_allows_decimal_weight_and_rpe():
         m = re.search(rf'<input[^>]*id="{field_id}"[^>]*>', HTML)
         assert m, f"找不到 {field_id}"
         assert 'step="any"' in m.group(0), f"{field_id} 仍被限制粒度"
+
+
+def test_tab_strip_wraps_instead_of_clipping():
+    """主导航放不下时必须换行，不能把末尾的入口裁掉。
+
+    实测（1024px 视口）：主界面那条导航 6 格每格 116px，连间距共需 726px，
+    而可用只有 628px。基础 .tabs 原本是 display:flex 且没有任何 overflow
+    规则，只在 ≤767px 的媒体查询里处理过溢出——767~1100px 这段既没换行也
+    没滚动，正好是出问题的区间，第 6 格「训练分析」露出 96px 后被祖先裁掉。
+
+    用 auto-fit grid 而不是 overflow-x：滚动只是让内容"可达"，视觉上仍是一个
+    被切掉半截的标签，看上去像坏了；导航不该要求用户去发现"这里能滚"。
+    auto-fit 还能让空轨道自动折叠，所以宽屏（6 列一行）与改动前完全一致。
+    """
+    start = HTML.index(".tabs {")
+    body = HTML[start:HTML.index("}", start)]
+    assert "display: grid" in body, "主导航退回 flex 会在中等宽度再次裁切标签"
+    assert "auto-fit" in body, "没有 auto-fit 就无法按宽度自适应列数"
+    assert "minmax(" in body, "缺少列宽下限，窄屏会挤成一列"
