@@ -242,3 +242,42 @@ def test_cached_plan_without_profile_keeps_working():
     result = safe_cached_result(_cacheable_plan(daily_kcal=1), expected_goal="增肌")
 
     assert result is not None
+
+
+# ----------------------------------------------------------------------
+# 小数体重 / 身高：填了什么就显示什么
+# ----------------------------------------------------------------------
+
+def test_basis_shows_decimal_weight_and_height():
+    """依据文案要照实显示小数。
+
+    原先固定用 ``:.0f``：用户填 62.5kg，计划里却写「62kg」。数值全程参与
+    BMR 与蛋白质计算（第 61/87 行用的是原始小数），只有这一行展示被取整——
+    填的人和显示的数对不上，用户会以为自己填的小数没生效。
+    """
+    result = calc_calorie_target(62.5, height_cm=172.5, age=30,
+                                 sex="男", goal="增肌", days_per_week=4)
+    assert "62.5kg" in result["basis"]
+    assert "172.5cm" in result["basis"]
+
+
+def test_basis_omits_trailing_zero_for_integers():
+    """整数不带小数点——「80.0kg」比「80kg」难读，没必要为了支持小数而变丑。"""
+    result = calc_calorie_target(80, height_cm=180, age=30,
+                                 sex="男", goal="增肌", days_per_week=4)
+    assert "80kg" in result["basis"]
+    assert "180cm" in result["basis"]
+    assert "80.0kg" not in result["basis"]
+
+
+def test_decimal_weight_actually_changes_the_calculation():
+    """小数必须真的进入计算，而不只是显示层好看。
+
+    62.5 与 62 的 BMR 相差 5 kcal——这正是「支持小数」的意义所在：
+    如果只改显示、计算仍按取整值走，那这个功能就是假的。
+    """
+    a = calc_calorie_target(62.5, height_cm=172.5, age=30, sex="男",
+                            goal="增肌", days_per_week=4)
+    b = calc_calorie_target(62, height_cm=172, age=30, sex="男",
+                            goal="增肌", days_per_week=4)
+    assert a["bmr"] != b["bmr"], "小数没有影响 BMR，说明计算被取整了"

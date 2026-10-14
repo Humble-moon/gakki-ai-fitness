@@ -3157,12 +3157,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
       <div id="profile-editor" class="field-group profile-editor">
         <div class="field">
           <label for="height">身高 Height (cm)</label>
-          <input id="height" type="number" value="180" min="100" max="250">
+          <!-- 与 weight 同理：身高 172.5cm 是真实填法，默认 step=1 会把小数
+               判为无效。后端 height 也是 float。 -->
+          <input id="height" type="number" value="180" min="100" max="250" step="any">
         </div>
 
         <div class="field">
           <label for="weight">体重 Weight (kg)</label>
-          <input id="weight" type="number" value="80" min="30" max="200">
+          <!-- step="any"：体重 62.5kg 是常见值，不写 step 时 type="number"
+               默认按 1 步进，小数会被浏览器判为无效（:invalid），
+               上下箭头也只能按 1 跳。后端 weight 本就是 float，收得住小数。 -->
+          <input id="weight" type="number" value="80" min="30" max="200" step="any">
         </div>
 
         <!-- 年龄和性别只服务于热量目标（Mifflin-St Jeor 的性别常数项男女相差

@@ -35,6 +35,18 @@ _GOAL_TABLE = {
 }
 
 
+def _num(value) -> str:
+    """把身体数据写进「依据」文案：有小数就带小数，没有就不带。
+
+    原先固定用 ``:.0f``，用户填了 62.5kg 却在计划里看到「62kg」，会以为自己
+    填的小数没生效——而它全程都参与了 BMR 与蛋白质计算，只有展示这一行被
+    取整了。填的人和算的数对不上，是最容易让人怀疑「这功能是不是没做」的那种不一致。
+
+    ``:g`` 让 62.5 显示成 62.5、62.0 显示成 62，两种情况都不别扭。
+    """
+    return f"{float(value):g}"
+
+
 def calc_calorie_target(weight_kg: float, height_cm: float | None = None,
                         age: float | None = None, sex: str = "不填",
                         goal: str = "muscle_building",
@@ -75,10 +87,10 @@ def calc_calorie_target(weight_kg: float, height_cm: float | None = None,
     # 依据文本给界面用：让用户看得懂这个数字怎么来的，而不是接受一个凭空的数
     if has_full_inputs:
         sex_note = "性别已知" if sex_known else "性别未填，按两性中值估算（误差约 ±83 kcal）"
-        basis = (f"{formula}｜{weight_kg:.0f}kg / {height_cm:.0f}cm / {age:.0f}岁｜"
+        basis = (f"{formula}｜{_num(weight_kg)}kg / {_num(height_cm)}cm / {_num(age)}岁｜"
                  f"活动系数 {factor}（每周 {days_per_week} 练）｜{sex_note}")
     else:
-        basis = f"{formula}｜{weight_kg:.0f}kg｜{goal_note}"
+        basis = f"{formula}｜{_num(weight_kg)}kg｜{goal_note}"
 
     return {
         "bmr": round(bmr),

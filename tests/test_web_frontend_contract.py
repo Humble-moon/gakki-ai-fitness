@@ -1435,3 +1435,24 @@ def test_invalid_field_gets_inline_message():
     body = _fn_body("validateProfileFields")
     assert "markFieldError" in body
     assert "focus(" in body, "出错字段要自动聚焦过去"
+
+
+def test_decimal_fields_allow_any_step():
+    """体重 / 身高 / 训练年限必须允许小数。
+
+    不写 step 时 type="number" 默认按 1 步进：输入 62.5 会被浏览器判为
+    :invalid，上下箭头也只能按 1 跳。而这三个字段的小数都是真实填法
+    （62.5kg / 172.5cm / 1.5 年），后端也本来就是 float，收得住。
+
+    年龄与每周天数**故意保持整数**——30.5 岁、每周 4.3 练不合理。
+    这条断言同时守住两个方向，避免以后有人图省事把五个字段一起改成 any。
+    """
+    def tag(field_id):
+        m = re.search(rf'<input id="{field_id}"[^>]*>', HTML)
+        assert m, f"找不到输入框 {field_id}"
+        return m.group(0)
+
+    for field_id in ("weight", "height", "years"):
+        assert 'step="any"' in tag(field_id), f"{field_id} 不允许输入小数"
+    for field_id in ("age", "days"):
+        assert 'step="any"' not in tag(field_id), f"{field_id} 不该允许小数"
