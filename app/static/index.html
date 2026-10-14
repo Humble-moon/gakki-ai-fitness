@@ -261,7 +261,13 @@ body {
   gap: 14px;
 }
 .field-group .field {
-  animation: fadeSlideIn 0.5s var(--ease-out) both;
+  /* fill-mode 用 backwards 而不是 both。
+     both 会让动画结束后永久保留 to 帧的 transform: translateY(0)，而任何
+     非 none 的 transform 都会让元素创建层叠上下文——下拉面板的 z-index
+     就被关进各自字段的上下文里，越不出去盖住后面的兄弟字段，表现为
+     「展开的下拉被下一个输入框压住」。backwards 只在动画开始前应用
+     from 帧（防首帧闪烁），结束后释放，元素回到自身无 transform 的状态。 */
+  animation: fadeSlideIn 0.5s var(--ease-out) backwards;
 }
 .field-group .field:nth-child(1) { animation-delay: 0.05s; }
 .field-group .field:nth-child(2) { animation-delay: 0.10s; }
@@ -314,6 +320,104 @@ body {
 
 .row { display: flex; gap: 12px; }
 .row .field { flex: 1; }
+
+/* ── 自绘下拉 ──
+   原生 <select> 展开后的面板由操作系统渲染，CSS 完全够不着（macOS 上是
+   带蓝底高亮的系统浮层，跟本页的浅色主题不是一套语言）。要样式可控就
+   只能自绘。视觉参数刻意与 .field input 对齐，两种控件并排时不打架。 */
+.sel { position: relative; }
+
+.sel-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-deep);
+  border: 1px solid var(--steel-light);
+  color: var(--chalk);
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+}
+
+.sel-btn:hover { border-color: var(--steel); }
+
+.sel.open .sel-btn {
+  border-color: var(--accent-ink);
+  box-shadow: 0 0 0 3px var(--forge-amber-dim);
+}
+
+.sel-val {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 未选任何项时（仅多选会出现）用弱化的提示色 */
+.sel-val.ph { color: var(--chalk-faint); }
+
+.sel-caret {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-right: 1.5px solid var(--chalk-dim);
+  border-bottom: 1.5px solid var(--chalk-dim);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.sel.open .sel-caret { transform: translateY(1px) rotate(-135deg); }
+
+.sel-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+  padding: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.sel-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sel-opt:hover { background: var(--bg-card-hover); }
+
+/* 选中态：加粗 + 勾。勾号占位常驻，避免选中时文字左右跳动 */
+.sel-opt .tick {
+  flex: none;
+  width: 12px;
+  color: var(--accent-ink);
+  visibility: hidden;
+}
+
+.sel-opt.on .tick { visibility: visible; }
+.sel-opt.on { font-weight: 600; }
+
+/* 日期输入框的样式统一放在样式表末尾，见文件最后的「日期输入框」一节 */
 
 /* ── Tag Pills ── */
 .tag-group {
@@ -2885,6 +2989,33 @@ body {
 
 .explain-fixed { color: var(--status-safe); }
 .explain-warn { color: var(--warn); }
+/* ── 日期输入框 ──
+   原生 date 控件只改得了外框，点开的日历面板仍是浏览器自带的，这部分
+   无法定制（要完全自绘得自己写日历，成本远高于收益）。
+
+   这条规则刻意放在样式表末尾：`.field input` 与 `.bm-field input` 各自
+   用 background / padding 简写定义了外观，与本规则同优先级，只有后定义
+   的才生效。放前面会被它们的简写覆盖掉，表现为「图标不出现、内边距没留」。
+
+   原生指示器铺满整个输入框，这样点任意位置都能唤起日历；图标另画一个。 */
+input[type="date"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M8 3v4M16 3v4M3 11h18'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -3020,12 +3151,20 @@ body {
             <input id="age" type="number" value="30" min="10" max="100">
           </div>
           <div class="field">
-            <label for="sex">性别 Sex</label>
-            <select id="sex">
-              <option value="不填" selected>不填</option>
-              <option value="男">男</option>
-              <option value="女">女</option>
-            </select>
+            <label for="sex-btn">性别 Sex</label>
+            <input type="hidden" id="sex" value="不填">
+            <div class="sel" data-for="sex">
+              <button type="button" class="sel-btn" id="sex-btn"
+                      aria-haspopup="listbox" aria-expanded="false">
+                <span class="sel-val">不填</span>
+                <i class="sel-caret" aria-hidden="true"></i>
+              </button>
+              <div class="sel-menu" role="listbox" hidden>
+                <button type="button" class="sel-opt on" role="option" data-val="不填"><span class="tick">✓</span>不填</button>
+                <button type="button" class="sel-opt" role="option" data-val="男"><span class="tick">✓</span>男</button>
+                <button type="button" class="sel-opt" role="option" data-val="女"><span class="tick">✓</span>女</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3035,11 +3174,19 @@ body {
             <input id="years" type="number" value="1" min="0" max="30" step="0.5">
           </div>
           <div class="field">
-            <label for="goal">目标 Goal</label>
-            <select id="goal">
-              <option value="增肌" selected>增肌</option>
-              <option value="减脂">减脂</option>
-            </select>
+            <label for="goal-btn">目标 Goal</label>
+            <input type="hidden" id="goal" value="增肌">
+            <div class="sel" data-for="goal">
+              <button type="button" class="sel-btn" id="goal-btn"
+                      aria-haspopup="listbox" aria-expanded="false">
+                <span class="sel-val">增肌</span>
+                <i class="sel-caret" aria-hidden="true"></i>
+              </button>
+              <div class="sel-menu" role="listbox" hidden>
+                <button type="button" class="sel-opt on" role="option" data-val="增肌"><span class="tick">✓</span>增肌</button>
+                <button type="button" class="sel-opt" role="option" data-val="减脂"><span class="tick">✓</span>减脂</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3049,11 +3196,19 @@ body {
         </div>
 
         <div class="field">
-          <label>训练场景 Scene</label>
-          <div class="tag-group" id="scene-tags">
-            <button type="button" class="tag active" data-val="居家">居家</button>
-            <button type="button" class="tag" data-val="健身房">健身房</button>
-            <button type="button" class="tag" data-val="户外">户外</button>
+          <label for="scene-btn">训练场景 Scene</label>
+          <input type="hidden" id="scene-tags" value="居家">
+          <div class="sel" data-for="scene-tags" data-multi="1">
+            <button type="button" class="sel-btn" id="scene-btn"
+                    aria-haspopup="listbox" aria-expanded="false">
+              <span class="sel-val">居家</span>
+              <i class="sel-caret" aria-hidden="true"></i>
+            </button>
+            <div class="sel-menu" role="listbox" aria-multiselectable="true" hidden>
+              <button type="button" class="sel-opt on" role="option" data-val="居家"><span class="tick">✓</span>居家</button>
+              <button type="button" class="sel-opt" role="option" data-val="健身房"><span class="tick">✓</span>健身房</button>
+              <button type="button" class="sel-opt" role="option" data-val="户外"><span class="tick">✓</span>户外</button>
+            </div>
           </div>
         </div>
 
@@ -4445,7 +4600,105 @@ function el(tag, cls, text) {
   return e;
 }
 
+// 自绘下拉。
+//
+// 为什么不用原生 <select>：它展开后的面板由操作系统渲染，CSS 完全够不着——
+// macOS 上就是一块带蓝底高亮的系统浮层，跟本页的浅色主题不是一套语言。
+// 要样式可控只能自绘。
+//
+// 值统一写回一个隐藏 input（id 与原 select 保持一致），因此 getProfile()、
+// getTags() 这些既有读取方一行都不用改，只是从「读控件」变成「读 input」。
+function initSelects() {
+  const closeAll = except => {
+    document.querySelectorAll('.sel.open').forEach(s => {
+      if (s === except) return;
+      s.classList.remove('open');
+      s.querySelector('.sel-menu').hidden = true;
+      s.querySelector('.sel-btn').setAttribute('aria-expanded', 'false');
+    });
+  };
+
+  document.querySelectorAll('.sel').forEach(sel => {
+    const btn = sel.querySelector('.sel-btn');
+    const menu = sel.querySelector('.sel-menu');
+    const valNode = sel.querySelector('.sel-val');
+    const target = document.getElementById(sel.dataset.for);
+    const multi = sel.dataset.multi === '1';
+    const opts = [...sel.querySelectorAll('.sel-opt')];
+
+    const chosen = () => opts.filter(o => o.classList.contains('on'));
+
+    const syncLabel = () => {
+      const on = chosen();
+      if (on.length) {
+        valNode.textContent = on.map(o => o.dataset.val).join('、');
+        valNode.classList.remove('ph');
+      } else {
+        valNode.textContent = '未选择';
+        valNode.classList.add('ph');
+      }
+    };
+
+    const commit = () => {
+      if (!target) return;
+      target.value = chosen().map(o => o.dataset.val).join(',');
+      // 派发到隐藏 input：既有的 updateProfileSummary 监听挂在
+      // #profile-editor 内的 input 上，这样它照常被唤醒。
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const close = () => {
+      sel.classList.remove('open');
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    };
+
+    const open = () => {
+      closeAll(sel);            // 同屏只留一个展开的面板
+      sel.classList.add('open');
+      menu.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+    };
+
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (sel.classList.contains('open')) close(); else open();
+    });
+
+    opts.forEach(opt => opt.addEventListener('click', e => {
+      e.stopPropagation();
+      if (multi) {
+        opt.classList.toggle('on');   // 多选：切完不收起，方便连选
+      } else {
+        opts.forEach(o => o.classList.toggle('on', o === opt));
+        close();
+      }
+      syncLabel();
+      commit();
+    }));
+
+    // Esc 收起并把焦点还给按钮，键盘用户不会掉在空处
+    sel.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && sel.classList.contains('open')) {
+        close();
+        btn.focus();
+      }
+    });
+
+    syncLabel();
+  });
+
+  // 点面板之外收起。挂在 document 上，只注册一次。
+  document.addEventListener('click', () => closeAll(null));
+}
+
 function getTags(id) {
+  const node = document.getElementById(id);
+  // 训练场景已改为多选下拉，值存在隐藏 input 里（逗号分隔）。
+  // 仍保留对旧 .tag.active 结构的读取，避免别处引用时静默拿到空数组。
+  if (node && node.tagName === 'INPUT') {
+    return node.value ? node.value.split(',').filter(Boolean) : [];
+  }
   return [...document.querySelectorAll(`#${id} .tag.active`)].map(t => t.dataset.val);
 }
 
@@ -4472,15 +4725,8 @@ function getProfile() {
   };
 }
 
-// ── Tag toggle ──
-document.querySelectorAll('.tag-group').forEach(group => {
-  group.addEventListener('click', e => {
-    const tag = e.target.closest('.tag');
-    if (!tag) return;
-    tag.classList.toggle('active');
-    updateProfileSummary();
-  });
-});
+// ── 自绘下拉的初始化 ──
+initSelects();
 document.querySelectorAll('#profile-editor input, #profile-editor select').forEach(field => {
   field.addEventListener('input', updateProfileSummary);
   field.addEventListener('change', updateProfileSummary);

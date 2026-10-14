@@ -1287,7 +1287,11 @@ def test_profile_form_collects_age_and_sex():
     assert 'id="sex"' in HTML, "档案表单缺少性别字段"
     # 「不填」必须是可选项且是默认项：营养估算用得上的信息，不值得让用户
     # 先回答一个涉及身份的问题。
-    assert '<option value="不填" selected>' in HTML, \
+    # 性别自 2026-10 起改为自绘下拉（原生 select 的展开面板由系统渲染，
+    # 与本页浅色主题不是一套语言），默认值落在隐藏 input 上，断言因此从
+    # <option value="不填" selected> 改为该 input 的 value——它保护的是
+    # 「默认不填」这个意图，而不是某种具体的控件写法。
+    assert 'id="sex" value="不填"' in HTML, \
         "性别的默认值应为「不填」，而不是替用户预选一个"
 
 
