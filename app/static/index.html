@@ -5262,6 +5262,11 @@ function renderPlanDraft(container, rawText) {
    器械类文案由大模型生成、措辞不受控，句子里顺带出现「伤病」两个字完全
    可能——若把宽松的伤病词排在前面，一条「缺根弹力带」会被显示成医疗风险。 */
 const NOTICE_TOPICS = [
+  // adjust 认后端发出的 [调整] 前缀，且必须排在 injury 前面。
+  // 这类提示的真相是"活动度不足，动作做法要调整"，不是医疗风险；
+  // 落到「伤病相关」里，一个只是柔韧性差的用户会以为自己有伤。
+  { key: 'adjust', label: '动作调整', hint: '按你的身体条件，这些动作的做法要调整',
+    re: /^\s*\[调整\]/ },
   { key: 'injury', label: '伤病相关', hint: '与你的伤病史有关，优先看',
     re: /\[语义匹配\]|\[规则引擎\]\s*伤病|禁止动作:|用户查询含伤病/ },
   { key: 'equipment', label: '器械不匹配', hint: '计划里的动作需要你没有的器械',
@@ -5280,7 +5285,7 @@ const NOTICE_TOPICS = [
     internal: true,
     re: /不在动作库|未收录|确认动作名称|动作库中不存在/ },
 ];
-const NOTICE_ORDER = ['injury', 'equipment', 'naming', 'other'];
+const NOTICE_ORDER = ['adjust', 'injury', 'equipment', 'naming', 'other'];
 const NOTICE_LOOSE_INJURY = /伤病|疼痛|损伤|急症/;
 
 /* 该类别是否只对内部有意义。判定与渲染共用 NOTICE_TOPICS，避免正则或名单
@@ -5331,9 +5336,10 @@ function renderPlanNotice(warnings) {
   items.forEach(raw => {
     const key = classifyNotice(raw);
     if (!buckets.has(key)) buckets.set(key, []);
-    // 去掉「[规则引擎]」「[语义匹配]」这类内部分类标记——它们是判据的来源，
-    // 对用户没有意义，读起来像报错日志。
-    buckets.get(key).push(String(raw || '').replace(/^\s*\[(规则引擎|语义匹配)\]\s*/, ''));
+    // 去掉「[规则引擎]」「[语义匹配]」「[调整]」这类内部分类标记——它们是判据的
+    // 来源，对用户没有意义，读起来像报错日志。（[调整] 已经参与过归类，
+    // 这里剥掉不影响分类结果。）
+    buckets.get(key).push(String(raw || '').replace(/^\s*\[(规则引擎|语义匹配|调整)\]\s*/, ''));
   });
 
   const box = el('section', 'plan-notice', '');

@@ -1326,3 +1326,29 @@ def test_explanation_panel_lists_the_habits_that_were_considered():
 
     assert "explain.habits" in fn, "可解释面板没有读取 habits"
     assert "运动习惯" in fn, "可解释面板没有展示运动习惯"
+
+
+def test_limitation_caution_has_its_own_topic_and_precedes_injury():
+    """「活动度不足要调整做法」不能显示成「伤病相关」。
+
+    后端为功能性受限（活动度/柔韧/僵硬）发出 ``[调整]`` 前缀的提示，
+    它不阻断交付，只是一条做法建议。若落进「伤病相关」标签下，一个只是
+    柔韧性差的用户会以为自己有伤——这正是这次要修的观感问题。
+
+    顺序也是契约：``classifyNotice`` 按 NOTICE_TOPICS 的先后返回第一个命中项。
+    adjust 必须排在 injury 之前，否则「伤病」这类宽松词会先吃掉它。
+    """
+    topics_start = HTML.index("const NOTICE_TOPICS")
+    topics_end = HTML.index("const NOTICE_ORDER", topics_start)
+    topics = HTML[topics_start:topics_end]
+
+    assert "'adjust'" in topics, "缺少面向功能性受限的提示类别"
+    assert "[调整]" in topics, "adjust 类别必须认后端发出的 [调整] 前缀"
+
+    order_start = HTML.index("const NOTICE_ORDER")
+    order = HTML[order_start:HTML.index(";", order_start)]
+    assert order.index("'adjust'") < order.index("'injury'"), \
+        "adjust 必须排在 injury 之前，否则会被宽松的伤病词先吃掉"
+
+    # 分类标记要剥离后再展示，否则用户会看到"[调整]"这种内部记号
+    assert "|调整)" in HTML, "strip 正则没跟上新增的 [调整] 标记"

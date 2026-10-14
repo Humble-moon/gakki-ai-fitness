@@ -376,12 +376,27 @@ def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
             f"动作「{name}」不在动作库中，请确认动作名称是否正确" for name in unknown_exercises
         ]
 
+    # 功能性受限（活动度/柔韧/僵硬）的做法调整建议：**随计划一起交付**，不进任何闸门。
+    #
+    # 它和上面那些 warning 一样只是提示，区别在于来源不是 LLM 检查器，而是
+    # HITL 的确定性规则/语义层。之所以要在这里明确声明"不参与闸门"：
+    # 下面 hard_ok 只看 schema_valid / is_safe / requires_review / confidence，
+    # 一旦把 cautions 接进那几个判据，"活动度不好"就会重新变回扣下计划的理由，
+    # 死锁照旧——而这正是本次要修的问题。
+    cautions = [
+        str(c) for c in (final.get("review_cautions") or result.get("review_cautions") or [])
+        if str(c).strip()
+    ]
+    if cautions:
+        warnings = warnings + cautions
+
     requires_review = final.get("requires_human_review") is True
     confidence = final.get("confidence")
     confidence_valid = isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
     result.update({"warnings": warnings, "active_issues": active_issues,
                    "resolved_issues": resolved_issues,
                    "unknown_exercises": unknown_exercises,
+                   "cautions": cautions,
                    "requires_review": requires_review or not checks or not is_safe,
                    "review_reason": final.get("review_reason", ""),
                    "review_severity": final.get("review_severity", ""),

@@ -81,4 +81,9 @@ class FactCheckerAgent:
         # 规则引擎/语义匹配的冲突明细单独存放，供审核工件作为人工决策依据；
         # 不并入 issues，避免影响重写循环对 issues 的既有语义。
         result["review_suggestions"] = list(review.suggestions or []) if review.needs_review else []
+        # 功能性受限（活动度/柔韧/僵硬）的做法调整建议。
+        # 与 review_suggestions 的关键区别：它**不参与任何闸门** —— 既不影响
+        # requires_human_review，也不进 issues，只是随计划一起交付给用户。
+        # 不这么分的话，"活动度不好"会重新变回扣下计划的理由，死锁照旧。
+        result["review_cautions"] = list(review.cautions or [])
         return result

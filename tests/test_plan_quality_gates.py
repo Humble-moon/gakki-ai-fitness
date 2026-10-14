@@ -18,7 +18,7 @@ from __future__ import annotations
 import pytest
 
 from src.core.plan_finalization import collect_unknown_exercises, finalize_result
-from src.hitl.review import HITLReview
+from src.hitl.review import HITLReview, classify_injury_nature
 
 
 class TestFocusIsNotInjuryText:
@@ -672,3 +672,184 @@ def test_reason_line_is_stripped_too():
     src = inspect.getsource(pf.build_review_pending_payload)
     assert "reason = _strip_internal_markers(reason)" in src, \
         "兜底 reason 直接取 issue 原文，会带内部标记，必须剥离"
+
+
+class TestMobilityLimitationOnlyAdjustsNotBlocks:
+    """功能性受限（活动度/柔韧/僵硬）只给做法调整，不阻断交付。
+
+    本组来自一次实测事故：用户在伤病史填「肩膀活动度不好」「脚踝活动度不好」，
+    计划被「暂缓交付」，理由是"发现 6 处动作与你的伤病史冲突"——而报出的冲突里，
+    触发词是「肩」和「踝」两个**部位词**。
+
+    三重错误叠在一起才致命：
+      1. ``INJURY_EXERCISE_CONFLICTS`` 的键全是部位词，而部位词不是伤病——
+         「我想练肩」同样命中「肩」；
+      2. 活动度差不是禁忌，它恰恰是训练要改善的东西。系统自己算出的处置写着
+         "建议限制幅度…或改为绳索夹胸"，内容完全正确，只是被错误地升级成了
+         阻断理由；
+      3. 本项目的 HITL 没有"审核人"角色，扣下即死锁——用户永远拿不到计划，
+         也没有任何人能放行。这才是"体验差"的真正来源。
+
+    加严的那一面同样要守住：真损伤照拦不误。放行的唯一条件是描述里明确
+    出现"能力不足"语义（活动度/活动范围/柔韧/僵硬…）且不含任何诊断词。
+    """
+
+    @pytest.fixture(autouse=True)
+    def _offline_semantic(self, monkeypatch):
+        """规则层用例不得依赖 embedding 服务。
+
+        把语义匹配钉成"无命中"，断言才只反映确定性规则层；语义层本身用桩
+        单独测（见 TestSemanticLayerRespectsLimitationNature）。
+        """
+        monkeypatch.setattr(HITLReview, "_match_semantic", lambda self, text: [])
+
+    def _check(self, injuries, exercises):
+        review = HITLReview()
+        plan = {"days": [{"exercises": [{"name": n} for n in exercises]}]}
+        decision = review.check(
+            {"is_safe": True, "issues": [], "confidence": 0.9},
+            plan=plan, profile={"injuries": injuries},
+        )
+        return review, decision
+
+    @pytest.mark.parametrize("text,expected", [
+        ("肩膀活动度不好", "limitation"),
+        ("脚踝活动度不好", "limitation"),
+        ("髋关节灵活性差，柔韧性不好", "limitation"),
+        ("肩袖撕裂", "structural"),
+        ("半月板撕裂，活动度受限", "structural"),  # 诊断词压制受限词
+        ("我肩膀疼", "structural"),                  # 只有症状，保持从严
+        ("腰椎间盘突出", "structural"),
+    ])
+    def test_nature_classification(self, text, expected):
+        assert classify_injury_nature(text) == expected
+
+    def test_limitation_no_longer_produces_blocking_conflicts(self):
+        """实测原例：这两条描述曾报出 5 条 danger 级冲突。"""
+        review = HITLReview()
+        plan = {"days": [
+            {"exercises": [{"name": "慢离心卧推"}, {"name": "上斜哑铃飞鸟"}, {"name": "坐姿推举"}]},
+            {"exercises": [{"name": "杠铃深蹲"}, {"name": "提踵"}]},
+        ]}
+        issues = review._check_conflicts(
+            plan, {"injuries": ["肩膀活动度不好", "脚踝活动度不好"]})
+        assert issues == [], f"活动度不好不应再产生阻断级冲突: {issues}"
+
+    def test_limitation_still_produces_actionable_cautions(self):
+        """不阻断 ≠ 不管。用户要的是"在注意这些的前提下继续生成"。"""
+        _review, decision = self._check(["肩膀活动度不好"], ["慢离心卧推"])
+        assert decision.needs_review is False
+        assert decision.cautions, "受限必须留下做法调整建议"
+        assert decision.cautions[0].startswith("[调整]")
+        assert "无痛范围" in decision.cautions[0]
+
+    @pytest.mark.parametrize("injury,exercise", [
+        ("肩袖撕裂", "慢离心卧推"),
+        ("腰椎间盘突出", "杠铃深蹲"),
+        ("脚踝扭伤", "杠铃深蹲"),
+    ])
+    def test_structural_injury_still_blocks(self, injury, exercise):
+        """放行受限，绝不能把真损伤一起放行。"""
+        _review, decision = self._check([injury], [exercise])
+        assert decision.needs_review is True, f"{injury} 必须仍然阻断"
+        assert decision.severity == "danger"
+        assert decision.suggestions
+
+    def test_mixed_injuries_block_but_keep_limitation_cautions(self):
+        """损伤与受限同时存在：以损伤为准阻断，受限的建议也得留着。"""
+        _review, decision = self._check(
+            ["脚踝活动度不好", "腰椎间盘突出"], ["杠铃深蹲"])
+        assert decision.needs_review is True
+        assert decision.cautions, "受限那部分仍要给出做法调整"
+
+
+class TestSemanticLayerRespectsLimitationNature:
+    """语义层不得把"活动度不好"读成疾病诊断。
+
+    实测：用户写「肩膀活动度不好」→ 与 shoulder-impingement 档案相似度 0.694
+    （danger）；「脚踝活动度不好」→ ankle-sprain 0.703。系统因此判了 danger，
+    在用户已经被规则引擎拦下的基础上补了第二刀——只修一层不够，两层都要改。
+
+    这里用桩固定语义匹配结果，避免测试真的去调 embedding 服务。
+    """
+
+    _MATCH = [{"profile_id": "shoulder-impingement", "similarity": 0.694,
+               "banned_exercises": ["推举", "卧推", "飞鸟"], "severity": "danger"}]
+
+    def _decide(self, monkeypatch, injuries, matches=None):
+        review = HITLReview()
+        monkeypatch.setattr(
+            review, "_match_semantic",
+            lambda text: [dict(m) for m in (matches or self._MATCH)])
+        return review.check(
+            {"is_safe": True, "issues": [], "confidence": 0.9},
+            plan={"days": []}, profile={"injuries": injuries},
+        )
+
+    def test_limitation_match_is_downgraded_to_caution(self, monkeypatch):
+        decision = self._decide(monkeypatch, ["肩膀活动度不好"])
+        assert decision.needs_review is False, "活动度不该被当成肩峰撞击来拦"
+        assert decision.cautions and decision.cautions[0].startswith("[调整]")
+
+    def test_structural_match_still_blocks(self, monkeypatch):
+        decision = self._decide(monkeypatch, ["肩袖撕裂"])
+        assert decision.needs_review is True
+        assert decision.severity == "danger"
+
+    def test_best_match_is_picked_by_similarity_not_table_order(self, monkeypatch):
+        """注释一直写"取相似度最高的匹配"，代码取的却是档案表顺序第一个。
+
+        两条档案同时命中时，扣不扣计划取决于档案表的排列顺序——这是隐式的，
+        任何一次档案重排都会悄悄改变安全行为。这里把口径钉在相似度上。
+        """
+        decision = self._decide(monkeypatch, ["肩袖撕裂"], matches=[
+            {"profile_id": "low-sim", "similarity": 0.70,
+             "banned_exercises": ["深蹲"], "severity": "warning"},
+            {"profile_id": "high-sim", "similarity": 0.95,
+             "banned_exercises": ["推举"], "severity": "danger"},
+        ])
+        assert "推举" in " ".join(decision.suggestions), "应取相似度最高的档案"
+
+
+class TestCautionsRideAlongWithoutGating:
+    """cautions 必须进 warnings 随计划交付，且**不参与任何闸门**。
+
+    这是本次修复的最后一道：判定层放行了，如果 finalize 又把它当问题清单拿去
+    算 hard_ok，计划照样交付不出去，等于没修。
+    """
+
+    # 形状必须过 TrainingPlanOutput：schema 不过时 schema_valid 为假，
+    # _delivery_allowed 本来就该是 False，那条断言会变成假阴性。
+    _PLAN = {
+        "plan_name": "一周全身训练", "goal": "增肌", "weeks": None,
+        "sessions_per_week": 3,
+        "days": [{"day": 1, "focus": "全身", "exercises": [
+            {"name": "慢离心卧推", "sets": 4, "reps": "8-12", "rest": "90秒"}]}],
+        "notes": "循序渐进",
+        "plan_id": "plan-caution-test", "user_id": 1,
+    }
+    _CAUTION = "[调整] 「肩膀活动度不好」不算禁忌，计划照常安排；建议降低活动幅度"
+
+    def _finalize(self, checks):
+        return finalize_result(dict(self._PLAN), checks, 0)
+
+    def test_cautions_are_delivered_as_warnings(self):
+        final = self._finalize([{"is_safe": True, "issues": [], "confidence": 0.9,
+                                 "review_cautions": [self._CAUTION]}])
+        assert final["cautions"] == [self._CAUTION]
+        assert any("[调整]" in w for w in final["warnings"]), "必须随计划交付给用户"
+
+    def test_cautions_do_not_block_delivery(self):
+        """关键断言：带 cautions 的计划必须照常交付。"""
+        final = self._finalize([{"is_safe": True, "issues": [], "confidence": 0.9,
+                                 "review_cautions": [self._CAUTION]}])
+        assert final["requires_review"] is False
+        assert final["_delivery_allowed"] is True
+
+    def test_structural_hold_is_unaffected(self):
+        """有真拦截时，cautions 不得把闸门顶开。"""
+        final = self._finalize([{"is_safe": False, "issues": [{"issue": "危险"}],
+                                 "confidence": 0.9,
+                                 "review_cautions": ["[调整] 仅供参考"]}])
+        assert final["requires_review"] is True
+        assert final["_delivery_allowed"] is False

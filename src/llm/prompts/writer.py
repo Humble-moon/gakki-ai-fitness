@@ -108,7 +108,27 @@ def build_writer_messages(retrieved_exercises: list, profile: dict, goal: str,
         f"训练日数量：{days} 天（必须恰好生成 {days} 个训练日，每个 day 从 1 到 {days}）",
     ]
     if injuries:
-        constraints.append(f"伤病限制：用户有以下伤病 {injuries}，避免涉及这些部位的动作")
+        # 损伤与受限的处置必须分开。
+        #
+        # 原来只有一句"避免涉及这些部位的动作"，对受限用户是错的：他写「肩膀活动度
+        # 不好」，要的恰恰是练肩，只是幅度小一点、变式稳一点；一句"避免"会让模型
+        # 直接把整个肩部从计划里删掉。而且生成侧一旦回避、判定侧再当风险拦一次，
+        # 就成了两头堵。
+        #
+        # 判定口径与 HITL 规则引擎共用 classify_injury_nature：生成侧放行、判定侧
+        # 又扣下，是最难查的一类问题，必须同源。
+        from src.hitl.review import classify_injury_nature
+        structural = [i for i in injuries if classify_injury_nature(i) != "limitation"]
+        limitations = [i for i in injuries if classify_injury_nature(i) == "limitation"]
+        if structural:
+            constraints.append(f"伤病限制：用户有以下伤病 {structural}，避免涉及这些部位的动作")
+        if limitations:
+            constraints.append(
+                f"身体条件：用户有以下功能性受限 {limitations}。这不是禁忌，"
+                "不要因此回避相关部位、也不要删掉动作——正常安排，只调做法："
+                "降低活动幅度、全程保持在无痛范围内，或换成更稳定的变式"
+                "（器械或支撑类），并在这些动作的说明里写清怎么控制。"
+            )
     if equipment:
         constraints.append(f"器械限制：只能用 {equipment}，不要推荐需要其他器械的动作")
     # 运动习惯：它此前只落进长期记忆，生成计划时一个字都没用上——用户填了
