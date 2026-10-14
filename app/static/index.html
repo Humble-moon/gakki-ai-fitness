@@ -1665,6 +1665,16 @@ body {
 .plan-draft .plan-day-column { opacity: .78; }
 .plan-draft .plan-actions { display: none; }
 
+/* 计划末尾的操作栏（重新生成）。
+   它是 .plan-result-grid 的**兄弟**而不是子元素——grid 内部靠 gap: 16px
+   拉开卡片间距，容器本身没有任何间距规则，于是按钮直接贴上了最后一行
+   卡片，看起来像被吞进了卡片里。这里补上同样的 16px，与卡片间距同源。 */
+.plan-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
 /* ── Plan Card (compact grid version) ── */
 .plan-card {
   background: var(--bg-card);
