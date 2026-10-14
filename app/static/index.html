@@ -132,10 +132,21 @@
   --chalk-dim: var(--text-secondary);
   --chalk-faint: var(--text-muted);
   /* 字体换成系统栈。原来的 Rajdhani（工业窄体）+ Syncopate（超宽大写）
-     + Share Tech Mono 是"硬核科技感"的来源，和苹果式浅色不搭；
-     顺带修掉 --font-logo 一直没定义的问题（.logo 之前实际在用继承字体渲染）。 */
-  --font-logo:    -apple-system, 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', sans-serif;
-  --font-heading: -apple-system, 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', sans-serif;
+     + Share Tech Mono 是"硬核科技感"的来源，和苹果式浅色不搭。
+
+     2026-10-14 统一回退顺序。此前 heading / logo 是
+     `-apple-system, 'SF Pro Display', 'Helvetica Neue', …`，body 是
+     `-apple-system, 'PingFang SC', …`；两者只差一个回退顺序，看着像没区别，
+     实测却不是：本机装着 'Helvetica Neue'，它在匹配中胜过了前面的
+     -apple-system，于是**标题与品牌字的英文和数字落在 Helvetica Neue，
+     正文落在系统字体 SF**——同一页里两种西文字形（中文反倒一致，都走 PingFang）。
+     实测同一串 `Plan Ag 123` 在 64px 下：改前标题 346.19px、正文 352.64px。
+     统一后三方都是 352.64px。
+
+     --font-logo 原本与 --font-heading 逐字相同（它是当年为修「--font-logo
+     未定义」而补的），已合并为一支；heading 与 body 保留为两个令牌，
+     因为它们是两种角色，日后若要给标题换字面，不该动正文。 */
+  --font-heading: -apple-system, 'PingFang SC', 'Noto Sans SC', 'Helvetica Neue', sans-serif;
   --font-body:    -apple-system, 'PingFang SC', 'Noto Sans SC', 'Helvetica Neue', sans-serif;
   /* 末尾必须挂中文字体。字体栈里只有等宽英文字体时，中文会掉进浏览器的
      兜底字体（macOS 上通常落到宋体一类衬线体），和全站的 PingFang 黑体
@@ -223,7 +234,7 @@ body {
 }
 
 .logo {
-  font-family: var(--font-logo);
+  font-family: var(--font-heading);
   font-size: 34px;
   font-weight: 700;
   letter-spacing: 0.5px;
