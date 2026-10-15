@@ -1345,8 +1345,10 @@ body {
 
 .feature-card .fc-accent {
   position: absolute;
-  top: 0; right: 0;
-  width: 40px; height: 40px;
+  top: 8px; right: 14px;
+  /* 不写 width/height：字宽是比例字体决定的，"01" 比 "02"/"03" 窄，
+     框住 40px 会让 "02"/"03" 溢出到卡片右边缘、被 overflow: hidden
+     竖着切掉半个数字。让框随文字自适应，再用 top/right 留出边距。 */
   /* 水印数字。0.06 是深色底上的值，白底上只剩 1.12:1 等于没有；
      0.34 又太抢——数字会盖过卡片标题，看着像排版坏了。
      0.18（约 1.42:1）才回到"质感而不是内容"的分寸。
@@ -2000,6 +2002,61 @@ body {
    所以用弱化的灰而不进 review-pending-row 那一档（那一档是加粗标签结构）。 */
 .review-pending-footnote {
   margin: 6px 0 0;
+  padding-left: 13px;
+  border-left: 2px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.7;
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+
+/* 急症停止面板：这一屏不给计划，只给处置。
+   与「计划已暂缓交付」的区别要一眼看得出：暂缓是"等人确认"，急症是
+   "现在就别练了"。所以左侧色条换成 danger，标题字号也大一档——
+   用户扫一眼就该知道这次不是流程问题，是身体信号问题。 */
+.emergency-stop-panel {
+  padding: 18px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-md);
+}
+.emergency-stop-panel h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
+}
+.emergency-stop-lead {
+  margin: 8px 0 12px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.85;
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+.emergency-stop-row {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.75;
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+/* 命中的症状词：列出来是为了让用户确认"系统说的就是我描述的那句"，
+   而不是一句笼统的"检测到风险"。它是引用而非警告，所以用中性底。 */
+.emergency-stop-signals {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+.emergency-stop-footnote {
+  margin: 10px 0 0;
   padding-left: 13px;
   border-left: 2px solid var(--border);
   color: var(--text-muted);
@@ -5095,6 +5152,14 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
+      // 急症：后端不给计划，这里也必须有话可说。
+      // 漏掉这一支的后果不是"少显示一块"——下面那行 `!== 'safe_delivered'`
+      // 会让整屏静默留白，用户只看到自己刚才填的东西消失了。
+      if (mode === 'plan' && data?.delivery_status === 'emergency_stopped') {
+        renderEmergencyStop(resultArea, data?.emergency);
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       if (mode === 'plan' && data?.delivery_status !== 'safe_delivered') return;
       renderPlanResult(resultArea, data);
       if (mode === 'plan') {
@@ -5211,6 +5276,44 @@ function renderReviewPending(container, review) {
     panel.dataset.reviewId = details.review_id;
     console.info('[计划待确认] 审核编号（仅供排查）:', details.review_id);
   }
+  container.appendChild(panel);
+}
+
+/* 急症落地屏：这一次不给计划。
+   后端在交付前拦下（delivery_status=emergency_stopped），载荷里 days 为空——
+   这里只负责把「为什么没有计划」和「现在该做什么」说清楚。
+   措辞沿用问答入口那套急症口径：不评估严重程度、不建议先观察、不给任何
+   训练动作或呼吸技巧。用户此刻最需要的是「停下来去医院」这一句。 */
+function renderEmergencyStop(container, emergency) {
+  if (!container) return;
+  container.replaceChildren();
+  const details = emergency || {};
+  const panel = el('section', 'emergency-stop-panel', '');
+  panel.setAttribute('aria-label', '已暂停生成训练计划');
+
+  panel.appendChild(el('h3', '', details.title || '先停下来，尽快就医'));
+  panel.appendChild(el('p', 'emergency-stop-lead',
+    details.message || '你描述的症状需要先由医生评估，在此之前不建议继续训练。'));
+
+  // 列出命中的词，让用户确认系统读懂的是哪一句；否则一句笼统的
+  // 「检测到风险」只会让人怀疑是不是哪里填错了。
+  const signals = Array.isArray(details.matched_signals) ? details.matched_signals : [];
+  if (signals.length) {
+    panel.appendChild(el('div', 'emergency-stop-signals',
+      `系统在你写的内容里读到：${signals.join('、')}`));
+  }
+
+  const row = el('div', 'emergency-stop-row', '');
+  row.appendChild(el('strong', '', '下一步：'));
+  appendText(row, details.next_step
+    || '先停止训练并尽快就医；医生确认可以运动之后，再回来生成计划。');
+  panel.appendChild(row);
+
+  panel.appendChild(el('p', 'emergency-stop-footnote',
+    '这次没有生成计划不是故障，也不用你再改一遍表单——'
+    + '在你描述的这类症状面前，任何训练安排都该先放一放。'
+    + '等医生确认可以运动后，回来重新生成就好。'));
+
   container.appendChild(panel);
 }
 

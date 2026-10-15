@@ -1499,3 +1499,49 @@ def test_tab_strip_wraps_instead_of_clipping():
     assert "display: grid" in body, "主导航退回 flex 会在中等宽度再次裁切标签"
     assert "auto-fit" in body, "没有 auto-fit 就无法按宽度自适应列数"
     assert "minmax(" in body, "缺少列宽下限，窄屏会挤成一列"
+
+
+def test_feature_card_accent_number_is_not_clipped():
+    """卡片右上角的水印数字必须完整可见，不能被卡片右边缘切掉。
+
+    实测（1024px 视口，动作分析页三张卡）：.fc-accent 原本写死
+    `width: 40px; height: 40px` 并 `right: 0`，而数字是比例字体——
+    "01" 的墨迹宽约 33px，装得下；"02"/"03" 约 37px，超出 40px 的框，
+    向右溢出到卡片外，被卡片自身的 overflow: hidden 竖着切掉半个字形
+    （实测 "02" 的墨迹右缘距卡片右边缘仅 0.5px）。
+
+    去掉固定宽高、让框随文字自适应，再用 top/right 留边距即可根治。
+    这里不查具体边距数值：字号或字体变了边距可以再调，但"框不能小于文字"
+    这条是硬约束。
+    """
+    start = HTML.index(".feature-card .fc-accent {")
+    body = HTML[start:HTML.index("}", start)]
+
+    # 用正则匹配属性名，避免命中注释里的 "width/height" 与 line-height
+    assert not re.search(r"(?<![\w-])width\s*:", body), \
+        "写死宽度会让较宽的数字溢出卡片、被 overflow: hidden 裁掉半个字形"
+    assert not re.search(r"(?<![\w-])height\s*:", body), \
+        "写死高度会把行盒压扁，数字顶部同样可能被裁"
+    assert re.search(r"(?<![\w-])right\s*:", body) and re.search(r"(?<![\w-])top\s*:", body), \
+        "改为自适应后必须用 top/right 定位，否则数字会贴到卡片左上角"
+
+
+def test_emergency_stop_state_has_a_visible_outlet():
+    """急症终态必须在前端有可见出口，不能落进静默分支。
+
+    后端的 ``emergency_stopped`` 不带 days。前端 onTerminal 里若不为它单独
+    分支，就会撞上下面的 ``!== 'safe_delivered'`` 直接 return——用户点了生成，
+    进度条走完，然后屏幕上什么都没有。这不是"少显示一块"，是让人以为坏了。
+    """
+    # 分支必须排在静默兜底之前，否则永远轮不到它
+    branch = HTML.index("data?.delivery_status === 'emergency_stopped'")
+    silent_fallback = HTML.index("data?.delivery_status !== 'safe_delivered'")
+    assert branch < silent_fallback, "急症分支被静默兜底挡在后面，等于没有"
+
+    body = _fn_body("renderEmergencyStop")
+    assert "replaceChildren" in body, "换屏前要清空，否则与上一次的结果叠在一起"
+    assert "next_step" in body, "只说症状不说下一步，用户不知道该做什么"
+    assert "matched_signals" in body, "要能回述命中的是用户哪句话，否则像误判"
+
+    # 面板类名必须有对应样式，否则只是一个没有色条的裸 div
+    assert ".emergency-stop-panel" in HTML

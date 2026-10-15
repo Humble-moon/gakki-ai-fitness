@@ -3,6 +3,7 @@
 Topology (the thesis's core diagram — export with ``graph.get_graph().draw_mermaid()``):
 
     START → ingest → check_cache
+    check_cache --emergency--> deliver → END    (急症:不给计划,直接处置)
     check_cache --hit--> deliver_cached → END
     check_cache --miss--> plan → retrieve → write → check
     check --clean--> finalize
@@ -51,7 +52,7 @@ def build_coach_graph(deps, checkpointer=None):
     g.add_edge("ingest", "check_cache")
     g.add_conditional_edges(
         "check_cache", routing.route_after_cache,
-        {"deliver_cached": "deliver_cached", "plan": "plan"})
+        {"deliver_cached": "deliver_cached", "plan": "plan", "deliver": "deliver"})
     g.add_edge("plan", "retrieve")
     g.add_edge("retrieve", "write")
     g.add_edge("write", "check")

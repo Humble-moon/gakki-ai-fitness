@@ -20,6 +20,8 @@ from src.core.plan_finalization import (
     build_review_pending_payload,
     check_with_goal_issue,
     create_review_artifact,
+    emergency_signals_in,
+    emergency_stop_payload,
     finalize_result,
     long_term_user_key,
     normalize_plan,
@@ -61,6 +63,16 @@ def ingest_node(deps, state: dict) -> dict:
     query = state.get("query") or f"为{profile.get('goal', '')}目标生成训练计划"
     expected_goal = validate_requested_goal(profile.get("goal"))
 
+    # 急症信号在这里一次定下来，供路由、交付与持久化三处共用。
+    # 放在 ingest（而不是各消费点各判一次）是因为它没有依赖、不需要 LLM，
+    # 而下游每一处漏判的代价都不一样大：路由漏了白等一分钟，交付漏了直接
+    # 发出训练计划，持久化漏了会把计划缓存起来供下次命中。
+    injuries = profile.get("injuries") or []
+    if isinstance(injuries, str):
+        injuries = [injuries]
+    emergency_signals = (emergency_signals_in(query)
+                         or emergency_signals_in(" ".join(map(str, injuries))))
+
     _emit("stage", "[分析] 正在分析你的情况...")
 
     conv_context = ""
@@ -91,6 +103,7 @@ def ingest_node(deps, state: dict) -> dict:
         "plan_context": plan_context,
         "training_context": training_context,
         "long_term_context": long_term_context,
+        "emergency_signals": emergency_signals,
         "rewrite_count": 0,
         "checks": [],
         "provider_degraded": False,
@@ -291,6 +304,30 @@ def deliver_node(deps, state: dict) -> dict:
     query = state.get("query", "")
     session_id = state.get("session_id")
     review_decision = state.get("review_decision")
+
+    # 急症信号优先于本节点其余所有分支——包括人工审核放行。
+    #
+    # 原先这里只认「生成的计划违不违规」：planner 检测到急症后会把 skill 覆盖成
+    # exercise_analysis，可那只是换了拆解方向，下游照常生成并交付一份完整的
+    # 训练计划。实测「训练时突然胸闷、头晕、眼前发黑，还能继续练吗」拿到了
+    # 4 天增肌计划，而同一句话在问答入口会被明确挡下——同一条安全口径在两条
+    # 路径上一处生效一处失效。症状可能指向心血管事件，此刻任何训练动作建议
+    # 都是有害的，因此这里直接给出不含训练内容的终态载荷。
+    #
+    # 判定本身在 ingest 阶段做过（路由据此已经跳过了检索与生成），这里再验
+    # 一次是**有意的重复**：这是数据流出的最后一道闸门，代价只是一次子串匹配，
+    # 而漏判的代价是发出训练计划。state 里没有该键时（例如测试直接调本节点）
+    # 就地补算。
+    if "emergency_signals" in state:
+        signals = state.get("emergency_signals") or []
+    else:
+        injuries = profile.get("injuries") or []
+        if isinstance(injuries, str):
+            injuries = [injuries]
+        signals = (emergency_signals_in(query)
+                   or emergency_signals_in(" ".join(map(str, injuries))))
+    if signals:
+        return {"final_payload": emergency_stop_payload(signals)}
 
     if review_decision == APPROVED:
         # Human approval delivers the plan but does not pollute the automated

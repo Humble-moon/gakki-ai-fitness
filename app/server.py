@@ -1606,10 +1606,11 @@ def generate_plan_v2(req: PlanRequest,
                      principal: Principal = Depends(get_current_principal)):
     """同步版：走 LangGraph 状态图生成训练计划。
 
-    返回三种情况之一：
+    返回四种情况之一：
     - 正常交付 → final_payload（delivery_status=safe_delivered）
     - 命中缓存 → final_payload（缓存计划）
     - 触发人工审核 → review_pending 载荷（含 thread_id，供后续 resolve）
+    - 命中急症信号 → emergency_stopped 载荷（不含训练内容）
     """
     profile = _profile_from_request(req)
     thread_id = graph_runtime.new_thread_id()

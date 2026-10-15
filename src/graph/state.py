@@ -34,6 +34,11 @@ class CoachState(TypedDict, total=False):
     training_context: str         # training execution history + confirmed adjustments
     long_term_context: str        # cross-session profile memory (goal/injuries/habits/equipment)
 
+    # 命中的急症信号词（空列表＝没有）。在 ingest 阶段就定下来，让路由据此跳过
+    # 检索与生成、直接给处置：症状可能指向心血管事件，此刻既不该生成训练内容，
+    # 也不该让用户在等满 60~90 秒之后才看到一份注定被丢弃的计划。
+    emergency_signals: list[str]
+
     # ---- Pipeline artifacts ----
     cache_hit: dict | None        # safe cached plan, or None on miss
     plan: dict                    # Planner output (skill, subtasks, skill_config)

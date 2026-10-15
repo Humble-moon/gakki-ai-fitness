@@ -9,7 +9,15 @@ from src.graph.state import MAX_REWRITES
 
 
 def route_after_cache(state: dict) -> str:
-    """Short-circuit to delivery on a safe cache hit, otherwise start planning."""
+    """Short-circuit to delivery on a safe cache hit, otherwise start planning.
+
+    排在缓存之前的是急症：命中急症信号时既不能交付缓存里的计划（那同样是
+    训练内容），也没有必要生成新的——直接进交付节点给出处置。这条分流是
+    **响应时间**上的关键一步：没有它，用户带着胸闷头晕填完表单，要等一次
+    完整的检索与生成（实测 60~90 秒）才能看到「请先就医」。
+    """
+    if state.get("emergency_signals"):
+        return "deliver"
     return "deliver_cached" if state.get("cache_hit") else "plan"
 
 

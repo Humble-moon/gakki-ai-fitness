@@ -180,3 +180,169 @@ class TestPlannerSafetyGate:
 
         for text in ["我腰椎间盘突出", "膝盖疼", "半月板损伤", "刚做完手术"]:
             assert any(kw in text for kw in PlannerAgent.SAFETY_OVERRIDE), text
+
+
+class TestEmergencyStopsPlanDelivery:
+    """急症信号必须阻止计划交付，而不只是改变拆解方向。
+
+    上面那组用例只验到「Planner 认得急症词、会把 skill 换成 exercise_analysis」。
+    可换 skill 只是换了拆解方向：下游照常检索、生成、检查，最后交付一份完整
+    训练计划。实测把「训练的时候突然胸闷、头晕、眼前发黑，还能继续练吗」发到
+    计划接口，拿到的是 **4 天增肌计划**（delivery_status=safe_delivered，
+    requires_review=False），而同一句话发到问答入口会被明确挡下并建议就医。
+    同一条安全口径，两条路径一处生效一处失效。
+
+    这一组钉住交付侧：命中急症就不给任何训练内容，也不进审核队列——
+    审核的语义是「确认之后可能放行」，而急症不是「等一等就能练」的情况。
+    """
+
+    EMERGENCY_QUERY = "我训练的时候突然胸闷、头晕、眼前发黑，还能继续练吗"
+
+    def _state(self, query="", injuries=None, result=None):
+        return {
+            "query": query,
+            "profile": {"goal": "增肌", "injuries": injuries or []},
+            "result": result or {
+                "days": [{"day": 1, "exercises": [{"name": "杠铃卧推"}]}],
+            },
+            "session_id": "emergency-session",
+            "athlete_key": "emergency-athlete",
+        }
+
+    def test_deliver_node_withholds_the_plan(self):
+        """急症 query 不得产出可执行计划。"""
+        from types import SimpleNamespace
+
+        from src.core.plan_finalization import EMERGENCY_STOP_STATUS
+        from src.graph.nodes import deliver_node
+
+        payload = deliver_node(
+            SimpleNamespace(), self._state(query=self.EMERGENCY_QUERY))["final_payload"]
+
+        assert payload["delivery_status"] == EMERGENCY_STOP_STATUS
+        assert payload["delivery_status"] != "safe_delivered"
+        assert payload["days"] == [], "急症终态不得携带任何训练内容"
+        assert payload["emergency"]["matched_signals"], "要能说清命中了哪句话"
+        assert payload["requires_review"] is False, "急症不是「等审核」的情形"
+
+    def test_injuries_field_also_stops_delivery(self):
+        """症状写在伤病史字段里同样要拦——只看 query 会漏掉一半入口。"""
+        from types import SimpleNamespace
+
+        from src.graph.nodes import deliver_node
+
+        payload = deliver_node(
+            SimpleNamespace(), self._state(injuries=["最近训练时胸闷心慌"]))["final_payload"]
+
+        assert payload["delivery_status"] == "emergency_stopped"
+        assert payload["days"] == []
+
+    def test_ordinary_injury_is_not_treated_as_emergency(self):
+        """伤病不得被误判为急症：那会把「换动作继续练」变成「一律不生成」。"""
+        from types import SimpleNamespace
+
+        from src.graph.nodes import deliver_node
+
+        payload = deliver_node(SimpleNamespace(), self._state(
+            query="深蹲的时候膝盖有点疼",
+            result={"requires_review": True, "days": []}))["final_payload"]
+
+        assert payload["delivery_status"] == "review_pending"
+
+    def test_persist_is_blocked_for_emergency(self):
+        """急症结果不得写入缓存与画像。
+
+        缓存会被后续相同请求命中、把计划捞回来，等于绕开这道拦截；画像记的是
+        训练偏好，一段急症描述不是偏好。用会抛异常的替身证明这条路径确实
+        一个存储都没碰。
+        """
+        from src.core.plan_finalization import persist_if_safe
+
+        class Untouchable:
+            def __getattr__(self, name):
+                raise AssertionError(f"急症路径不该触碰存储:{name}")
+
+        wrote = persist_if_safe(
+            Untouchable(), Untouchable(), Untouchable(),
+            {"goal": "增肌"},
+            self.EMERGENCY_QUERY,
+            {"_persistence_allowed": True, "_delivery_allowed": True},
+        )
+
+        assert wrote is False
+
+    def test_orchestrator_delivery_gate_prefers_emergency(self):
+        """命令式后端的交付判定走同一个函数，必须同样先看急症。"""
+        from src.core.plan_finalization import review_pending_result
+
+        class NoArtifact:
+            def create(self, *args, **kwargs):
+                raise AssertionError("急症不该创建审核工件")
+
+        payload = review_pending_result(
+            NoArtifact(), {"goal": "增肌", "injuries": []},
+            self.EMERGENCY_QUERY, {"days": [], "requires_review": True})
+
+        assert payload["delivery_status"] == "emergency_stopped"
+
+    def test_normal_query_is_unaffected(self):
+        """回归保护：正常请求仍按原路交付。"""
+        from types import SimpleNamespace
+
+        from src.graph.nodes import deliver_node
+
+        # 交付分支会调用持久化；这个结果的闸门标志都是假值，
+        # 所以三个存储只被引用、不会被真的写入。
+        deps = SimpleNamespace(cache=None, conversation=None, long_term=None)
+        payload = deliver_node(
+            deps, self._state(query="想练胸和背，每次 60 分钟"))["final_payload"]
+
+        assert payload["days"], "正常请求必须照常交付计划"
+        assert payload["delivery_status"] == "safe_delivered"
+
+    def test_router_sends_emergency_straight_to_delivery(self):
+        """急症不进检索与生成。
+
+        拦在交付层也能保证"不给计划"，但用户要等一次完整生成（实测 60~90 秒）
+        才看到「请先就医」——对一条就医提示来说，这个等待没有理由。
+        """
+        from src.graph.routing import route_after_cache
+
+        assert route_after_cache({"emergency_signals": ["胸闷"]}) == "deliver"
+        # 反向：普通请求的两条老路不能被这条分流吃掉
+        assert route_after_cache({"emergency_signals": [], "cache_hit": None}) == "plan"
+        assert route_after_cache(
+            {"emergency_signals": [], "cache_hit": {"days": []}}) == "deliver_cached"
+
+    def test_emergency_outranks_cache_hit(self):
+        """缓存命中不能把急症挡回去：缓存的同样是训练内容。"""
+        from src.graph.routing import route_after_cache
+
+        assert route_after_cache({
+            "emergency_signals": ["心悸"],
+            "cache_hit": {"days": [{"day": 1, "exercises": [{"name": "深蹲"}]}]},
+        }) == "deliver"
+
+    def test_ingest_records_the_signal_once_for_every_consumer(self):
+        """信号在 ingest 定下来，路由、交付、持久化看的是同一个判断。"""
+        from types import SimpleNamespace
+
+        from src.graph.nodes import ingest_node
+
+        deps = SimpleNamespace(
+            conversation=SimpleNamespace(
+                add_turn=lambda *a, **k: None,
+                build_context_for_prompt=lambda *a, **k: "",
+                get_plan_state=lambda *a, **k: "",
+            ),
+            long_term=SimpleNamespace(build_context_for_prompt=lambda *a, **k: ""),
+        )
+
+        hit = ingest_node(deps, {"query": self.EMERGENCY_QUERY,
+                                 "profile": {"goal": "增肌"}})
+        assert hit["emergency_signals"], "ingest 必须记下令中的信号"
+
+        # 反向：普通请求不能带上信号，否则每条计划都会被拦下
+        clean = ingest_node(deps, {"query": "想练胸和背",
+                                   "profile": {"goal": "增肌"}})
+        assert clean["emergency_signals"] == []

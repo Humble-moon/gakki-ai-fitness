@@ -529,6 +529,63 @@ def build_review_pending_payload(result: dict, artifact, thread_id: str | None =
     return payload
 
 
+#: 急症信号命中时的交付状态。**刻意不复用** review_pending：
+#: 审核路径的语义是"人工看过之后可能放行"，而急症是"此刻任何训练指导都有害"。
+#: 把它塞进审核队列会让用户以为等一等就有计划可练，而正确的下一步是先就医。
+EMERGENCY_STOP_STATUS = "emergency_stopped"
+
+#: 急症终态给用户的处置话术。与问答路径共用同一套安全口径
+#: （见 src/core/qa_safety.py 的 EMERGENCY_SYSTEM_MESSAGE）：
+#: 不评估严重程度、不建议观察、不给任何训练动作或呼吸技巧。
+EMERGENCY_STOP_MESSAGE = (
+    "你描述的症状（如胸闷、心慌、头晕、眼前发黑、呼吸困难）可能指向心血管、"
+    "神经或呼吸系统的急性问题，需要由医生评估，教练没有资格也没有能力判断它的性质。"
+    "在医生明确说没问题之前，不建议继续训练，也不建议用调整动作或呼吸节奏的方式"
+    "继续练。等待就医期间可以先就地休息，最好有人陪同。"
+)
+
+EMERGENCY_STOP_NEXT_STEP = (
+    "先停止训练并尽快就医（症状明显或持续时拨打急救电话）。"
+    "等医生确认可以运动之后，再回来生成计划。"
+)
+
+
+def emergency_signals_in(text: str) -> list[str]:
+    """返回文本中命中的急症信号词。
+
+    与问答路径共用同一张词表和同一套归一化（:func:`normalize_question`），
+    零宽字符之类的绕过手法对计划入口同样失效——两条路径各写一份匹配
+    正是本项目踩过的坑。
+    """
+    from src.core.qa_safety import EMERGENCY_KEYWORDS, normalize_question
+
+    normalized = normalize_question(text or "")
+    return [kw for kw in EMERGENCY_KEYWORDS if kw in normalized]
+
+
+def emergency_stop_payload(matched: list[str] | None = None) -> dict:
+    """急症信号命中时的终态载荷：**不含任何训练内容**。
+
+    ``days`` 显式给空列表而不是省略：前端与「我的计划」的收录接口都按
+    "存在 days 即视为可执行计划"处理，省略键会让下游各自猜一个默认值。
+    """
+    return {
+        "delivery_status": EMERGENCY_STOP_STATUS,
+        "requires_review": False,
+        "days": [],
+        "weeks": 0,
+        "sessions_per_week": 0,
+        "plan_name": "已暂停生成训练计划",
+        "goal": None,
+        "emergency": {
+            "title": "先停下来，尽快就医",
+            "message": EMERGENCY_STOP_MESSAGE,
+            "matched_signals": list(matched or []),
+            "next_step": EMERGENCY_STOP_NEXT_STEP,
+        },
+    }
+
+
 def review_pending_result(review_store, profile: dict, query: str, result: dict,
                           owner_key: str = "") -> dict:
     """交付判定：需要人工审核就扣下，否则交付。
@@ -543,6 +600,15 @@ def review_pending_result(review_store, profile: dict, query: str, result: dict,
         _persistence_allowed → 缓存闸门（继续要求 issues 清空，宁可少缓存）
     计划上带着的建议性提示会以 warnings 形式一并展示，不会静默丢掉。
     """
+    # 急症优先于伤病审核。症状可能写在 query（用户在计划说明里描述），
+    # 也可能写在 injuries 字段，两处都要看——只看一处就会漏一半入口。
+    injuries = profile.get("injuries") or []
+    if isinstance(injuries, str):
+        injuries = [injuries]
+    signals = emergency_signals_in(query) or emergency_signals_in(" ".join(map(str, injuries)))
+    if signals:
+        return emergency_stop_payload(signals)
+
     if result.get("requires_review"):
         artifact = create_review_artifact(review_store, profile, query, result,
                                           owner_key=owner_key)
@@ -622,6 +688,17 @@ def persist_if_safe(cache, conversation, long_term, profile: dict, query: str,
     """
     if not isinstance(result, dict):
         return False
+    # 急症信号：这里的"结果"不该被记住。
+    # 缓存会被后续相同请求命中并把计划捞回来，等于绕开急症拦截；而画像与
+    # 长期记忆记的是训练偏好，一段急症描述不是偏好，写进去只会污染后续计划。
+    # 判定放在闸门之前：即便上游给了一个 _persistence_allowed 为真的结果，
+    # 急症仍然一票否决。
+    injuries = profile.get("injuries") or []
+    if isinstance(injuries, str):
+        injuries = [injuries]
+    if emergency_signals_in(query) or emergency_signals_in(" ".join(map(str, injuries))):
+        return False
+
     cache_ok = result.get("_persistence_allowed") is True
     delivery_ok = result.get("_delivery_allowed") is True
     if not (cache_ok or delivery_ok):
