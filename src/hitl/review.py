@@ -472,7 +472,18 @@ class HITLReview:
                 injury_text += " " + " ".join(inj)
             elif isinstance(inj, str):
                 injury_text += " " + inj
-        semantic_matches = self._match_semantic(injury_text)
+        try:
+            semantic_matches = self._match_semantic(injury_text)
+        except Exception as exc:  # noqa: BLE001 - 检索层故障不该带崩整条生成
+            # 语义层是**增强**：它靠 embedding 服务，而那次调用要出网。
+            # 服务抖动、额度用尽、离线环境下异常会一路上抛，最终让整份计划
+            # 生成失败——用户填的东西全白填，却拿不到任何结果。
+            # 退回到关键词规则层即可：上面 1a 已经跑过，拦截能力只是少一层
+            # 口语化表达的覆盖，不是完全没有检查。问答路径早有同样的保护
+            #（见 src/core/qa_safety.py 的 detect_safety_concern），这里补齐。
+            logger.warning(f"语义伤病匹配不可用，本次只用关键词规则: {exc}")
+            semantic_matches = []
+
         if semantic_matches:
             # 取**相似度最高**的匹配。这里此前写的是 semantic_matches[0]，
             # 取到的是伤病档案表里的顺序第一个，与注释"取相似度最高的匹配"

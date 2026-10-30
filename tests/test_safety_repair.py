@@ -28,9 +28,16 @@ class _FakeLLM:
         return dict(self.payload)
 
 
-def _checker(payload=None):
+def _checker(payload=None, semantic=None):
+    """构造一个不联网的检查器。
+
+    语义层必须显式关掉：它要调 embedding 服务。开发机上有 .env 所以真连，
+    CI 没有密钥——同一个测试在两边行为不同，本地绿、CI 红。这类"本地能过"
+    的假安全感比测试本身更危险。``semantic`` 可传入桩结果用于验证语义层。
+    """
     checker = FactCheckerAgent.__new__(FactCheckerAgent)
     checker.hitl = HITLReview()
+    checker.hitl._match_semantic = lambda text: list(semantic or [])
     checker.llm = _FakeLLM(payload)
     return checker
 
@@ -120,6 +127,42 @@ def test_conflict_is_repaired_by_rewrite_then_delivered():
     assert payload["delivery_status"] == "safe_delivered"
     names = [ex["name"] for day in payload["days"] for ex in day["exercises"]]
     assert "杠铃硬拉" not in names, "冲突动作被留在了交付的计划里"
+
+
+def test_semantic_layer_outage_does_not_break_the_check():
+    """embedding 服务不可用时，检查必须退回关键词层，而不是抛异常。
+
+    这条来自一次 CI 失败：语义层要出网，开发机有 .env 所以真连、测试照样
+    是绿的；CI 没有密钥，2 条用例直接 APIConnectionError。真正的问题不是
+    测试红，而是**线上 embedding 一抖动，整份计划生成就会崩**——用户填的
+    东西全白填却拿不到任何结果。
+
+    关键词层已经先跑过了，退回它即可：拦截能力少一层口语化覆盖，但不是
+    完全没有检查。
+    """
+    checker = _checker()
+    checker.hitl._match_semantic = lambda text: (_ for _ in ()).throw(
+        ConnectionError("embedding service down"))
+
+    result = checker.check(_plan("哑铃卧推", "绳索夹胸"),
+                           {"goal": "增肌", "injuries": ["腰椎间盘突出"]})
+
+    # 没崩，且仍然给出了一份检查结论
+    assert result["is_safe"] is True
+    assert result["conflict_exercises"] == []
+
+
+def test_semantic_layer_outage_still_lets_rule_engine_block():
+    """语义层挂了，关键词层的拦截不能跟着失效。"""
+    checker = _checker()
+    checker.hitl._match_semantic = lambda text: (_ for _ in ()).throw(
+        ConnectionError("embedding service down"))
+
+    result = checker.check(_plan("杠铃硬拉"), {"goal": "增肌",
+                                              "injuries": ["腰椎间盘突出"]})
+
+    assert result["conflict_exercises"] == ["杠铃硬拉"], "关键词层被语义层的故障带崩了"
+    assert result["is_safe"] is False
 
 
 def test_prune_removes_only_the_conflicting_exercise():
