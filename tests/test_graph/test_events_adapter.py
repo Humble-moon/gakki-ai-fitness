@@ -35,7 +35,8 @@ def test_happy_path_event_sequence_ends_with_done():
     assert final_payload["delivery_status"] == "safe_delivered"
 
 
-def test_interrupt_surfaces_review_payload_as_done():
+def test_interrupt_surfaces_review_payload_as_done(manual_review):
+    """manual 模式下 interrupt 仍以 done 事件把审核载荷送出去。"""
     runtime = make_runtime(checks=[_needs_review_check()])
     events = run_events(runtime)
     final_event, final_payload = events[-1]
@@ -88,7 +89,10 @@ def test_cache_hit_emits_cache_hit_then_done():
     names = [event for event, _ in events]
     assert "cache_hit" in names
     assert names[-1] == "done"
-    assert events[-1][1] == cached
+    payload = events[-1][1]
+    assert payload["plan_id"] == cached["plan_id"]
+    assert payload["delivery_status"] == "safe_delivered", (
+        "缓存命中也必须带交付状态，否则前端不渲染这份计划")
 
 
 # ===========================================================================

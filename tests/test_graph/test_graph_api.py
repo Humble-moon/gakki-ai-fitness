@@ -54,7 +54,7 @@ async def test_v2_plan_goal_mismatch_returns_422(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_v2_plan_interrupt_returns_review_payload(monkeypatch):
+async def test_v2_plan_interrupt_returns_review_payload(monkeypatch, manual_review):
     server = _patch(monkeypatch, make_runtime(checks=[_needs_review_check()]))
     async with _client(server) as client:
         resp = await client.post("/api/v2/plan", json={"athlete_key": "v2-guest"})
@@ -80,7 +80,7 @@ async def test_v2_plan_stream_ends_with_done(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_v2_resolve_approves_and_delivers(monkeypatch):
+async def test_v2_resolve_approves_and_delivers(monkeypatch, manual_review):
     runtime = make_runtime(checks=[_needs_review_check()])
     server = _patch(monkeypatch, runtime)
     async with _client(server) as client:
@@ -100,7 +100,7 @@ async def test_v2_resolve_approves_and_delivers(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_v2_resolve_rejects_and_records(monkeypatch):
+async def test_v2_resolve_rejects_and_records(monkeypatch, manual_review):
     runtime = make_runtime(checks=[_needs_review_check()])
     server = _patch(monkeypatch, runtime)
     async with _client(server) as client:
@@ -114,7 +114,7 @@ async def test_v2_resolve_rejects_and_records(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_v2_double_resolve_is_conflict(monkeypatch):
+async def test_v2_double_resolve_is_conflict(monkeypatch, manual_review):
     runtime = make_runtime(checks=[_needs_review_check()])
     server = _patch(monkeypatch, runtime)
     async with _client(server) as client:
@@ -140,7 +140,7 @@ async def test_v2_resolve_unknown_review_is_404(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_v2_get_review_shows_artifact_and_resolution(monkeypatch):
+async def test_v2_get_review_shows_artifact_and_resolution(monkeypatch, manual_review):
     runtime = make_runtime(checks=[_needs_review_check()])
     server = _patch(monkeypatch, runtime)
     async with _client(server) as client:

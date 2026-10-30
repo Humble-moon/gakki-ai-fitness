@@ -72,7 +72,12 @@ def test_safe_result_persists_regular_cache_and_long_term_memory():
     assert [name for name, _, _ in orch.long_term.calls] == ["save_preference"] * 3
 
 
-def test_review_required_result_creates_pending_artifact_and_is_not_persisted():
+def test_review_required_result_creates_pending_artifact_and_is_not_persisted(manual_review):
+    """manual 模式仍能创建审核工件——这是开发期核对规则误报的通道。
+
+    默认的 auto 模式不再送审（见 test_unsafe_plan_is_refused_without_waiting_for_a_reviewer），
+    这里专门验证备用通道没有被改坏。
+    """
     orch = make_orch()
     check = safe_check(
         requires_human_review=True,

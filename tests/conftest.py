@@ -66,6 +66,20 @@ del _var
 import pytest  # noqa: E402
 
 
+@pytest.fixture
+def manual_review(monkeypatch):
+    """把审核模式切回 manual（送审 → 等人放行）。
+
+    默认模式是 auto：安全类问题就地拒绝，不产生"等待审核"状态——这个项目
+    没有审核人这个角色，扣下等人放行只会让用户永远拿不到计划。
+
+    manual 仍然保留，用于开发期核对规则引擎有没有误报。用到这个 fixture
+    的用例验证的正是那条备用通道：它必须还能跑通，但不参与默认流程。
+    """
+    monkeypatch.setattr("src.core.plan_finalization.MANUAL_REVIEW_ENABLED", True)
+    monkeypatch.setattr("src.graph.routing.MANUAL_REVIEW_ENABLED", True)
+
+
 @pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     """清空 RateLimitMiddleware 的滑动窗口。

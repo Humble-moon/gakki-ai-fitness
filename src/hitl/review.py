@@ -245,8 +245,7 @@ CRITICAL_INJURY_KEYWORDS = [
 # 但活动度差**不是禁忌**，它恰恰是训练要改善的东西。正确处置是降幅度、换更稳的
 # 变式、提示无痛范围——系统自己算出的文案写的就是"建议限制幅度、保持肘部微屈
 # 并在无痛范围内进行，或改为绳索夹胸/器械推胸"。处置内容完全正确，只是被错误地
-# 升级成了阻断理由。而本项目的 HITL 没有"审核人"角色（见 review_pending_result
-# 的说明），扣下即死锁：用户永远拿不到计划，也没人能放行。
+# 升级成了阻断理由。
 #
 # 分流口径（默认从严，拦截能力不减弱）：
 #   命中结构性诊断词            → structural，维持 danger 阻断
@@ -357,6 +356,24 @@ class ReviewDecision:
     severity: str
     suggestions: list
     cautions: list = field(default_factory=list)
+    #: 能定位到**计划里具体动作**的冲突，形如
+    #: ``[{"injury": "腰椎间盘突出", "exercise": "硬拉", "keywords": ["腰"]}]``。
+    #:
+    #: 单独留一份结构化数据，是为了让上游能把"哪一个动作不能做"告诉重写环节，
+    #: 从而替换而不是整份扣下。字符串 issue 里虽然也有这些名字，但从文本反解
+    #: 出来太脆——名字里带「（扶支撑）」这类后缀时就会漏。
+    conflicts: list = field(default_factory=list)
+
+    @property
+    def conflict_exercises(self) -> list:
+        """去重后的冲突动作名，保持首次出现的顺序。"""
+        seen, names = set(), []
+        for item in self.conflicts or []:
+            name = item.get("exercise") if isinstance(item, dict) else None
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+        return names
 
 
 class HITLReview:
@@ -430,8 +447,10 @@ class HITLReview:
         # 命中后按伤病性质分流：结构性损伤扣下计划，功能性受限只带调整建议。
         rule_issues = []
         rule_cautions = []
+        rule_conflicts = []
         if plan and profile:
-            rule_issues, rule_cautions = self._collect_conflicts(plan, profile)
+            rule_issues, rule_cautions, rule_conflicts = self._collect_conflicts(
+                plan, profile)
 
         if rule_issues:
             return ReviewDecision(
@@ -440,6 +459,7 @@ class HITLReview:
                 severity="danger",
                 suggestions=rule_issues,
                 cautions=rule_cautions,
+                conflicts=rule_conflicts,
             )
 
         # === 阶段 1b：语义相似度匹配 ===
@@ -477,22 +497,50 @@ class HITLReview:
                     scope="",
                 ))
             else:
-                suggestions = [
-                    f"[语义匹配] 你的描述与「{injury_profile_label(best['profile_id'])}」"
-                    f"的常见症状相似（相似度 {best['similarity']}，级别 {best['severity']}）",
-                    f"建议禁止动作: {', '.join(best['banned_exercises'][:5])}",
+                label = injury_profile_label(best["profile_id"])
+                banned = list(best.get("banned_exercises") or [])
+                # 档案相似不等于计划有问题。这一步必须落到"计划里到底有没有
+                # 那个禁忌动作"上——只看相似度的话，任何填了腰椎间盘突出的
+                # 用户都会被拦下，哪怕计划里全是卧推和划船。
+                plan_names = [
+                    ex.get("name", ex.get("exercise", ""))
+                    for day in (plan or {}).get("days", [])
+                    for ex in day.get("exercises", [])
                 ]
-                logger.info(
-                    f"HITL semantic match: {best['profile_id']} "
-                    f"(sim={best['similarity']}, severity={best['severity']})"
-                )
-                return ReviewDecision(
-                    needs_review=True,
-                    reason="你的描述与已知的伤病情况相符，需要专业人员确认",
-                    severity=best["severity"],
-                    suggestions=suggestions,
-                    cautions=rule_cautions,
-                )
+                hit = [n for n in plan_names if n and any(b in n for b in banned)]
+
+                if not hit:
+                    # 描述像某种伤病，但这份计划并没有踩到它的禁忌动作。
+                    # 降级为提示：该提醒的仍然提醒，但不阻断交付。
+                    rule_cautions.append(
+                        f"[调整] 你的描述与「{label}」的常见症状相近；"
+                        f"本次计划未包含该情况的常见禁忌动作"
+                        f"（{', '.join(banned[:3])}）。训练时若出现不适，"
+                        f"立即减量并咨询医生。"
+                    )
+                    logger.info(
+                        f"HITL semantic match without conflict: {best['profile_id']} "
+                        f"(sim={best['similarity']}) — downgraded to caution"
+                    )
+                else:
+                    suggestions = [
+                        f"[语义匹配] 你的描述与「{label}」的常见症状相似"
+                        f"（相似度 {best['similarity']}，级别 {best['severity']}）",
+                        f"计划中的 {', '.join(hit[:5])} 属于该情况的禁忌动作",
+                    ]
+                    logger.info(
+                        f"HITL semantic conflict: {best['profile_id']} "
+                        f"(sim={best['similarity']}, hits={hit})"
+                    )
+                    return ReviewDecision(
+                        needs_review=True,
+                        reason=f"计划中的动作与「{label}」冲突",
+                        severity=best["severity"],
+                        suggestions=suggestions,
+                        cautions=rule_cautions,
+                        conflicts=[{"injury": label, "exercise": name, "keywords": []}
+                                   for name in hit],
+                    )
 
         # === 阶段 2：LLM 结果复审 ===
         confidence = fact_check_result.get("confidence", 0)
@@ -515,8 +563,6 @@ class HITLReview:
         # 这里曾经是 needs_review=True，后果是**所有计划都被扣下**：LLM 检查器
         # 几乎总给出若干条建议性提示（"新手注意恢复""下肢训练量接近上限"），
         # 极少返回空 issues，于是连无伤病、无冲突的健康用户也一律进审核队列。
-        # 而本项目的 HITL 只实现了机制、没有定义"审核人"这个角色，
-        # 于是形成死锁——用户永远拿不到计划，也没人来审核。
         #
         # 这与交付闸门在 finalize_result 里的判据也是对齐的：那里决定
         # requires_review 的是 is_safe，issues 只作为 warnings 展示。
@@ -546,10 +592,10 @@ class HITLReview:
         保留这个签名是因为它同时是"计划是否会被扣下"的既有判据，
         语义应当保持"这里非空 = 危险"。
         """
-        danger, _cautions = self._collect_conflicts(plan, profile)
+        danger, _cautions, _conflicts = self._collect_conflicts(plan, profile)
         return danger
 
-    def _collect_conflicts(self, plan: dict, profile: dict) -> tuple[list, list]:
+    def _collect_conflicts(self, plan: dict, profile: dict) -> tuple[list, list, list]:
         """确定性规则：检查伤病与训练动作的冲突，并按伤病**性质**分流。
 
         遍历 profile["injuries"] 和 plan["days"][*]["exercises"][*]["name"]，
@@ -560,19 +606,21 @@ class HITLReview:
         INJURY_EXERCISE_CONFLICTS 的键是**部位词**，而部位词不是伤病。
         实测事故——用户伤病史写「肩膀活动度不好」「脚踝活动度不好」，
         「肩」「踝」两个字命中禁忌表，正在生成的计划被判 danger 并扣下；
-        而本项目的 HITL 没有"审核人"角色，扣下即死锁，用户永远拿不到计划。
-        更讽刺的是系统自己算出的处置写着"建议限制幅度…或改为绳索夹胸"，
-        内容完全正确，只是被错误地升级成了阻断理由。
+        而系统自己算出的处置写着"建议限制幅度…或改为绳索夹胸"，内容完全
+        正确，只是被错误地升级成了阻断理由。
 
-        返回 ``(danger, cautions)``：
-            danger   — 结构性损伤与动作的硬冲突，阻断交付。
-            cautions — 功能性受限与动作的软冲突，**不阻断**，随计划交付。
+        返回 ``(danger, cautions, conflicts)``：
+            danger    — 结构性损伤与动作的硬冲突，需要处置。
+            cautions  — 功能性受限与动作的软冲突，**不阻断**，随计划交付。
+            conflicts — 结构化冲突明细 ``[{"injury", "exercise", "keywords"}]``，
+                        上游据此把冲突动作定点替换掉；没有可定位动作的
+                        （如查询本身问到危险动作）不在其中。
         """
         injuries = profile.get("injuries", [])
         if isinstance(injuries, str):
             injuries = [injuries]
         if not injuries:
-            return [], []
+            return [], [], []
 
         # 收集所有训练动作名
         exercise_names = []
@@ -599,6 +647,8 @@ class HITLReview:
         # 命中部位的动辄五六个，逐个报会把提示区刷成一屏噪声。
         limitation_exercises: dict[str, list] = {}
         limitation_queries: dict[str, list] = {}
+        #: 每个冲突动作所触发的禁用词集合，供重写指令明确指出"避开哪些词"。
+        banned_by_exercise: dict[str, set] = {}
 
         for injury in injuries:
             injury_lower = injury.lower() if isinstance(injury, str) else str(injury)
@@ -620,6 +670,12 @@ class HITLReview:
                             keywords = exercise_conflicts.setdefault((injury, ex_name), [])
                             if keyword not in keywords:
                                 keywords.append(keyword)
+                            # 记住这次命中的禁用词。重写模型必须知道是哪些**词**
+                            # 要避开，只给"换个安全的动作"它会换成同类变体——
+                            # 实测三轮：高脚杯深蹲→箱式深蹲、单臂划船→坐姿绳索
+                            # 划船、阿诺德推举→坐姿靠背推举，字符串匹配照样命中。
+                            banned_by_exercise.setdefault(ex_name, set()).update(
+                                forbidden_exercises)
 
                 # 2. 也检查 query 文本中是否提到了禁止动作
                 # 例如用户问"跟腱炎怎么练小腿"，query 中提到"小腿"→推测为提踵类动作→触发冲突
@@ -635,15 +691,22 @@ class HITLReview:
                                 keywords.append(keyword)
 
         issues = []
+        # 能定位到计划里具体动作的冲突，供上游定点替换。query_conflicts 不在
+        # 其中：它说的是"用户问到了危险动作"，没有对应的计划动作可删。
+        conflicts: list[dict] = []
         for (injury, ex_name), keywords in exercise_conflicts.items():
+            banned = sorted(banned_by_exercise.get(ex_name) or ())
             issues.append(
                 f"[规则引擎] 伤病「{injury}」与动作「{ex_name}」"
-                f"存在冲突（触发词: {'/'.join(keywords)}），建议人工审核"
+                f"存在冲突（触发词: {'/'.join(keywords)}）"
+                f"；替代动作的名称里不得含: {'/'.join(banned)}"
             )
+            conflicts.append({"injury": injury, "exercise": ex_name,
+                              "keywords": list(keywords), "forbidden": banned})
         for (injury, forbidden), keywords in query_conflicts.items():
             issues.append(
                 f"[规则引擎] 用户查询含伤病「{injury}」，"
-                f"且提到高风险动作「{forbidden}」（触发词: {'/'.join(keywords)}），建议人工审核"
+                f"且提到高风险动作「{forbidden}」（触发词: {'/'.join(keywords)}）"
             )
 
         # 检查 query_text 中是否包含高危伤病关键词
@@ -653,15 +716,17 @@ class HITLReview:
                 for ex_name in exercise_names:
                     issue_text = (
                         f"[规则引擎] 用户描述含高危关键词「{keyword}」，"
-                        f"计划中的「{ex_name}」需人工确认安全性"
+                        f"计划中的「{ex_name}」需确认安全性"
                     )
                     if issue_text not in issues:
                         issues.append(issue_text)
+                    conflicts.append({"injury": f"高危症状「{keyword}」",
+                                      "exercise": ex_name, "keywords": [keyword]})
                 if not exercise_names:
                     # 没有具体动作名也要报（高危关键词本身就值得关注）
                     issues.append(
                         f"[规则引擎] 用户描述含高危关键词「{keyword}」，"
-                        f"请人工审核训练方案安全性"
+                        f"需确认训练方案安全性"
                     )
                 break  # 只报一次高危
 
@@ -673,4 +738,4 @@ class HITLReview:
             cautions.append(build_limitation_caution(injury, names, scope="你提到的"))
 
         # 去重
-        return list(dict.fromkeys(issues)), list(dict.fromkeys(cautions))
+        return list(dict.fromkeys(issues)), list(dict.fromkeys(cautions)), conflicts

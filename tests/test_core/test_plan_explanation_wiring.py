@@ -149,11 +149,12 @@ def test_unresolved_problem_in_final_round_still_blocks_delivery():
     orch = _orchestrator(unsafe)
     result = orch.generate_plan(_profile(), "增肌")
 
-    # 走审核路径返回的是审核载荷，计划本身被扣下不返回
-    assert result["delivery_status"] == "review_pending"
-    assert result["requires_review"] is True
-    assert "review" in result
-    assert "未解决的问题" in result["review"]["reason"] or result["review"]["issues"]
+    # 返回的是拒绝载荷，计划本身被扣下不返回。
+    # 这里曾经断言 review_pending——那意味着用户要等一个本项目并不存在的
+    # 审核人。拦截能力不变，变的是终态：直接说清为什么没给计划。
+    assert result["delivery_status"] == "safety_blocked"
+    assert result["days"] == []
+    assert result["safety"]["next_step"]
 
 
 def test_clean_first_draft_is_delivered_normally():

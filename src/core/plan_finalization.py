@@ -15,6 +15,7 @@ full ``Orchestrator``.
 import re
 
 from src.agents.output_validation import OutputValidationError, validate_training_plan
+from src.config import MANUAL_REVIEW_ENABLED
 from src.core.nutrition import calc_calorie_target
 from src.core.goal_contract import (
     plan_goal_issue,
@@ -365,8 +366,7 @@ def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
     # **真实存在、只是本库未收录**的动作。
     #
     # 更根本的原因是：LLM 生成的计划本来就不会严格只用库内动作名，
-    # 强制送审等于 100% 的计划都交付不出去（而本项目的 HITL 又没有
-    # 定义"审核人"角色，形成死锁）。
+    # 把它们当阻断理由等于 100% 的计划都交付不出去。
     #
     # 定位修正：库外动作是"值得让用户知道"，不是"可能有害"。真正的安全
     # 拦截保持不变——伤病冲突、danger 级建议、低置信度仍然阻断。
@@ -381,8 +381,8 @@ def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
     # 它和上面那些 warning 一样只是提示，区别在于来源不是 LLM 检查器，而是
     # HITL 的确定性规则/语义层。之所以要在这里明确声明"不参与闸门"：
     # 下面 hard_ok 只看 schema_valid / is_safe / requires_review / confidence，
-    # 一旦把 cautions 接进那几个判据，"活动度不好"就会重新变回扣下计划的理由，
-    # 死锁照旧——而这正是本次要修的问题。
+    # 一旦把 cautions 接进那几个判据，"活动度不好"就会重新变回拒绝交付的理由，
+    # 而这正是本次要修的问题。
     cautions = [
         str(c) for c in (final.get("review_cautions") or result.get("review_cautions") or [])
         if str(c).strip()
@@ -404,15 +404,44 @@ def finalize_result(result: dict, checks: list[dict], rewrite_count: int,
                    "confidence": confidence if confidence_valid else 0,
                    "rewrite_count": rewrite_count})
     goal_matches = expected_goal is None or plan_goal_matches(result, expected_goal)
+    degraded = bool(provider_degraded or result.get("_degraded", False))
     hard_ok = bool(schema_valid and is_safe and not requires_review
-                   and confidence_valid and goal_matches
-                   and not provider_degraded and not result.get("_degraded", False))
+                   and confidence_valid and goal_matches and not degraded)
     # 缓存闸门：在"能交付"之上再要求问题清单干净。缓存是"同一份身体数据命中同一份
     # 计划"的去重产物，宁可少命中也不缓存带瑕疵的版本——这道额外要求是合理的。
     result["_persistence_allowed"] = bool(hard_ok and issues_empty)
     # 交付闸门：只要结果可以安全交付即可。它与缓存闸门只差 issues_empty 一项，
     # 而那一项衡量的是**计划的完成度**，不是**用户是谁**。
     result["_delivery_allowed"] = hard_ok
+
+    # 交付被拒的非安全原因。安全类问题（is_safe / requires_human_review）走
+    # 人工审核，其余的（结构、置信度、目标、降级）不该送审——审核员无从补齐
+    # 一份缺字段的计划。这里把原因提前记下来，让终态能给用户说出具体哪一项没过。
+    # 安全类阻断与"这次没生成好"要分开：前者要告诉用户具体哪些动作不能做、
+    # 该找谁确认；后者只是模型这一次没给合格输出，重试即可。混成一句
+    # "生成失败"会让一个真受伤病史的人以为产品坏了，而不是"这个动作我不该做"。
+    safety_block = None
+    if is_safe is False or requires_review:
+        safety_block = {
+            # 冲突明细在**检查结果**里（FactChecker 的产出），不在计划本身。
+            # 从 result 取会永远是空的，拒绝文案就退化成一句笼统的
+            # "发现 N 处冲突"，说不出是哪个动作。
+            "conflicts": list(final.get("review_conflicts") or []),
+            "reason": final.get("review_reason") or "",
+            "severity": final.get("review_severity") or "",
+        }
+    result["_safety_block"] = safety_block
+
+    block_reasons: list[str] = []
+    if not schema_valid:
+        block_reasons.append("计划结构不完整")
+    if not confidence_valid:
+        block_reasons.append("缺少置信度信息")
+    if not goal_matches:
+        block_reasons.append("计划目标与你的目标不一致")
+    if degraded:
+        block_reasons.append("生成服务降级")
+    result["_delivery_block_reasons"] = block_reasons
     return result
 
 
@@ -563,6 +592,24 @@ def emergency_signals_in(text: str) -> list[str]:
     return [kw for kw in EMERGENCY_KEYWORDS if kw in normalized]
 
 
+def emergency_signals_for(profile: dict | None, query: str | None) -> list[str]:
+    """一次计划请求里的急症信号：query 与伤病史两处都要看。
+
+    症状可能写在计划说明里（"训练时突然胸闷、头晕"），也可能写在档案的伤病
+    字段。只看一处就会漏掉一半入口。
+
+    这个函数是计划侧**唯一**的取信号入口。状态图交付节点、命令式编排的缓存
+    快速路径、兜底交付都必须走它——各写一份就会出现"一个入口拦、另一个入口
+    放行"，而这个项目已经在问答与计划两条路径之间踩过一次同样的坑。
+    """
+    profile = profile or {}
+    injuries = profile.get("injuries") or []
+    if isinstance(injuries, str):
+        injuries = [injuries]
+    return (emergency_signals_in(query or "")
+            or emergency_signals_in(" ".join(map(str, injuries))))
+
+
 def emergency_stop_payload(matched: list[str] | None = None) -> dict:
     """急症信号命中时的终态载荷：**不含任何训练内容**。
 
@@ -586,6 +633,170 @@ def emergency_stop_payload(matched: list[str] | None = None) -> dict:
     }
 
 
+GENERATION_FAILED_STATUS = "generation_failed"
+
+
+def generation_failed_payload(result: dict | None = None) -> dict:
+    """交付闸门拒绝、但又不是安全问题的终态载荷。
+
+    与 ``emergency_stop_payload`` 同一套理由：**不含任何训练内容**。结构校验
+    没过、置信度缺失、目标对不上或生成过程降级时，``days`` 即使拼出来也不
+    可信，放进去只会让下游（自动收录「我的计划」、训练日志预填）把它当成
+    一份可以照着练的计划。
+
+    为什么不转人工审核：审核员面对一份缺字段的计划，除了驳回也做不了别的，
+    用户还得等一轮。这类问题是"这一次没生成好"，直接让用户重试最快。
+    """
+    result = result or {}
+    reasons = [str(r) for r in (result.get("_delivery_block_reasons") or []) if str(r).strip()]
+    payload = {
+        "delivery_status": GENERATION_FAILED_STATUS,
+        "requires_review": False,
+        "days": [],
+        "weeks": 0,
+        "sessions_per_week": 0,
+        "plan_name": "这次没能生成计划",
+        "goal": None,
+        # 已产出的提示照常带上：器械缺件这类信息对"重试时该改什么"有用
+        "warnings": list(result.get("warnings") or []),
+        "failure": {
+            "title": "这次没能生成出一份合格的计划",
+            "reasons": reasons,
+            "message": "生成结果没有通过交付前的检查，可能是模型这一次的输出不完整。",
+            "next_step": "直接再生成一次即可；如果连着两次都这样，检查一下档案有没有漏填。",
+        },
+    }
+    # 诊断字段随载荷一并保留，与 safe_delivered 的处理一致：它们描述的是
+    # 系统内部发生了什么（重写了几轮、两个闸门的判定），前端不读，但排查
+    # 线上问题时没有它们就只能靠猜。
+    for key in ("rewrite_count", "_persistence_allowed", "_delivery_allowed"):
+        if key in result:
+            payload[key] = result[key]
+    return payload
+
+
+def prune_conflicting_exercises(plan: dict, conflict_names: list[str]) -> tuple[dict, list[str]]:
+    """把冲突动作从计划里摘掉，返回 (新计划, 实际摘掉的名字)。
+
+    这是重写失败后的确定性兜底。实测：让模型"换个安全的动作"三轮之后仍有
+    1~2 个冲突——它换的是同类变体（高脚杯深蹲→箱式深蹲、单臂划船→坐姿
+    绳索划船），字符串规则照样命中。继续调提示词不可靠，而**整份拒绝**对
+    用户是净损失：少两个动作的计划仍然可以练，空手而归不行。
+
+    只在动作确实存在时摘除；某一天被摘空时保留该天但动作列表为空——
+    调用方（``prune_and_recheck``）会据此判断是否还值得交付。
+    """
+    targets = {n for n in (conflict_names or []) if n}
+    if not targets or not isinstance(plan, dict):
+        return plan, []
+
+    pruned = dict(plan)
+    removed: list[str] = []
+    new_days = []
+    for day in plan.get("days") or []:
+        if not isinstance(day, dict):
+            new_days.append(day)
+            continue
+        kept = []
+        for ex in day.get("exercises") or []:
+            name = ex.get("name", ex.get("exercise", "")) if isinstance(ex, dict) else ""
+            if name and name in targets:
+                if name not in removed:
+                    removed.append(name)
+                continue
+            kept.append(ex)
+        new_day = dict(day)
+        new_day["exercises"] = kept
+        new_days.append(new_day)
+    pruned["days"] = new_days
+    return pruned, removed
+
+
+def prune_conflicts_with_recheck(plan: dict, check: dict, recheck):
+    """剪掉 ``check`` 报出的冲突动作并复检，最多两轮。
+
+    返回 ``(计划, 最近一次检查结果, 被剪掉的动作名)``。
+
+    两轮足够：第一轮摘掉本轮报出的全部冲突动作；复检若又报出新的
+    （上一轮的检查对象是剪枝前的计划，理论上不会有），再摘一次。
+    不做无限循环——真剪不干净说明规则表与计划结构互相打架，该走拒绝
+    而不是死循环。
+    """
+    removed_all: list[str] = []
+    for _ in range(2):
+        names = check.get("conflict_exercises") or []
+        if not names:
+            break
+        plan, removed = prune_conflicting_exercises(plan, names)
+        if not removed:
+            break
+        for name in removed:
+            if name not in removed_all:
+                removed_all.append(name)
+        check = recheck(plan)
+    return plan, check, removed_all
+
+
+SAFETY_BLOCKED_STATUS = "safety_blocked"
+
+
+def safety_blocked_payload(result: dict | None = None) -> dict:
+    """安全类拒绝：不给计划，但说清哪些动作不能做、下一步该找谁。
+
+    与 ``generation_failed_payload`` 的区别在**责任归属**：这份计划本身有
+    问题，不是模型这一次没写好。同样一句话重试，大概率还是同样的结果，
+    所以下一步不是"再生成一次"，而是"改档案或先确认身体状况"。
+
+    与旧的 ``review_pending`` 的区别在**有没有出路**：送审意味着等一个
+    本项目里并不存在的审核人；这里明确告诉用户卡在哪、该去问谁。
+    """
+    result = result or {}
+    block = result.get("_safety_block") or {}
+    conflicts = block.get("conflicts") or []
+
+    exercises: list[str] = []
+    injuries: list[str] = []
+    for item in conflicts:
+        if not isinstance(item, dict):
+            continue
+        ex, inj = item.get("exercise"), item.get("injury")
+        if ex and ex not in exercises:
+            exercises.append(ex)
+        if inj and inj not in injuries:
+            injuries.append(inj)
+
+    if exercises:
+        message = (
+            f"你填的「{'、'.join(injuries)}」与计划里的「{'、'.join(exercises)}」冲突。"
+            "这些动作会给该部位额外施压，换成别的动作之后又没能凑出一份完整的计划，"
+            "所以这次没有生成。"
+        )
+    else:
+        message = (block.get("reason")
+                   or "这份计划没有通过安全检查，所以这次没有生成。")
+
+    # 禁止事项与下一步取自同一个分类函数，保证两者永远指向同一件事。
+    prohibited, next_step = hold_guidance(result)
+
+    return {
+        "delivery_status": SAFETY_BLOCKED_STATUS,
+        "requires_review": False,
+        "days": [],
+        "weeks": 0,
+        "sessions_per_week": 0,
+        "plan_name": "这次没有生成计划",
+        "goal": None,
+        "warnings": list(result.get("warnings") or []),
+        "safety": {
+            "title": "这些动作和你目前的情况有冲突",
+            "message": message,
+            "conflicts": conflicts,
+            "prohibited_actions": prohibited,
+            "next_step": next_step,
+        },
+    }
+
+
 def review_pending_result(review_store, profile: dict, query: str, result: dict,
                           owner_key: str = "") -> dict:
     """交付判定：需要人工审核就扣下，否则交付。
@@ -600,19 +811,26 @@ def review_pending_result(review_store, profile: dict, query: str, result: dict,
         _persistence_allowed → 缓存闸门（继续要求 issues 清空，宁可少缓存）
     计划上带着的建议性提示会以 warnings 形式一并展示，不会静默丢掉。
     """
-    # 急症优先于伤病审核。症状可能写在 query（用户在计划说明里描述），
-    # 也可能写在 injuries 字段，两处都要看——只看一处就会漏一半入口。
-    injuries = profile.get("injuries") or []
-    if isinstance(injuries, str):
-        injuries = [injuries]
-    signals = emergency_signals_in(query) or emergency_signals_in(" ".join(map(str, injuries)))
+    # 急症优先于伤病处置。取信号走共用入口，与状态图和命令式编排一致。
+    signals = emergency_signals_for(profile, query)
     if signals:
         return emergency_stop_payload(signals)
 
-    if result.get("requires_review"):
+    # 安全类问题默认就地拒绝：说清哪些动作冲突、该去问谁。不送审——
+    # 本项目没有审核人，等一个不存在的人放行等于让用户永远拿不到计划。
+    if result.get("_safety_block") and not MANUAL_REVIEW_ENABLED:
+        return safety_blocked_payload(result)
+
+    # 手动模式（开发期核对规则误报）保留旧的送审分支。
+    if result.get("requires_review") and MANUAL_REVIEW_ENABLED:
         artifact = create_review_artifact(review_store, profile, query, result,
                                           owner_key=owner_key)
         return build_review_pending_payload(result, artifact)
+    # 剩余四种（结构/置信度/目标/降级）不该被当成可交付。
+    # 只看 requires_review 会让这类计划被标成 safe_delivered——内部已经判定
+    # 不允许交付，接口却告诉前端"可以安全交付"，两边口径相反。
+    if result.get("_delivery_allowed") is not True:
+        return generation_failed_payload(result)
     delivered = dict(result)
     delivered["delivery_status"] = "safe_delivered"
     return delivered

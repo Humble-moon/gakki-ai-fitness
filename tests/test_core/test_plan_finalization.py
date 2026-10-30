@@ -204,20 +204,27 @@ def test_safe_plan_with_advisory_notes_is_still_delivered():
     assert delivered["warnings"]
 
 
-def test_review_required_plan_is_held_not_delivered():
-    """需要审核时依然扣下——交付闸门放宽没有削弱拦截。"""
+def test_unsafe_plan_is_refused_without_waiting_for_a_reviewer():
+    """不安全计划被拒绝，且**不进入等待审核**。
+
+    过去的断言是 review_pending——那是给用户一张"等待审核"的空头支票，
+    而本项目没有审核人这个角色。现在改成明确拒绝：不给计划，但说清卡在
+    哪、该去问谁。
+    """
     store = InMemoryReviewArtifactStore()
     check = safe_check(is_safe=False, requires_human_review=True,
                        issues=[{"issue": "伤病冲突", "severity": "danger"}])
     result = pf.finalize_result(valid_plan(), [check], 0)
 
     delivered = pf.review_pending_result(store, {"goal": "增肌"}, "q", result)
-    assert delivered["delivery_status"] == "review_pending"
-    assert "days" not in delivered
+    assert delivered["delivery_status"] == "safety_blocked"
+    # days 显式给空列表：省略键会让下游各自猜一个默认值
+    assert delivered["days"] == []
+    assert delivered["safety"]["next_step"], "拒绝时必须给出下一步"
 
 
 def test_review_takes_priority_over_persistence_eligibility():
-    """既可缓存又需审核时，审核优先——不能因为能缓存就放行。"""
+    """既可缓存又需审核时，拒绝优先——不能因为能缓存就放行。"""
     store = InMemoryReviewArtifactStore()
     check = safe_check(requires_human_review=True, issues=[{"issue": "x"}],
                        confidence=0.9)
@@ -225,7 +232,19 @@ def test_review_takes_priority_over_persistence_eligibility():
     assert result["requires_review"] is True
 
     delivered = pf.review_pending_result(store, {"goal": "增肌"}, "q", result)
+    assert delivered["delivery_status"] == "safety_blocked"
+
+
+def test_manual_mode_still_creates_a_review_artifact(manual_review):
+    """manual 模式保留送审通道——开发期核对规则误报时要用它。"""
+    store = InMemoryReviewArtifactStore()
+    check = safe_check(is_safe=False, requires_human_review=True,
+                       issues=[{"issue": "伤病冲突", "severity": "danger"}])
+    result = pf.finalize_result(valid_plan(), [check], 0)
+
+    delivered = pf.review_pending_result(store, {"goal": "增肌"}, "q", result)
     assert delivered["delivery_status"] == "review_pending"
+    assert delivered["review"]["review_id"]
 
 
 def test_degraded_provider_result_cannot_persist():

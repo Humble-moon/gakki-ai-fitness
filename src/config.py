@@ -102,7 +102,10 @@ LLM_DEFAULT_MODEL = LLM_CONFIGS.get("default", {}).get("model", "deepseek-chat")
 # pgvector 扩展：存储和检索向量嵌入（embedding）
 # ============================================================
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")          # 数据库主机地址
-POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))          # 数据库端口
+# 默认 5433：docker-compose 把容器内 5432 映射到宿主机 5433（见 docker-compose.yml）。
+# 这里曾经默认 5432，没有 .env 时本机连不上库，而报错只表现为「数据库连接失败」，
+# 很难看出是端口对不上。
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5433"))          # 数据库端口
 POSTGRES_USER = os.getenv("POSTGRES_USER", "ai_fitness")         # 数据库用户名
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "fitness123") # 数据库密码
 POSTGRES_DB = os.getenv("POSTGRES_DB", "fitness_assistant")      # 数据库名称
@@ -254,6 +257,22 @@ EXERCISE_FUSION = os.getenv("EXERCISE_FUSION", "rrf").lower()
 HITL_CONFIDENCE_THRESHOLD = 0.7
 # 人工介入（Human-in-the-Loop）阈值：
 # 当 AI 对分析结果的置信度 < 0.7 时，标记为需要人工审核
+
+# ============================================================
+# 人工审核模式
+#
+# 默认 auto：安全检查发现的问题就地处置——能定位到具体动作的冲突交给重写
+# 循环替换，替换之后仍冲突或问题本身无法定点修复，就直接告诉用户卡在哪、
+# 该去问谁。**不产生"等待审核"状态**。
+#
+# 原因很直接：这个项目里没有"审核人"这个角色。把计划扣下等一个不存在的人
+# 放行，用户拿到的只有一张空头支票。
+#
+# 设为 manual 恢复旧的"送审 → 等人放行"流程，只用于开发期核对规则引擎
+# 有没有误报——那是工具，不是面向用户的流程。
+# ============================================================
+REVIEW_MODE = os.getenv("COACH_REVIEW_MODE", "auto").strip().lower()
+MANUAL_REVIEW_ENABLED = REVIEW_MODE == "manual"
 
 # ============================================================
 # 出网文本脱敏（直接标识符剥离）

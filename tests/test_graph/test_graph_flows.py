@@ -66,7 +66,8 @@ def make_profile(goal="增肌", injuries=()):
 
 
 def make_runtime(*, plan=None, checks=None, rewrite_out=None, cache_return=None,
-                 planner_raises=False, retrieved=None, planner_error_reason=None):
+                 planner_raises=False, retrieved=None, planner_error_reason=None,
+                 fact_checker=None):
     """Build a GraphRuntime with fully faked dependencies."""
     plan = plan if plan is not None else valid_plan()
     checks = list(checks) if checks else [safe_check()]
@@ -111,7 +112,9 @@ def make_runtime(*, plan=None, checks=None, rewrite_out=None, cache_return=None,
         return copy.deepcopy(rewrite_out)
 
     writer = SimpleNamespace(write_plan_stream=write_plan_stream, rewrite_plan=rewrite_plan)
-    fact_checker = SimpleNamespace(check=check_fn)
+    # 传入真实检查器时用它（验证规则引擎与重写回路的联动）；否则按顺序吐出
+    # 预设的检查结果。
+    fact_checker = fact_checker or SimpleNamespace(check=check_fn)
 
     cache = StoreSpy()
     if cache_return is not None:
@@ -194,8 +197,14 @@ def test_cache_hit_short_circuits_pipeline():
     runtime = make_runtime(cache_return=cached, planner_raises=True)  # planner must NOT run
     state, _, _ = invoke_plan(runtime, make_profile())
 
-    assert state["final_payload"] == cached
-    assert state["final_payload"]["plan_id"] == "plan-1"
+    payload = state["final_payload"]
+    assert payload["plan_id"] == "plan-1"
+    assert payload["days"] == cached["days"]
+    # 缓存命中同样要带交付状态。缓存对象存的是计划内容，不含交付决定；
+    # 交付节点原样返回它时，前端拿到的是没有 delivery_status 的载荷，
+    # 而前端按 `!== 'safe_delivered'` 直接 return——计划有内容却整屏留白。
+    assert payload["delivery_status"] == "safe_delivered"
+    assert "delivery_status" not in cached, "交付状态不该被写回缓存对象"
 
 
 # ---------------------------------------------------------------------------
@@ -213,22 +222,23 @@ def test_single_rewrite_then_safe_delivery():
     assert len(state["checks"]) == 2
 
 
-def test_rewrite_budget_exhausted_escalates_to_review():
+def test_rewrite_budget_exhausted_refuses_instead_of_queueing():
+    """重写预算用尽仍不安全 → 直接拒绝，不再排队等审核。
+
+    排队等审核意味着用户永远拿不到结果（本项目没有审核人这个角色）。
+    拦截能力没有变：计划照样不给，只是终态从"等待"变成"说明原因"。
+    """
     runtime = make_runtime(plan=valid_plan(),
                            checks=[unsafe_check(), unsafe_check(), unsafe_check(), unsafe_check()])
     state, thread_id, config = invoke_plan(runtime, make_profile(injuries=["膝盖疼"]))
 
     assert state["rewrite_count"] == 3
     assert runtime._rewrite_calls["count"] == 3
-    # interrupted at review_gate with a review payload
-    assert "__interrupt__" in state
-    payload = state["review_payload"]
-    assert payload["delivery_status"] == "review_pending"
-    assert payload["review"]["review_id"] == state["review_id"]
-    assert payload["thread_id"] == thread_id
-    # artifact stored + thread registered for later resume
-    assert runtime.deps.review_store.get(state["review_id"]) is not None
-    assert runtime.deps.thread_index.thread_for(state["review_id"]) == thread_id
+    assert "__interrupt__" not in state
+    payload = state["final_payload"]
+    assert payload["delivery_status"] == "safety_blocked"
+    assert payload["days"] == []
+    assert payload["safety"]["next_step"]
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +251,7 @@ def _needs_review_check():
                       review_severity="warning")
 
 
-def test_resume_approved_delivers_without_polluting_cache():
+def test_resume_approved_delivers_without_polluting_cache(manual_review):
     from langgraph.types import Command
     runtime = make_runtime(checks=[_needs_review_check()])
     state, thread_id, config = invoke_plan(runtime, make_profile(injuries=["膝盖疼"]))
@@ -255,7 +265,7 @@ def test_resume_approved_delivers_without_polluting_cache():
     assert len(runtime.deps.cache.calls) == cache_calls_before
 
 
-def test_resume_rejected_withholds_plan():
+def test_resume_rejected_withholds_plan(manual_review):
     from langgraph.types import Command
     runtime = make_runtime(checks=[_needs_review_check()])
     state, thread_id, config = invoke_plan(runtime, make_profile(injuries=["膝盖疼"]))
@@ -269,7 +279,7 @@ def test_resume_rejected_withholds_plan():
     assert final["review"]["review_id"] == state["review_id"]
 
 
-def test_resume_with_invalid_decision_fails_closed_to_rejected():
+def test_resume_with_invalid_decision_fails_closed_to_rejected(manual_review):
     from langgraph.types import Command
     runtime = make_runtime(checks=[_needs_review_check()])
     state, thread_id, config = invoke_plan(runtime, make_profile(injuries=["膝盖疼"]))

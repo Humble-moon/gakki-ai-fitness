@@ -74,16 +74,57 @@ class FactCheckerAgent:
         # 阶段 2：HITL 规则引擎复查（含确定性伤病-动作冲突检测）
         # HITL 在 LLM 结果基础上，还会独立检查 plan + profile 中的伤病冲突
         review = self.hitl.check(result, plan=plan, profile=profile)
-        # HITL 的判定覆盖 LLM 的 requires_human_review（以规则引擎为准）
-        result["requires_human_review"] = review.needs_review
+
+        # 冲突能定位到计划里的具体动作时，**先修再判**。
+        #
+        # 规则引擎给出的信息足够具体——"硬拉与腰椎间盘突出冲突"——所以没有
+        # 理由把整份计划扣下：把那个动作换成不对该部位施压的即可。做法是把它
+        # 作为一条 danger issue 交给重写循环，并置 is_safe=False 让循环启动。
+        # 真正的拦截没有放松：重写后规则引擎会再查一遍，仍然冲突就拒绝交付。
+        conflict_exercises = review.conflict_exercises
+        if conflict_exercises:
+            result["is_safe"] = False
+            # 先别送审：这一轮还有机会靠重写修好。
+            result["requires_human_review"] = False
+            issues = list(result.get("issues") or [])
+            known = {i.get("exercise") for i in issues if isinstance(i, dict)}
+            for item in review.conflicts:
+                name = item.get("exercise")
+                if not name or name in known:
+                    continue
+                known.add(name)
+                # 禁用词必须写进指令。只说"换成不施压的动作"，模型会换同类
+                # 变体——实测三轮：高脚杯深蹲→箱式深蹲、单臂划船→坐姿绳索
+                # 划船、阿诺德推举→坐姿靠背推举，字面上仍然命中禁忌表。
+                # 把词列出来，模型才会跨到别的动作类别（腿举、高位下拉、侧平举）。
+                banned = [str(b) for b in (item.get("forbidden") or []) if str(b).strip()]
+                hint = (f"；新动作名称中不得含以下任何一个词: {'/'.join(banned)}"
+                        if banned else "")
+                issues.append({
+                    "issue": (f"动作「{name}」与「{item.get('injury')}」冲突，"
+                              f"必须替换成不会给该部位施压的动作{hint}"),
+                    "severity": "danger",
+                    "exercise": name,
+                    "forbidden": banned,
+                })
+            result["issues"] = issues
+        else:
+            # 没有可定点修复的动作（查询本身问到了危险动作、语义匹配到伤病
+            # 档案、低置信度、LLM 判 danger）——这些交给终态处置。
+            result["requires_human_review"] = review.needs_review
+
+        # 动作名列表用于驱动重写；结构化明细用于终态文案——只给名字的话，
+        # 拒绝时说不出"因为哪条伤病"。两者都带伤病信息，但用途不同。
+        result["conflict_exercises"] = conflict_exercises
+        result["review_conflicts"] = list(review.conflicts or [])
         result["review_reason"] = review.reason
         result["review_severity"] = review.severity
-        # 规则引擎/语义匹配的冲突明细单独存放，供审核工件作为人工决策依据；
+        # 规则引擎/语义匹配的冲突明细单独存放，供终态说明"为什么没给计划"；
         # 不并入 issues，避免影响重写循环对 issues 的既有语义。
         result["review_suggestions"] = list(review.suggestions or []) if review.needs_review else []
         # 功能性受限（活动度/柔韧/僵硬）的做法调整建议。
         # 与 review_suggestions 的关键区别：它**不参与任何闸门** —— 既不影响
         # requires_human_review，也不进 issues，只是随计划一起交付给用户。
-        # 不这么分的话，"活动度不好"会重新变回扣下计划的理由，死锁照旧。
+        # 不这么分的话，"活动度不好"会重新变回拒绝交付的理由。
         result["review_cautions"] = list(review.cautions or [])
         return result

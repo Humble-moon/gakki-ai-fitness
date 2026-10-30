@@ -5,6 +5,7 @@ state and return the name of the next node; the builder wires the returned names
 to real nodes via ``add_conditional_edges``.
 """
 
+from src.config import MANUAL_REVIEW_ENABLED
 from src.graph.state import MAX_REWRITES
 
 
@@ -40,14 +41,17 @@ def route_after_check(state: dict) -> str:
 
 
 def route_after_finalize(state: dict) -> str:
-    """Escalate to human review when the final gate is not fully safe.
+    """Send the plan to delivery; human review is opt-in only.
 
-    判据只看 ``requires_review``。原先附带 ``_persistence_allowed is not True``，
-    但那个标志是缓存闸门、额外要求问题清单干净，与"该不该送审"无关；
-    两个条件在最终归一化里本就互斥（可缓存必然蕴含不需要审核），
-    附带条件因此从未生效——留着只会让人误以为送审还与缓存有关。
+    默认一律走交付节点。最终归一化已经把"能不能交付"和"为什么不能"都算好
+    了，交付节点据此产出 safe_delivered / safety_blocked / generation_failed
+    三种终态。**"等待人工审核"不再是其中之一**——本项目没有审核人这个角色，
+    扣下等人放行等于让用户永远拿不到计划。
+
+    ``COACH_REVIEW_MODE=manual`` 时恢复旧的送审分支，用于开发期核对规则
+    引擎有没有误报。
     """
     result = state.get("result") or {}
-    if result.get("requires_review"):
+    if MANUAL_REVIEW_ENABLED and result.get("requires_review"):
         return "open_review"
     return "deliver"

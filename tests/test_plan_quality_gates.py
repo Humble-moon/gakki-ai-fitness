@@ -776,14 +776,22 @@ class TestSemanticLayerRespectsLimitationNature:
     _MATCH = [{"profile_id": "shoulder-impingement", "similarity": 0.694,
                "banned_exercises": ["推举", "卧推", "飞鸟"], "severity": "danger"}]
 
-    def _decide(self, monkeypatch, injuries, matches=None):
+    def _decide(self, monkeypatch, injuries, matches=None, exercises=("哑铃推举",)):
+        """用含真实动作的计划调用 check。
+
+        这里曾经传 ``plan={"days": []}``——空计划。语义匹配现在会判断
+        "计划里到底有没有该档案的禁忌动作"，空计划自然没有冲突，于是
+        "结构性伤病仍会阻断"这条断言失去意义。空计划的真实含义是
+        "没有动作可执行"，那时阻断本来就不成立。
+        """
         review = HITLReview()
         monkeypatch.setattr(
             review, "_match_semantic",
             lambda text: [dict(m) for m in (matches or self._MATCH)])
+        plan = {"days": [{"day": 1, "exercises": [{"name": n} for n in exercises]}]}
         return review.check(
             {"is_safe": True, "issues": [], "confidence": 0.9},
-            plan={"days": []}, profile={"injuries": injuries},
+            plan=plan, profile={"injuries": injuries},
         )
 
     def test_limitation_match_is_downgraded_to_caution(self, monkeypatch):

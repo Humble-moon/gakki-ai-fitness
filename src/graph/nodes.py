@@ -20,13 +20,17 @@ from src.core.plan_finalization import (
     build_review_pending_payload,
     check_with_goal_issue,
     create_review_artifact,
+    emergency_signals_for,
     emergency_signals_in,
     emergency_stop_payload,
     finalize_result,
+    generation_failed_payload,
     long_term_user_key,
     normalize_plan,
     persist_if_safe,
+    prune_conflicts_with_recheck,
     safe_cached_result,
+    safety_blocked_payload,
     summarize_plan_for_context,
 )
 from src.core.plan_explanation import build_explanation
@@ -121,7 +125,17 @@ def check_cache_node(deps, state: dict) -> dict:
 
 
 def deliver_cached_node(deps, state: dict) -> dict:
-    return {"final_payload": state.get("cache_hit")}
+    """Deliver a cache hit through the same terminal payload shape.
+
+    缓存对象本身不带 ``delivery_status``（它存的是计划内容，不是交付决定）。
+    直接原样返回的话，前端拿到的是没有该字段的载荷，而它的写法是
+    ``if (data?.delivery_status !== 'safe_delivered') return;``——
+    缓存命中的计划有内容，用户却看到一片空白。交付状态在交付这一步补，
+    不要写进缓存，否则缓存里会存着一份"当时的交付决定"。
+    """
+    cached = dict(state.get("cache_hit") or {})
+    cached["delivery_status"] = "safe_delivered"
+    return {"final_payload": cached}
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +264,29 @@ def _known_library_names(deps) -> set | None:
 
 
 def finalize_node(deps, state: dict) -> dict:
+    checks = list(state.get("checks") or [])
+    result = dict(state.get("result") or {})
+    profile = state.get("profile") or {}
+
+    # 重写预算用尽仍在冲突 → 直接摘掉这些动作，而不是整份拒绝。与命令式
+    # 编排同一口径（见 Orchestrator.generate_plan）。两条后端各写一份的话，
+    # 前端走哪条就会拿到不同结果。
+    if checks and getattr(deps, "fact_checker", None) is not None:
+        result, last_check, pruned = prune_conflicts_with_recheck(
+            result, checks[-1],
+            lambda p: deps.fact_checker.check(p, profile))
+        if pruned:
+            checks.append(last_check)
+            result["pruned_exercises"] = pruned
+            result.setdefault("warnings", []).extend(
+                f"「{name}」与你的伤病冲突，已从计划中移除" for name in pruned)
+        if pruned and not [d for d in (result.get("days") or [])
+                           if (d or {}).get("exercises")]:
+            result["is_safe"] = False
+            result["requires_human_review"] = True
+
     result = finalize_result(
-        state.get("result") or {}, state.get("checks") or [],
+        result, checks,
         state.get("rewrite_count", 0),
         provider_degraded=state.get("provider_degraded", False),
         expected_goal=state.get("expected_goal"),
@@ -321,11 +356,7 @@ def deliver_node(deps, state: dict) -> dict:
     if "emergency_signals" in state:
         signals = state.get("emergency_signals") or []
     else:
-        injuries = profile.get("injuries") or []
-        if isinstance(injuries, str):
-            injuries = [injuries]
-        signals = (emergency_signals_in(query)
-                   or emergency_signals_in(" ".join(map(str, injuries))))
+        signals = emergency_signals_for(profile, query)
     if signals:
         return {"final_payload": emergency_stop_payload(signals)}
 
@@ -351,12 +382,21 @@ def deliver_node(deps, state: dict) -> dict:
             },
         }}
 
-    # 交付判据用 requires_review（与命令式编排同一口径），而不是 _persistence_allowed。
-    # 后者还额外交代了"问题清单必须干净"——那是缓存的要求。用错判据的后果不是
-    # 少缓一次，而是**交付带建议性警告的计划拿不到 delivery_status**，
-    # 前端因 `!== 'safe_delivered'` 直接不渲染：计划有内容，用户却什么都看不到。
-    # 这也与最终归一化里新增的 _delivery_allowed 保持同一语义。
-    if result.get("requires_review") is not True:
+    # 安全类拒绝排在交付判定之前：它要给出的是"哪些动作不能做、该找谁"，
+    # 而不是一句"这次没生成好"。它也取代了过去"送去人工审核"的位置——
+    # 本项目没有审核人，扣下等人放行只会让用户永远拿不到计划。
+    if result.get("_safety_block"):
+        return {"final_payload": safety_blocked_payload(result)}
+
+    # 交付判据用 _delivery_allowed，而不是 _persistence_allowed，也不是只看
+    # requires_review：
+    #   * _persistence_allowed 还要求问题清单干净（缓存的要求）。用它判断交付，
+    #     带建议性警告的计划会拿不到 delivery_status，前端直接不渲染。
+    #   * requires_review 只覆盖安全类问题。结构校验没过、置信度无效、目标不一致、
+    #     生成降级这四项它都不反映，于是会出现"内部判定不允许交付、接口却说
+    #     safe_delivered"的口径分裂。
+    # _delivery_allowed 恰好是这两者之间那一档：不含 issues_empty，含其余全部。
+    if result.get("_delivery_allowed") is True and result.get("requires_review") is not True:
         # athlete_key 必须传：它是长期记忆的身份键。漏传时 persist_if_safe 退回
         # make_user_key(profile) 指纹，而 ingest_node 是拿 athlete_key 去读的——
         # **写和读落在两个键上，用户永远读不回自己刚存的习惯与旧伤**。
@@ -369,10 +409,16 @@ def deliver_node(deps, state: dict) -> dict:
         final["delivery_status"] = "safe_delivered"
         return {"final_payload": final}
 
-    # 兜底：既没被送去审核、又带着"需要审核"的标记。正常拓扑走不到这里
-    # （requires_review 为真时路由会先去 open_review），但真出现时不能
-    # 返回一个没有 delivery_status 的载荷——那等于让计划静默消失。
-    final = dict(result)
-    final["delivery_status"] = "review_pending"
-    final.setdefault("requires_review", True)
-    return {"final_payload": final}
+    if result.get("requires_review") is True:
+        # 兜底：带着"需要审核"的标记却没被送审。正常拓扑走不到这里
+        # （requires_review 为真时路由会先去 open_review），但真出现时不能
+        # 返回一个没有 delivery_status 的载荷——那等于让计划静默消失。
+        final = dict(result)
+        final["delivery_status"] = "review_pending"
+        final.setdefault("requires_review", True)
+        return {"final_payload": final}
+
+    # 剩下的只有一种：交付闸门拒绝，但拒绝理由不是安全。结构、置信度、目标、
+    # 降级这四项送去人工审核没有意义——审核员无从补齐缺失的字段。给出可重试的
+    # 失败态，并保留已产出的 warnings（器械缺件这类提示对"该改什么"有用）。
+    return {"final_payload": generation_failed_payload(result)}

@@ -291,11 +291,29 @@ class TestEmergencyStopsPlanDelivery:
 
         from src.graph.nodes import deliver_node
 
-        # 交付分支会调用持久化；这个结果的闸门标志都是假值，
-        # 所以三个存储只被引用、不会被真的写入。
-        deps = SimpleNamespace(cache=None, conversation=None, long_term=None)
+        # _delivery_allowed 必须显式给出：真实路径一定经过 finalize_result
+        # 设置它，而这里直接构造 state 绕过了那一步。缺这个标志意味着"没经过
+        # 最终校验"，交付节点按 fail-closed 处理——这正是要保护的行为。
+        result = {
+            "days": [{"day": 1, "exercises": [{"name": "杠铃卧推"}]}],
+            "_delivery_allowed": True,
+            "requires_review": False,
+        }
+        # 安全交付会顺带写长期记忆（画像），所以 long_term 不能给 None。
+        # 用记录型替身而不是真存储：这条用例测的是"能不能交付"，不是写入。
+        class _Recorder:
+            def __init__(self):
+                self.calls = []
+
+            def __getattr__(self, name):
+                def record(*args, **kwargs):
+                    self.calls.append(name)
+                return record
+
+        deps = SimpleNamespace(cache=None, conversation=None, long_term=_Recorder())
         payload = deliver_node(
-            deps, self._state(query="想练胸和背，每次 60 分钟"))["final_payload"]
+            deps, self._state(query="想练胸和背，每次 60 分钟",
+                              result=result))["final_payload"]
 
         assert payload["days"], "正常请求必须照常交付计划"
         assert payload["delivery_status"] == "safe_delivered"

@@ -168,6 +168,13 @@ class Orchestrator:
         """Generate and finalize a training plan synchronously."""
         profile_dict = profile.model_dump()
         expected_goal = validate_requested_goal(profile_dict.get("goal"))
+        # 急症必须先于缓存。缓存里存的是一份训练计划——只要用户此刻描述的
+        # 是胸闷、头晕、眼前发黑，命中缓存就等于把一份训练安排递到手上，
+        # 与状态图路径（route_after_cache 先判急症）口径不一致。缓存只是
+        # 省时间的手段，不能变成绕过安全判定的一条近路。
+        signals = plan_finalization.emergency_signals_for(profile_dict, query)
+        if signals:
+            return plan_finalization.emergency_stop_payload(signals)
         cached = self._safe_cached_result(self.cache.get(profile_dict, query),
                                               expected_goal=expected_goal, profile=profile_dict)
         if cached:
@@ -244,6 +251,26 @@ class Orchestrator:
             provider_degraded = provider_degraded or bool(check.get("_degraded"))
             all_checks.append(check)
 
+        # 重写预算用尽仍在冲突 → 直接摘掉这些动作，而不是整份拒绝。
+        # 实测三轮重写后总能剩下 1~2 个冲突（模型换的是同类变体），而少两个
+        # 动作的计划仍然能练。摘完之后某一天被摘空，说明这份计划的骨架本来
+        # 就踩在禁忌动作上，那时才拒绝。
+        result, check, pruned = plan_finalization.prune_conflicts_with_recheck(
+            result, check,
+            lambda p: self._check_with_goal_issue(
+                p, self.fact_checker.check(p, profile_dict), expected_goal))
+        if pruned:
+            all_checks.append(check)
+            result["pruned_exercises"] = pruned
+            result.setdefault("warnings", []).extend(
+                f"「{name}」与你的伤病冲突，已从计划中移除" for name in pruned)
+        non_empty_days = [d for d in (result.get("days") or [])
+                          if (d or {}).get("exercises")]
+        if pruned and not non_empty_days:
+            # 全摘空了：这份计划的骨架就是禁忌动作，没有可交付的内容
+            result["is_safe"] = False
+            result["requires_human_review"] = True
+
         result = self._finalize_result(result, all_checks, rewrite_count,
                                        provider_degraded=provider_degraded,
                                        expected_goal=expected_goal)
@@ -275,6 +302,15 @@ class Orchestrator:
         long_term_key = plan_finalization.long_term_user_key(profile_dict, athlete_key)
         long_term_context = self.long_term.build_context_for_prompt(long_term_key)
         if not session_id:
+            # 同 generate_plan：急症检查排在缓存之前。没有这一条时，一句
+            # "训练时突然胸闷头晕"碰上缓存命中会直接拿到一份训练计划，
+            # 而同一句话在状态图路径会被挡下——两条入口一套口径，一处失效
+            # 就等于整套失效。
+            signals = plan_finalization.emergency_signals_for(profile_dict, query)
+            if signals:
+                stopped = plan_finalization.emergency_stop_payload(signals)
+                yield ("done", stopped)
+                return
             cached = self._safe_cached_result(self.cache.get(profile_dict, query),
                                               expected_goal=expected_goal, profile=profile_dict)
             if cached:

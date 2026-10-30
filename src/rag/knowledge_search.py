@@ -340,7 +340,13 @@ class KnowledgeSearch:
         # ---- 阶段 1：多路检索 ----
         # 各路检索相互独立，可以并行（当前是串行）
         # TODO: 可使用 asyncio.gather 并发执行以加速
-        vector_results = self.vector_search(query)
+        try:
+            vector_results = self.vector_search(query)
+        except Exception as exc:
+            # 向量路要过一次 embedding 服务。它超时或报错时，整条检索链不该
+            # 跟着失效——关键词路不依赖 embedding，仍能给出可用结果。
+            logger.warning(f"向量检索失败，本次降级为关键词检索: {exc}")
+            vector_results = []
         keyword_results = self.keyword_search(query)
 
         # 稀疏词法路（第三路，默认关闭）。available() 会校验
@@ -396,10 +402,22 @@ class KnowledgeSearch:
             2. 如果混合检索返回空，回退到纯关键词检索
             3. 纯关键词检索仍然空 → 返回空列表（暴露问题，让上游处理）
         """
-        results = self.search(query)
+        try:
+            results = self.search(query)
+        except Exception as exc:
+            # 兜底的价值就在这一步：调用方（问答、计划生成）不该因为检索内部
+            # 抛异常而整轮失败。此前只判断「结果为空」，异常会直接穿透。
+            logger.warning(f"混合检索抛异常，回退到纯关键词检索: {exc}")
+            results = []
 
         if not results:
             logger.info("Full search returned empty, falling back to keyword-only...")
-            results = self.keyword_search(query, top_k=FINAL_TOP)
+            try:
+                results = self.keyword_search(query, top_k=FINAL_TOP)
+            except Exception as exc:
+                # 关键词路也挂了通常意味着数据库不可用。返回空列表，把
+                # 「知识库暂时查不到」交给上游按无检索结果处理，而不是崩掉整轮。
+                logger.error(f"关键词兜底检索失败: {exc}")
+                results = []
 
         return results

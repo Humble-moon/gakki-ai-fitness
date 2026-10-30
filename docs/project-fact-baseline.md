@@ -26,7 +26,7 @@ python scripts/verify_project_facts.py --json
 
 ## 架构与能力边界
 
-仓库代码和文档可见 FastAPI + SSE 入口、自研 Orchestrator，以及 Planner、Retriever、Writer、FactChecker 分层；还包含 GraphRAG、MCP、Redis 语义缓存、Provider 熔断器和 HITL 升级判定。HITL 审核闭环（工件创建 → 中断暂停 → resolve 接口恢复 → 解除记录）已全链路打通并具备重启存活性（见下节）；GraphRAG、MCP 和部分高级能力应以实际配置与依赖可用性为前提。
+仓库代码和文档可见 FastAPI + SSE 入口、自研 Orchestrator，以及 Planner、Retriever、Writer、FactChecker 分层；还包含 GraphRAG、MCP、Redis 语义缓存、Provider 熔断器和安全规则引擎。安全审查的默认处置是「冲突动作自动替换 → 替换不掉则拒绝」，不产生等待审核的中间态；旧的送审闭环（工件创建 → 中断暂停 → resolve 接口恢复 → 解除记录）作为 `COACH_REVIEW_MODE=manual` 下的开发期工具保留，已全链路打通并具备重启存活性（见下节）。GraphRAG、MCP 和部分高级能力应以实际配置与依赖可用性为前提。
 
 当前运行契约为 `localhost:8503`，SSE 入口包括 `/api/generate-plan`、`/api/analyze-exercise` 和 `/api/ask-question`。默认测试通过 `pytest` 排除 `integration` 与 `live` 标记；需要外部服务或真实模型的评测必须显式 opt-in。
 
@@ -34,7 +34,7 @@ python scripts/verify_project_facts.py --json
 
 | 事实 | 证据路径 | 状态 |
 |---|---|---|
-| 人工审核存储 SQLite 持久化（工件/解除记录/线程索引重启不丢） | `src/hitl/review_storage.py`、`tests/test_hitl/test_review_storage.py` | 已实现+已测试 |
+| 人工审核存储 SQLite 持久化（工件/解除记录/线程索引重启不丢）。**仅在 `COACH_REVIEW_MODE=manual` 下使用**，默认流程不创建审核工件 | `src/hitl/review_storage.py`、`tests/test_hitl/test_review_storage.py` | 已实现+已测试 |
 | HITL 闭环默认启用持久化（`HITL_STORE_BACKEND=sqlite`，memory 供离线测试） | `src/graph/runtime.py` `_make_hitl_stores` | 已实现 |
 | HTTP 安全中间件：可选 API key 认证、每 IP 滑动窗口限流、CORS 白名单；未配置任何令牌时 `/admin/*` 失败关闭（403） | `src/security/api_guard.py`、`tests/test_security/test_api_guard.py` | 已实现+已测试 |
 | 动作名数据驱动加载（338 条，最长优先），替换 QA 链路硬编码列表 | `src/rag/exercise_catalog.py`、`tests/test_rag/test_exercise_catalog.py` | 已实现+已测试 |
@@ -95,11 +95,13 @@ python scripts/verify_project_facts.py --json
 | **动作库校验**：计划中的动作名必须在 338 库内；比较前做名称归一化（去括号说明 + 剥一层姿势前缀），归后仍在库外则仅**提示**不阻断 | `src/core/plan_finalization.py::collect_unknown_exercises`、`tests/test_plan_quality_gates.py` | 已实现+已测试 |
 | 规则引擎不再把训练日 `focus` 当伤病文本（此前 focus「胸肌与肩部」会让卧推被判与腰突冲突） | `src/hitl/review.py::_check_conflicts` | 已实现+已测试（含修复前会失败的反证） |
 | 同「伤病+动作」的冲突合并为一条，触发词并列展示（`触发词: 腰/椎/间盘`）；端到端 16 条 → 4 条 | 同上 | 已实现+已测试+端到端实测 |
-| **交付分流**：伤病冲突/语义匹配/danger/低置信度 → 扣下送审；**warning 级建议 → 照常交付** | `src/hitl/review.py::check`、`tests/test_advanced.py` | 已实现+已测试+端到端实测 |
+| **交付分流**：伤病冲突/语义匹配冲突 → 自动重写替换，替换后仍冲突则 `safety_blocked`；danger/低置信度 → `safety_blocked`；**warning 级建议 → 照常交付** | `src/hitl/review.py::check`、`src/core/plan_finalization.py::safety_blocked_payload`、`tests/test_safety_repair.py` | 已实现+已测试+端到端实测 |
 
-**实测记录**：修复前「训练时突然胸闷、头晕，眼前发黑」答的是呼吸技巧、未建议就医；修复后答「请立即停止运动，尽快就医或拨打急救电话……我不能也不应该判断它严不严重」。交付分流实测：健康新手 `safe_delivered` + 9 条警告，腰突患者 `review_pending`（规则引擎检出冲突）。
+**实测记录**：修复前「训练时突然胸闷、头晕，眼前发黑」答的是呼吸技巧、未建议就医；修复后答「请立即停止运动，尽快就医或拨打急救电话……我不能也不应该判断它严不严重」。
 
-**为什么 warning 级不阻断（重要）**：LLM 检查器几乎从不返回空 issue 列表，把 warning 当送审判据会让**所有计划都进审核队列**；而本项目 HITL 只实现了机制、未定义"审核人"角色，形成死锁——用户拿不到计划、也无人审核。**这不等于放宽安全**：伤病冲突、danger、低置信度三层拦截保持不变。
+**为什么默认没有"等审核"这一档（重要）**：这个项目没有"审核人"这个角色，把计划扣下等一个不存在的人放行，用户拿到的只有空头支票。而绝大多数冲突本来就能靠换动作解决——规则引擎已经给出「哪个动作 vs 哪条伤病」，把那个动作交给重写循环替换掉即可；替换后仍冲突，才拒绝交付并说明卡在哪、该找谁确认。**这不等于放宽安全**：伤病冲突、danger、低置信度三层拦截一条没少，只是终态从「等待」变成「修复」或「明确拒绝」。
+
+旧的送审流程仍保留在 `COACH_REVIEW_MODE=manual` 下（工件创建 → 中断暂停 → resolve 恢复 → 解除记录），只用于开发期核对规则引擎有没有误报，不参与默认流程。
 
 **为什么库外动作不阻断（重要）**：实测中被点名的多是命名变体（`保加利亚分腿蹲（扶支撑）` → 库里是 `保加利亚分腿蹲`）与真实但本库未收录的动作（`帕洛夫推`），而 LLM 生成的计划本就用不全库内动作名。一律拦截等于 100% 的计划交付不出去。真幻觉（如 `慢离心哑铃地板卧推`，由两个真名拼接）仍会被识别并提示。
 

@@ -1,19 +1,28 @@
+# 本地演示用的基础服务。
+#
+# 两条默认约束，改之前先想清楚：
+#   1. 端口一律绑 127.0.0.1。这些是开发期依赖，没有理由监听所有网络接口——
+#      绑成 0.0.0.0 时，同一网段的人能不能连上只取决于对方的防火墙设置，
+#      而数据库与对象存储本来就不该用这种"看运气"的方式暴露。
+#   2. 凭据走环境变量，并保留与既有部署一致的默认值。默认值写在这里是为了
+#      `docker compose up -d` 开箱即用；对外部署时请在 .env 里覆盖，
+#      不要沿用演示密码。
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    ports: ["5433:5432"]
+    ports: ["127.0.0.1:5433:5432"]
     environment:
-      - POSTGRES_USER=ai_fitness
-      - POSTGRES_PASSWORD=fitness123
-      - POSTGRES_DB=fitness_assistant
+      - POSTGRES_USER=${POSTGRES_USER:-ai_fitness}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-fitness123}
+      - POSTGRES_DB=${POSTGRES_DB:-fitness_assistant}
     volumes:
       - pg_data:/var/lib/postgresql/data
 
   neo4j:
     image: neo4j:5.20
-    ports: ["7474:7474", "7687:7687"]
+    ports: ["127.0.0.1:7474:7474", "127.0.0.1:7687:7687"]
     environment:
-      - NEO4J_AUTH=neo4j/fitness123
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-fitness123}
       - NEO4J_server_memory_heap_initial__size=512m
       - NEO4J_server_memory_heap_max__size=1g
     volumes:
@@ -21,17 +30,17 @@ services:
 
   redis:
     image: redis/redis-stack:latest
-    ports: ["6380:6379", "8002:8001"]
+    ports: ["127.0.0.1:6380:6379", "127.0.0.1:8002:8001"]
     volumes:
       - redis_data:/data
 
   minio:
     image: minio/minio:latest
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio_data:/data
 

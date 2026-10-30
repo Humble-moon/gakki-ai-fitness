@@ -2015,6 +2015,101 @@ body {
    与「计划已暂缓交付」的区别要一眼看得出：暂缓是"等人确认"，急症是
    "现在就别练了"。所以左侧色条换成 danger，标题字号也大一档——
    用户扫一眼就该知道这次不是流程问题，是身体信号问题。 */
+/* 安全拒绝面板：计划被安全门拦下。用 --danger 竖条，与急症面板同一语义层级，
+   但标题不是"先停下来就医"——多数情况只是某几个动作要避开。 */
+.safety-block-panel {
+  padding: 18px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-md);
+}
+.safety-block-panel h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
+}
+.safety-block-lead {
+  margin: 8px 0 12px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.85;
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+.safety-block-conflicts {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.8;
+  list-style: disc;
+  list-style-position: inside;
+}
+.safety-block-row {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+.safety-block-row strong { color: var(--text-primary); }
+.safety-block-footnote {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+/* 生成失败面板。与急症面板同构，但左侧竖条用中性色而不是 --danger：
+   这是"这次没生成好"，不是"你可能有害"，用红色会让人以为自己做错了什么。 */
+.generation-failed-panel {
+  padding: 18px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-md);
+}
+.generation-failed-panel h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
+}
+.generation-failed-lead {
+  margin: 8px 0 12px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.85;
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+.generation-failed-reasons {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.8;
+  list-style: disc;
+  list-style-position: inside;
+}
+.generation-failed-sub {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.generation-failed-row {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+.generation-failed-row strong { color: var(--text-primary); }
+
 .emergency-stop-panel {
   padding: 18px 20px;
   background: var(--bg-card);
@@ -4166,8 +4261,10 @@ async function gateAuth(mode) {
       localStorage.removeItem(GUEST_PASS_KEY);
     } catch (e) {}
     hideAuthGate();
-    // 注册时顺手认领本机数据，与侧栏注册走同一条路径
-    const claimed = await claimLocalGuestData();
+    // 只有注册才自动认领本机数据，与侧栏注册走同一条路径。
+    // 登录不能自动认领：在别人的电脑上登录时，那台机器的游客数据不是本人的。
+    // 登录后是否认领交给侧栏的「认领到账号」按钮（见 maybeOfferClaim）。
+    const claimed = action === 'register' ? await claimLocalGuestData() : '';
     const who = currentUser ? currentUser.username : username;
     // 注册和登录要说不同的话：注册完却提示"已登录为 X"，等于没告诉用户
     // 账号是不是真建成了。侧栏那份一直是分开写的，这里之前合并掉了。
@@ -4360,11 +4457,13 @@ async function handleLogout() {
   showAuthGate();
 }
 
-// 身份变化后重新拉取按用户归属的数据（训练日志、图表统计、体测记录）
+// 身份变化后重新拉取按用户归属的数据（训练日志、图表统计、体测记录、档案）
 function refreshUserScopedViews() {
   if (typeof loadLogHistory === 'function') loadLogHistory();
   if (typeof loadTrainingStats === 'function') loadTrainingStats();
   if (typeof loadBodyMeasurements === 'function') loadBodyMeasurements();
+  // 档案也归身份：登录/登出/认领之后要换成对应身份那一份。
+  if (typeof loadSavedProfile === 'function') loadSavedProfile();
 }
 
 // ── Multi-turn QA session (legacy, kept for qa-specific UI) ──
@@ -4850,6 +4949,85 @@ function getProfile() {
   };
 }
 
+// ── 把长期记忆里的画像回填到左侧档案 ──
+/* 后端在计划安全交付时把整份画像写进 pref:profile（见 plan_finalization），
+   但前端此前只把它当「记忆」展示，刷新后表单仍停在硬编码默认值：用户填过的
+   伤病、习惯、目标全看不见，等于每次都要重填。伤病尤其重要——它决定危险
+   动作会不会被排除，丢了它就等于把安全边界一起丢了。 */
+
+// 独立于 initSelects 的那份闭包：这里只改界面状态和隐藏 input，
+// 不重复绑定事件。选项里没有该值时直接放弃，避免写进一个界面显示不出的值。
+function setSelectValue(targetId, value) {
+  const sel = document.querySelector(`.sel[data-for="${targetId}"]`);
+  const target = document.getElementById(targetId);
+  if (!sel || !target || value == null || value === '') return false;
+  const wanted = String(value);
+  const opts = [...sel.querySelectorAll('.sel-opt')];
+  if (!opts.some(o => o.dataset.val === wanted)) return false;
+  opts.forEach(o => o.classList.toggle('on', o.dataset.val === wanted));
+  const valNode = sel.querySelector('.sel-val');
+  if (valNode) {
+    valNode.textContent = wanted;
+    valNode.classList.remove('ph');
+  }
+  target.value = wanted;
+  target.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
+function applyProfileToForm(profile) {
+  if (!profile || typeof profile !== 'object') return false;
+  const setNum = (id, value) => {
+    const node = document.getElementById(id);
+    if (node && value != null && value !== '' && !Number.isNaN(Number(value))) {
+      node.value = value;
+    }
+  };
+  setNum('height', profile.height);
+  setNum('weight', profile.weight);
+  setNum('age', profile.age);
+  setNum('years', profile.training_years);
+  setNum('days', profile.days_per_week);
+  setSelectValue('sex', profile.sex);
+  setSelectValue('goal', profile.goal);
+
+  // 档案里只存器械清单，场景是靠器械反推的。取覆盖最多的一项；
+  // 一个都对不上就保持当前选择，别把用户选好的场景清掉。
+  const equipment = Array.isArray(profile.available_equipment)
+    ? profile.available_equipment : [];
+  if (equipment.length) {
+    let best = '';
+    let bestHit = 0;
+    Object.entries(SCENE_EQUIPMENT).forEach(([scene, list]) => {
+      const hit = equipment.filter(item => list.includes(item)).length;
+      if (hit > bestHit) { bestHit = hit; best = scene; }
+    });
+    if (best) setSelectValue('scene-tags', best);
+  }
+
+  const injuries = document.getElementById('injuries-input');
+  if (injuries && Array.isArray(profile.injuries) && profile.injuries.length) {
+    injuries.value = profile.injuries.join('、');
+  }
+  const habits = document.getElementById('habits-input');
+  if (habits && Array.isArray(profile.habits) && profile.habits.length) {
+    habits.value = profile.habits.join('、');
+  }
+  updateProfileSummary();
+  return true;
+}
+
+/* 启动与切换身份时各读一次。读不到就保持默认值——档案是增强，不是使用前提。 */
+async function loadSavedProfile() {
+  try {
+    const resp = await fetch(`/api/memory?athlete_key=${encodeURIComponent(athleteKey)}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const entry = (data.preferences || []).find(p => p.key === 'profile');
+    if (entry && entry.value) applyProfileToForm(entry.value);
+  } catch (e) { /* 读不回不影响使用，保持默认值 */ }
+}
+
 // ═══════════════ 训练档案字段校验 ═══════════════
 /* 这些 input 上都写了 min/max，但**它们从来没有生效过**。
    type="number" 的 min/max 只在原生表单提交时由浏览器校验，而这个页面不是
@@ -5160,9 +5338,32 @@ async function streamFrom(url, body, outputId, mode, signal, isCurrent = () => t
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
+      // 安全拒绝：伤病与动作冲突，且替换后仍冲突。后端不再把这类计划送去
+      // "等待审核"——本项目没有审核人，等下去只会一直等。
+      if (mode === 'plan' && data?.delivery_status === 'safety_blocked') {
+        renderSafetyBlocked(resultArea, data?.safety);
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      // 生成失败：结构不合规、置信度缺失、目标对不上或服务降级。
+      // 后端不把这几种送人工审核（审核员补不齐缺失字段），也不会标成
+      // safe_delivered，所以必须有自己的一支——否则下面那行会让整屏留白。
+      if (mode === 'plan' && data?.delivery_status === 'generation_failed') {
+        renderGenerationFailed(resultArea, data?.failure, data?.warnings);
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       if (mode === 'plan' && data?.delivery_status !== 'safe_delivered') return;
       renderPlanResult(resultArea, data);
       if (mode === 'plan') {
+        // 训练日志的「用上次计划预填」读的就是这份缓存。此前只有读没有写，
+        // 那个按钮于是永远不出现。只写安全交付的计划：审核中或急症拦截的
+        // 内容不该被当成可照练的计划带进训练日志。
+        try {
+          localStorage.setItem('ironmind_last_plan', JSON.stringify(data));
+          const fillBtn = document.getElementById('btn-fill-from-plan');
+          if (fillBtn) fillBtn.hidden = false;
+        } catch (e) { /* 配额满或隐私模式：只影响预填，不影响本次查看 */ }
         const iterBar = el('div', 'iterate-bar', '');
         appendText(iterBar, '不满意？');
         [['swap','换一批动作'],['harder','加大强度'],['easier','降低难度'],['focus','聚焦核心']].forEach(([action, label]) => {
@@ -5313,6 +5514,99 @@ function renderEmergencyStop(container, emergency) {
     '这次没有生成计划不是故障，也不用你再改一遍表单——'
     + '在你描述的这类症状面前，任何训练安排都该先放一放。'
     + '等医生确认可以运动后，回来重新生成就好。'));
+
+  container.appendChild(panel);
+}
+
+/* 安全拒绝：说清哪几个动作不能做、为什么、下一步找谁。
+   这是本项目对"没有审核人"的正面回答——不给空头支票，也不偷偷放行。 */
+function renderSafetyBlocked(container, safety) {
+  if (!container) return;
+  container.replaceChildren();
+  const details = safety || {};
+  const panel = el('section', 'safety-block-panel', '');
+  panel.setAttribute('aria-label', '这次没有生成计划');
+
+  panel.appendChild(el('h3', '', details.title || '这些动作和你目前的情况有冲突'));
+  panel.appendChild(el('p', 'safety-block-lead',
+    details.message || '这份计划没有通过安全检查，所以这次没有生成。'));
+
+  // 逐条列出「伤病 — 动作」，让用户能自己核对是不是填错了档案；
+  // 只给一句笼统的"有冲突"，用户既无从确认，也不知道该改什么。
+  const conflicts = Array.isArray(details.conflicts) ? details.conflicts : [];
+  if (conflicts.length) {
+    const list = el('ul', 'safety-block-conflicts', '');
+    conflicts.forEach(c => {
+      const injury = c?.injury || '你的伤病';
+      const exercise = c?.exercise || '这个动作';
+      list.appendChild(el('li', '', `「${exercise}」与「${injury}」冲突`));
+    });
+    panel.appendChild(list);
+  }
+
+  const prohibited = Array.isArray(details.prohibited_actions) ? details.prohibited_actions : [];
+  if (prohibited.length) {
+    const row = el('div', 'safety-block-row', '');
+    row.appendChild(el('strong', '', '在确认之前：'));
+    appendText(row, prohibited.join('；'));
+    panel.appendChild(row);
+  }
+
+  const row = el('div', 'safety-block-row', '');
+  row.appendChild(el('strong', '', '下一步：'));
+  appendText(row, details.next_step || '');
+  panel.appendChild(row);
+
+  panel.appendChild(el('p', 'safety-block-footnote',
+    '这不是故障，也不用反复重试同一份档案——同样的伤病描述会得到同样的结论。'));
+
+  container.appendChild(panel);
+}
+
+/* 生成失败：告诉用户"哪一项没过"和"现在该做什么"。
+   不叫「出错了」——那会让人以为系统坏了；这里多数情况是模型这一次的输出
+   不完整，点一次重新生成就好。把具体原因列出来，是因为只给一句笼统的
+   "没生成出来"会让用户不知道该改档案还是直接重试。 */
+function renderGenerationFailed(container, failure, warnings) {
+  if (!container) return;
+  container.replaceChildren();
+  const details = failure || {};
+  const panel = el('section', 'generation-failed-panel', '');
+  panel.setAttribute('aria-label', '这次没能生成计划');
+
+  panel.appendChild(el('h3', '', details.title || '这次没能生成出一份合格的计划'));
+  panel.appendChild(el('p', 'generation-failed-lead',
+    details.message || '生成结果没有通过交付前的检查，可能是模型这一次的输出不完整。'));
+
+  const reasons = Array.isArray(details.reasons) ? details.reasons.filter(Boolean) : [];
+  if (reasons.length) {
+    const list = el('ul', 'generation-failed-reasons', '');
+    reasons.forEach(r => list.appendChild(el('li', '', r)));
+    panel.appendChild(list);
+  }
+
+  // 器械缺件这类提示与失败原因无关，但对"重试前该改什么"有用，照常带上。
+  // 单独起一行小标题：两块内容并排放在一起时，用户会以为最后一条也是
+  // 失败原因之一。
+  const notes = Array.isArray(warnings) ? warnings.filter(Boolean) : [];
+  if (notes.length) {
+    panel.appendChild(el('div', 'generation-failed-sub', '另外还有这些提示'));
+    const list = el('ul', 'generation-failed-reasons', '');
+    notes.slice(0, 5).forEach(w => list.appendChild(el('li', '', w)));
+    panel.appendChild(list);
+  }
+
+  const row = el('div', 'generation-failed-row', '');
+  row.appendChild(el('strong', '', '下一步：'));
+  appendText(row, details.next_step || '直接再生成一次即可。');
+  panel.appendChild(row);
+
+  const retry = document.createElement('button');
+  retry.className = 'btn-secondary';
+  retry.type = 'button';
+  retry.textContent = '再生成一次';
+  retry.onclick = generatePlan;
+  panel.appendChild(retry);
 
   container.appendChild(panel);
 }
@@ -7297,6 +7591,8 @@ function initTrainingTabs() {
     else showAuthGate();
     loadLogHistory();
     loadSavedPlans();
+    // 档案也按身份读回来：刷新后不该退回硬编码默认值，伤病尤其不能丢。
+    loadSavedProfile();
     // 身份解析完再迁：迁移要按当前身份写进「我的计划」，早了会落到错的
     // owner_key 上（游客 key 与登录后的 u:{id} 不是一回事）。
     migrateLocalHistory().then(loadSavedPlans);
