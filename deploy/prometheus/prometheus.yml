@@ -1,0 +1,21 @@
+# Prometheus 抓取配置示例。
+#
+# 指标端点在 /admin/* 下，受 ADMIN_TOKEN 保护。这里用标准 Bearer 头，
+# 令牌放在单独的文件里（credentials_file），不要写进本文件或 compose 的
+# 环境变量，避免配置本身成为泄露源。
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: ironmind
+    metrics_path: /admin/metrics/prometheus
+    scheme: http
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/admin_token
+    static_configs:
+      - targets: ["app:8503"]

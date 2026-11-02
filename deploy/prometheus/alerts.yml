@@ -1,0 +1,75 @@
+# IronMind 告警规则。
+#
+# 阈值来自 /admin/sli 的三个 SLI 与两个运行信号：
+#   1. 成功率      —— 5xx 占比
+#   2. P95 延迟    —— 含流式响应完成时间
+#   3. LLM 失败率  —— 含熔断跳过
+#   4. 熔断状态    —— 已经在跳过上游，属于用户可感知的降级
+#   5. 进程存活    —— 抓取失败
+#
+# 全部带 `for`：单次抖动不该叫人起床；持续 5–10 分钟才值得处理。
+groups:
+  - name: ironmind-api
+    rules:
+      - alert: IronMindDown
+        expr: up{job="ironmind"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "IronMind 抓取失败"
+          description: "Prometheus 连续 2 分钟抓不到 {{ $labels.instance }}。"
+
+      - alert: ApiErrorRateHigh
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.05
+          and
+          sum(rate(http_requests_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "业务接口错误率超过 5%"
+          description: "近 5 分钟 5xx 占比 {{ $value | humanizePercentage }}。"
+
+      - alert: ApiLatencyP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "接口 P95 延迟超过 5 秒"
+          description: "近 10 分钟 P95 为 {{ $value }}s。流式接口按完成时间计入，长回答会抬高该值，需结合 LLM 延迟一起看。"
+
+      - alert: LLMFailureRateHigh
+        expr: |
+          (
+            sum(rate(llm_calls_total{outcome!="success"}[10m]))
+            /
+            sum(rate(llm_calls_total[10m]))
+          ) > 0.10
+          and
+          sum(rate(llm_calls_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM 调用失败率超过 10%"
+          description: "近 10 分钟失败率 {{ $value | humanizePercentage }}，降级链可能已经耗尽。"
+
+      - alert: LLMCircuitOpen
+        expr: increase(llm_calls_total{outcome="circuit_open"}[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "有模型处于熔断状态"
+          description: "近 10 分钟有 {{ $value }} 次调用因熔断被跳过，说明上游持续失败。"

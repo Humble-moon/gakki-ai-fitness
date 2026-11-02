@@ -72,7 +72,9 @@ RAGAS 对 68 条查询的评测结果（`eval/ragas_results.json`）：
 
 **成本控制是单机级别的。** 当日 LLM 成本上限依赖 Redis 计数，Redis 故障时降级为放行。参考量级：单份训练计划约 ¥0.32（含数十次模型调用），单次问答约 ¥0.01。
 
-**运维能力范围。** 已有：启动期 `alembic upgrade head`、结构化 JSON 日志与 `X-Request-ID` 关联、`/health/live` 与探测 PostgreSQL/Redis 的 `/health/ready`、`pg_dump` 备份与恢复脚本、依赖精确锁定、Prometheus 文本指标（`/admin/metrics/prometheus`）与三个 SLI（`/admin/sli`：请求成功率、P95 延迟、LLM 调用失败率）、只追加的审计表（登录、审核创建与解除、数据导出与删除，`/admin/audit-events`）、CI 覆盖率门槛（70%）与锁定依赖漏洞扫描。**没有**：告警规则、日志聚合、指标长期存储、数据保留期自动清理、审计表归档。
+**运维能力范围。** 已有：启动期 `alembic upgrade head`、结构化 JSON 日志与 `X-Request-ID` 关联、`/health/live` 与探测 PostgreSQL/Redis 的 `/health/ready`、`pg_dump` 备份与恢复脚本、依赖精确锁定、Prometheus 文本指标（`/admin/metrics/prometheus`）与三个 SLI（`/admin/sli`：请求成功率、P95 延迟、LLM 调用失败率）、只追加的审计表（登录、审核创建与解除、数据导出与删除，`/admin/audit-events`）、CI 覆盖率门槛（70%）与锁定依赖漏洞扫描、五条告警规则（`deploy/prometheus/alerts.yml`）。**没有**：日志聚合、指标长期存储、告警通知渠道、数据保留期自动清理、审计表归档。
+
+**发布链路。** 推送 `vMAJOR.MINOR.PATCH` tag 会构建镜像、用 Trivy 扫描（有修复版本的 HIGH/CRITICAL 直接失败）、生成 SBOM 并创建 GitHub Release；`/health/live` 返回版本号，回滚方式见 `docs/release.md`。**没有**蓝绿或金丝雀、自动回滚与镜像签名；`docker compose up -d` 是存在秒级中断的替换。
 
 ## 六、不可由仓库独立复核的部分
 
