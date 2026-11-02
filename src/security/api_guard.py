@@ -175,15 +175,30 @@ class RateLimitMiddleware:
     """
 
     def __init__(self, app, requests_per_minute: int = 60,
-                 exempt_prefixes: tuple = ("/health", "/static")):
+                 exempt_prefixes: tuple = ("/health", "/static"),
+                 shared_limiter=None):
         self.app = app
         self.capacity = max(1, requests_per_minute)
         self.window = 60.0
         self.exempt_prefixes = exempt_prefixes
+        # 保留进程内窗口：既是 Redis 不可用时的回退，也让单机测试无需外部依赖。
         self._hits: dict[str, deque] = {}
         self._lock = threading.Lock()
+        if shared_limiter is None:
+            from src.security.shared_state import build_rate_limiter
+            shared_limiter = build_rate_limiter()
+        self._shared = shared_limiter
 
     def _allow(self, client: str) -> tuple[bool, int]:
+        if self._shared is not None:
+            result = self._shared.allow(client, self.capacity, self.window)
+            if result is not None:
+                return result
+            # Redis 不可用 → 回退到本实例窗口。多副本时配额会临时变宽，
+            # 但服务不断；Redis 恢复后自动回到共享计数。
+        return self._allow_local(client)
+
+    def _allow_local(self, client: str) -> tuple[bool, int]:
         now = time.monotonic()
         with self._lock:
             window = self._hits.setdefault(client, deque())

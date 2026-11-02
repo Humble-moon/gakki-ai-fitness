@@ -129,6 +129,12 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "fitness123")   # Neo4j 密码
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")  # Redis 服务器地址
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6380"))  # Redis 端口（使用 6380 避免和默认 6379 冲突）
 
+# 限流与熔断状态后端：
+#   auto   —— 有 Redis 就用共享状态，连不上自动回退进程内（默认）
+#   redis  —— 强制共享；启动时连不上直接失败，避免多副本悄悄各算各的
+#   memory —— 只用进程内状态，适合单机开发与测试
+SHARED_STATE_BACKEND = os.getenv("SHARED_STATE_BACKEND", "auto").strip().lower()
+
 # ============================================================
 # MinIO 对象存储配置
 # 对象存储：存储生成的训练计划 JSON 文件，类似 AWS S3 的本地替代

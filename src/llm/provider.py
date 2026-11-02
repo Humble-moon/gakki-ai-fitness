@@ -56,6 +56,7 @@ from src.config import (
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL,
 )
 from src.llm.cost_tracker import cost_tracker
+from src.observability.metrics import LLM_CALLS, LLM_DURATION
 
 logger = logging.getLogger(__name__)
 
@@ -145,14 +146,20 @@ class CircuitBreaker:
     """
 
     def __init__(self, failure_threshold: int = _CIRCUIT_FAILURE_THRESHOLD,
-                 cooldown_seconds: float = _CIRCUIT_COOLDOWN_SECONDS):
+                 cooldown_seconds: float = _CIRCUIT_COOLDOWN_SECONDS,
+                 remote=None):
         self.threshold = failure_threshold
         self.cooldown = cooldown_seconds
         self._failures: dict[str, list[float]] = {}
         self._open_until: dict[str, float] = {}
+        # 多副本时用 Redis 共享熔断状态；None 表示只用进程内状态。
+        self._remote = remote
 
     def record_failure(self, model_alias: str):
         """记录一次调用失败。连续失败达到阈值时打开熔断器。"""
+        if self._remote is not None and self._remote.record_failure(
+                model_alias, self.threshold, self.cooldown):
+            return
         now = time.monotonic()
         if model_alias not in self._failures:
             self._failures[model_alias] = []
@@ -170,6 +177,8 @@ class CircuitBreaker:
 
     def record_success(self, model_alias: str):
         """一次调用成功——重置该模型的失败计数和熔断状态。"""
+        if self._remote is not None and self._remote.record_success(model_alias):
+            return
         if model_alias in self._failures or model_alias in self._open_until:
             self._failures.pop(model_alias, None)
             self._open_until.pop(model_alias, None)
@@ -177,6 +186,10 @@ class CircuitBreaker:
 
     def is_open(self, model_alias: str) -> bool:
         """检查熔断器是否开启（该模型当前是否不可用）。"""
+        if self._remote is not None:
+            remote_state = self._remote.is_open(model_alias)
+            if remote_state is not None:
+                return remote_state
         if model_alias not in self._open_until:
             return False
         if time.monotonic() > self._open_until[model_alias]:
@@ -261,7 +274,8 @@ class LLMProvider:
         self._clients: dict[str, OpenAI] = {}
         self._models: dict[str, str] = {}
         self._active: str = "default"
-        self._breaker = CircuitBreaker()
+        from src.security.shared_state import build_circuit_backend
+        self._breaker = CircuitBreaker(remote=build_circuit_backend())
 
         for alias, cfg in LLM_CONFIGS.items():
             self._clients[alias] = OpenAI(
@@ -338,6 +352,7 @@ class LLMProvider:
                 continue
             if self._breaker.is_open(a):
                 logger.warning(f"[CircuitBreaker] Skipping {a} — circuit is OPEN")
+                LLM_CALLS.inc({"model": self._models.get(a, a), "outcome": "circuit_open"})
                 continue
             available.append(a)
         # 如果所有模型都被熔断，至少保留一个（全挂了就全挂了，不能空链）
@@ -450,6 +465,7 @@ class LLMProvider:
                     f"(alias={alias}) | errors so far: {errors}"
                 )
 
+            call_started = time.monotonic()
             try:
                 resp = self._call_api_with_retry(
                     cl, mn, messages, temperature, deadline=deadline)
@@ -460,12 +476,16 @@ class LLMProvider:
                 cost_tracker.record(mn, resp.tokens,
                                     extra="fallback" if resp.degraded else "chat")
                 self._breaker.record_success(alias)
+                LLM_DURATION.observe(time.monotonic() - call_started, {"model": mn})
+                LLM_CALLS.inc({"model": mn, "outcome": "success"})
                 # 响应里若复述了占位符，还原成原文再交给上层。
                 # 还原是纯字符串替换、不引入新信息，因此是安全的。
                 if redaction_map and getattr(resp, "content", None):
                     resp.content = restore_text(resp.content, redaction_map)
                 return resp
             except Exception as e:
+                LLM_DURATION.observe(time.monotonic() - call_started, {"model": mn})
+                LLM_CALLS.inc({"model": mn, "outcome": "error"})
                 summary = _error_summary(e)
                 errors.append(f"{mn}: {summary}")
                 logger.error(f"[LLM] {mn} failed: {summary}")
@@ -519,6 +539,7 @@ class LLMProvider:
                     logger.warning(f"[Fallback:stream] Switching to {mn} after errors: {errors}")
 
                 started_output = False
+                stream_started = time.monotonic()
                 try:
                     stream = self._create_stream_with_retry(
                         cl, mn, messages, temperature, deadline=deadline)
@@ -536,10 +557,16 @@ class LLMProvider:
                     cost_tracker.record(mn, max(1, len(output_text) // 2),
                                         extra="stream:fallback" if i > 0 else "stream")
                     self._breaker.record_success(alias)
+                    LLM_DURATION.observe(time.monotonic() - stream_started, {"model": mn})
+                    LLM_CALLS.inc({"model": mn, "outcome": "success"})
                     metadata.degraded = i > 0
                     return
                 except Exception as e:
+                    LLM_DURATION.observe(time.monotonic() - stream_started, {"model": mn})
+                    LLM_CALLS.inc({"model": mn, "outcome": "error"})
                     if started_output:
+                        # 已经向客户端吐过内容，不能再换模型重来；
+                        # 但这次调用仍然是一次失败，需要计入失败率。
                         raise
                     summary = _error_summary(e)
                     errors.append(f"{mn}: {summary}")
