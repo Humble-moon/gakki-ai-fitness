@@ -90,6 +90,21 @@ def manual_review(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolated_audit_db(tmp_path, monkeypatch):
+    """审计事件写临时库，不污染运行目录里的 data/audit.db。
+
+    覆盖路径后必须把单例置空：``get_audit_store()`` 是进程级缓存，
+    不清掉的话第一个用例的临时路径会被后面所有用例继续使用。
+    """
+    monkeypatch.setenv("AUDIT_DB_PATH", str(tmp_path / "audit.db"))
+    from src.audit import store as audit_store
+
+    audit_store._default_store = None
+    yield
+    audit_store._default_store = None
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     """清空 RateLimitMiddleware 的滑动窗口。
 

@@ -44,6 +44,12 @@ from src.graph import build_inputs, build_runtime, graph_stream_events
 from src.hitl.review_resolution import make_resolution
 from src.hitl.review_storage import is_review_expired, review_expires_at
 from src import config
+from src.audit import get_audit_store, record_event
+from src.observability.metrics import (
+    MetricsMiddleware,
+    render_prometheus,
+    sli_snapshot,
+)
 from src.security.api_guard import (AdminAuthMiddleware, ApiKeyMiddleware,
                                     CostLimitMiddleware, RateLimitMiddleware,
                                     cors_allow_origins)
@@ -146,6 +152,8 @@ app.add_middleware(CostLimitMiddleware, guard=cost_guard)
 
 app.add_middleware(RateLimitMiddleware,
                    requests_per_minute=config.RATE_LIMIT_PER_MINUTE)
+# 指标在限流之后注册 → 位于限流外层，被 429/401 拒绝的请求也会被计数。
+app.add_middleware(MetricsMiddleware)
 # CORS 最后注册 → 最外层，先于一切认证处理预检
 app.add_middleware(
     CORSMiddleware,
@@ -960,6 +968,12 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
             logger.warning("[data-rights] 导出会话失败：%s", exc)
             payload["conversation_error"] = str(exc)
 
+    # 导出是数据离开系统的动作，必须留痕；只记导出了哪些分节，不记内容本身。
+    record_event("data.exported", actor=athlete_key, target_type="account",
+                 target_id=athlete_key,
+                 detail={"sections": sorted(
+                     key for key, value in payload.items()
+                     if isinstance(value, list))})
     return payload
 
 
@@ -1052,6 +1066,12 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     result["ok"] = not result["errors"]
     if not result["ok"]:
         result["message"] = "部分数据删除失败，详见 errors。请重试或联系支持。"
+    # 删除记录保留在审计表里，且不随这次删除被清掉——否则"删了什么"无从追溯。
+    record_event("data.deleted", actor=athlete_key, target_type="account",
+                 target_id=athlete_key,
+                 outcome="success" if result["ok"] else "partial",
+                 detail={"deleted": result["deleted"],
+                         "errors": sorted(result["errors"])})
     return JSONResponse(status_code=200 if result["ok"] else 500, content=result)
 
 
@@ -1561,6 +1581,37 @@ async def admin_metrics():
     }
 
 
+@app.get("/admin/metrics/prometheus")
+async def admin_metrics_prometheus():
+    """Prometheus 抓取入口。
+
+    放在 /admin 下而不是根路径 /metrics：管理端认证中间件已经覆盖 /admin/*，
+    抓取端点无需再单独实现一套令牌校验，也不会因为漏配而暴露内部指标。
+    """
+    from starlette.responses import Response
+    return Response(
+        render_prometheus(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
+@app.get("/admin/sli")
+async def admin_sli():
+    """三个 SLI 的直接读数：请求成功率、P95 延迟、LLM 调用失败率。"""
+    return sli_snapshot()
+
+
+@app.get("/admin/audit-events")
+async def admin_audit_events(limit: int = 100, action: str = "", actor: str = ""):
+    """最近的审计事件，按时间倒序。action/actor 可精确过滤。"""
+    store = get_audit_store()
+    return {
+        "events": store.list_events(
+            limit=limit, action=action or None, actor=actor or None),
+        "total": store.count(action=action or None),
+    }
+
+
 @app.post("/admin/reingest")
 async def admin_reingest(strategy: str = "combo", incremental: bool = True):
     """POST /admin/reingest — 手动触发知识库摄入（增量模式）。
@@ -1815,6 +1866,11 @@ def resolve_review_v2(review_id: str, req: ReviewResolveRequest,
     reviewer = principal.username or (artifact.owner_key if artifact else "guest")
     resolution = make_resolution(review_id, req.decision, reviewer, req.comment)
     graph_runtime.resolutions.record(resolution)
+    # 审核决定进入审计表：谁、对哪一条、做了通过还是拒绝。
+    # 评论正文不落库，避免把用户健康描述写进长期保留的表。
+    record_event("review.resolved", actor=reviewer, target_type="review",
+                 target_id=review_id,
+                 detail={"decision": req.decision, "thread_id": resolved_thread})
     state = graph_runtime.graph.invoke(
         Command(resume={"decision": req.decision, "review_id": review_id,
                         "reviewer": reviewer, "comment": req.comment}),

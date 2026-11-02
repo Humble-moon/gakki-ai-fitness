@@ -22,6 +22,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
+from src.audit import record_event
 from src.security import auth as auth_mod
 from src.security.session import (
     ANONYMOUS,
@@ -238,12 +239,17 @@ def register(body: Credentials, request: Request, response: Response):
         # 检查之间挂了。前者是用户错误、后者是服务错误，不能混为一谈，
         # 因此回查一次来区分。
         if store.find_by_username(username):
+            record_event("auth.register", actor=username, target_type="user",
+                         outcome="failure", detail={"reason": "username_taken"})
             raise HTTPException(status_code=409, detail={
                 "error": "username_taken", "message": "该用户名已被使用。"})
         raise _unavailable()
 
     token = get_session_store().create(created["id"], created["username"])
     _set_session_cookie(response, token, request)
+    record_event("auth.register", actor=user_owner_key(created["id"]),
+                 target_type="user", target_id=str(created["id"]),
+                 detail={"username": created["username"]})
     return _user_payload(created)
 
 
@@ -257,21 +263,32 @@ def login(body: Credentials, request: Request, response: Response):
     # 用户名不存在与密码错误返回同一个响应：区分开来等于提供一个
     # 用户名枚举接口，攻击者可据此筛出有效账号再做定向爆破。
     if not row or not auth_mod.verify_password(body.password, row["password_hash"]):
+        # 审计只记"谁失败了、原因是什么"，绝不落密码或哈希。
+        record_event("auth.login", actor=body.username, target_type="user",
+                     outcome="failure", detail={"reason": "invalid_credentials"})
         raise HTTPException(status_code=401, detail={
             "error": "invalid_credentials", "message": "用户名或密码不正确。"})
     if not row.get("is_active", True):
+        record_event("auth.login", actor=user_owner_key(row["id"]),
+                     target_type="user", target_id=str(row["id"]),
+                     outcome="denied", detail={"reason": "account_disabled"})
         raise HTTPException(status_code=403, detail={
             "error": "account_disabled", "message": "该账号已被停用。"})
 
     token = get_session_store().create(row["id"], row["username"])
     _set_session_cookie(response, token, request)
+    record_event("auth.login", actor=user_owner_key(row["id"]),
+                 target_type="user", target_id=str(row["id"]))
     return _user_payload(row)
 
 
 @router.post("/logout")
 def logout(request: Request, response: Response):
-    get_session_store().revoke(request.cookies.get(COOKIE_NAME))
+    cookie = request.cookies.get(COOKIE_NAME)
+    get_session_store().revoke(cookie)
     _clear_session_cookie(response)
+    # 登出时已没有可信身份，只记录"发生过一次登出"以及是否带了会话。
+    record_event("auth.logout", detail={"had_session": bool(cookie)})
     return {"authenticated": False}
 
 
@@ -332,6 +349,9 @@ def issue_guest(body: GuestIssueRequest | None = None):
     """
     legacy = (body.legacy_key if body else "") or None
     token, owner = get_guest_identity_store().issue(legacy_key=legacy)
+    # 记录归属键，不记录令牌：令牌本身就是凭据，进审计表等于把钥匙抄一遍。
+    record_event("auth.guest_issued", actor=owner, target_type="guest",
+                 target_id=owner, detail={"legacy_claimed": bool(legacy)})
     return {"guest_token": token, "athlete_key": owner}
 
 
@@ -428,4 +448,7 @@ def claim_guest_data(
             "只认领了与当前画像相符的一档历史数据；更早时期因体重等变化产生的"
             "旧记录无法找回——它们由画像哈希生成，无法反推或枚举。")
 
+    record_event("auth.data_claimed", actor=owner, target_type="account",
+                 target_id=owner, outcome="success" if not result["skipped"] else "partial",
+                 detail={"claimed": result["claimed"], "skipped": result["skipped"]})
     return result

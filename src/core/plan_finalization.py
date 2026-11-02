@@ -470,7 +470,7 @@ def create_review_artifact(review_store, profile: dict, query: str, result: dict
         "warning",
     )
     prohibited, _ = hold_guidance(result)
-    return review_store.create(
+    artifact = review_store.create(
         profile_summary={key: profile.get(key) for key in ("goal", "injuries", "training_years") if key in profile},
         query=query,
         issues=issues,
@@ -478,6 +478,12 @@ def create_review_artifact(review_store, profile: dict, query: str, result: dict
         prohibited_actions=prohibited,
         owner_key=owner_key or "",
     )
+    # 审计只记"谁触发了审核、严重度、几条问题"，不落问题原文与画像。
+    from src.audit import record_event
+    record_event("review.created", actor=owner_key or "anonymous",
+                 target_type="review", target_id=artifact.review_id,
+                 detail={"severity": severity, "issue_count": len(issues)})
+    return artifact
 
 
 _INTERNAL_MARKER_RE = re.compile(r"^\s*\[(规则引擎|语义匹配)\]\s*")
