@@ -1,0 +1,63 @@
+{
+  "emergency": {
+    "metrics": {
+      "tp": 12,
+      "fp": 0,
+      "fn": 0,
+      "tn": 20,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "accuracy": 1.0
+    },
+    "errors": []
+  },
+  "injury_nature": {
+    "accuracy": 1.0,
+    "total": 14,
+    "correct": 14,
+    "confusion": {
+      "structural": {
+        "structural": 8
+      },
+      "limitation": {
+        "limitation": 6
+      }
+    },
+    "errors": []
+  },
+  "conflict": {
+    "metrics": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "tn": 4,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "accuracy": 1.0
+    },
+    "errors": []
+  },
+  "safety_trigger_rate": {
+    "正常需求": {
+      "hit": 1,
+      "total": 6,
+      "rate": 0.1667
+    },
+    "否定表达": {
+      "hit": 1,
+      "total": 4,
+      "rate": 0.25
+    },
+    "多伤病": {
+      "hit": 2,
+      "total": 4,
+      "rate": 0.5
+    }
+  }
+}
