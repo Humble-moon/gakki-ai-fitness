@@ -138,13 +138,13 @@ PDF 另有一个可选的 MinerU 后端（`DOC_PARSER_BACKEND=mineru`，默认�
 | 记忆 | 短期滑动窗口 + 长期记忆（带时间戳） |
 | 评测 | 206 条 Golden Dataset + 三组消融实验 + E2E/RAGAS + Serving 压测 |
 | 前端 | 单文件 HTML/CSS/JS（`app/static/index.html`，无构建步骤，无前端框架）+ SSE 流式；苹果式浅色主题，系统字体栈 + 单一强调色 |
-| 部署 | Docker Compose（PostgreSQL + Neo4j + Redis + MinIO） |
+| 部署 | Docker Compose（应用 + PostgreSQL + Neo4j + Redis + MinIO），带健康检查与重启策略 |
 
 ## 快速开始
 
 ```bash
-# 1. 安装依赖（不加载本地向量模型，装的是 API 版依赖）
-pip install -r requirements.txt
+# 1. 安装依赖（锁定版本，保证换机器也能构建出同一套依赖）
+pip install -r requirements.lock
 
 # 1b. 可选：跑 RAGAS 评测才需要
 # pip install -r requirements-eval.txt
@@ -152,9 +152,14 @@ pip install -r requirements.txt
 # 2. 配置环境变量
 cp .env.example .env
 # 编辑 .env，填入 DeepSeek API Key 和 DashScope API Key
+# 本地开发不想每次带 API 令牌时，显式设置 LOCAL_OPEN_MODE=1；
+# 不设置时业务接口按失败关闭原则拒绝访问。
 
-# 3. 启动基础服务（PostgreSQL/Neo4j/Redis/MinIO）
+# 3. 启动全部服务（应用 + 四个依赖）
 docker compose up -d
+
+# 或只启动依赖、在宿主机跑应用：
+# docker compose up -d postgres neo4j redis minio
 
 # 4. 灌入种子数据（338 个动作 → PG + Neo4j）
 python -m src.main --seed
@@ -162,10 +167,15 @@ python -m src.main --seed
 # 5. 摄入知识库（162 篇文档；chunk 数量以实际摄入输出为准 → pgvector）
 python -m src.rag.knowledge_ingestion --dir data/knowledge
 
-# 6. 启动服务
+# 6. 宿主机方式启动服务（容器方式已由第 3 步完成）
 python app/server.py
 # → 浏览器打开 http://localhost:8503
 # → 接口文档（Swagger UI）http://localhost:8503/docs
+
+# 日常运维
+make backup                              # pg_dump → backups/*.sql.gz，默认留 7 份
+make restore FILE=backups/xxx.sql.gz     # 覆盖式恢复，需交互确认
+make migrate                             # 手动执行 alembic upgrade head
 ```
 
 ## 参与开发

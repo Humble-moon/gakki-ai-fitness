@@ -301,14 +301,69 @@ REWRITE_MODEL = os.getenv("REWRITE_MODEL", "deepseek-chat")
 # 用法：配置独立的 LLM_REWRITE_* 或在 .env 设 REWRITE_MODEL=deepseek-chat
 
 # ============================================================
+# 调用超时与预算
+# 没有上界的对外调用是最隐蔽的可用性风险：上游不返回时请求会一直挂住，
+# 单进程部署下几个卡住的请求就能把服务堵死。下面的值都比实测慢路径留出
+# 一倍以上余量（计划生成端到端 47s，单次调用最慢约 30–40s），平时不会
+# 触发；一旦触发说明上游确实异常，应当快速失败而不是无限等待。
+# ============================================================
+LLM_REQUEST_TIMEOUT = float(os.getenv("LLM_REQUEST_TIMEOUT", "60"))
+# 单次 HTTP 请求的连接/读取超时（秒）。流式请求的 read 语义是
+# "两个数据块之间的最大间隔"，不是整个响应的总时长。
+
+LLM_TOTAL_BUDGET = float(os.getenv("LLM_TOTAL_BUDGET", "180"))
+# 一次 chat() 调用（含全部重试与降级模型）的总时长上限（秒）。
+# 设这个上限，是为了让"重试 3 次 + 切换到备用模型"不会叠加成数分钟。
+
+EMBEDDING_REQUEST_TIMEOUT = float(os.getenv("EMBEDDING_REQUEST_TIMEOUT", "30"))
+# embedding 兼容模式客户端的超时（秒）。native 模式另有独立的 30s 常量。
+
+REVIEW_ARTIFACT_TTL_SECONDS = int(os.getenv("REVIEW_ARTIFACT_TTL_SECONDS", "86400"))
+# 人工审核工件的有效期（秒），默认 24 小时。过期后不再允许解除恢复，
+# 避免 manual 模式下留下永久挂起的待审请求。
+
+GUEST_TOKEN_TTL_SECONDS = int(os.getenv(
+    "GUEST_TOKEN_TTL_SECONDS", str(365 * 24 * 3600)))
+# 游客身份令牌有效期（秒），默认一年。游客数据按 owner_key 留在库里，
+# 令牌过期只是不能再访问，不会删除数据。
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+# 应用与 uvicorn 的统一日志级别。
+
+LOG_JSON = os.getenv("LOG_JSON", "0").lower() in ("1", "true", "yes")
+# 输出结构化 JSON 日志。本地开发默认人读文本；部署到有日志采集的
+# 环境时设 1，才能按 request_id / level 过滤。
+
+AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "1").lower() in ("1", "true", "yes")
+# 启动时执行 alembic upgrade head。生产应为 1：代码版本与库结构
+# 必须同步，否则新代码会撞上旧表。离线测试设为 0。
+
+HEALTH_PROBE_DEPENDENCIES = os.getenv(
+    "HEALTH_PROBE_DEPENDENCIES", "1").lower() in ("1", "true", "yes")
+# /health/ready 是否真的连接 PostgreSQL 与 Redis。生产应为 1：只检查
+# "配置里有没有模型"说明不了服务能不能用。离线测试或本地无依赖时设 0。
+
+ALLOW_LEGACY_GUEST_KEY = os.getenv(
+    "ALLOW_LEGACY_GUEST_KEY", "0").lower() in ("1", "true", "yes")
+# 是否继续接受未签名的游客 athlete_key。默认关闭：游客身份必须由
+# POST /api/auth/guest 签发，客户端不能自己编一个 key 来读写数据。
+# 只在一次性迁移窗口内临时打开；打开期间任何知道旧 key 的人都能认领它。
+
+# ============================================================
 # HTTP 安全加固（认证 / 限流 / CORS）
 # 全部可选配置：不设置时保持本地单用户演示的默认行为，
 # 其中 /admin/* 端点在未配置任何令牌时按失败关闭原则拒绝访问。
 # ============================================================
 API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "")
-# /api/* 业务接口的 Bearer 令牌。为空则不启用认证（本地演示）；
-# 设置后所有 /api/* 请求须携带 Authorization: Bearer <token>、
-# X-API-Key 头部或 ?api_key=<token>（SSE 浏览器客户端无法设置自定义头部）。
+# /api/* 业务接口的 Bearer 令牌。设置后所有 /api/* 请求须携带
+# Authorization: Bearer <token>、X-API-Key 头部或 ?api_key=<token>
+# （SSE 浏览器客户端无法设置自定义头部）。
+
+LOCAL_OPEN_MODE = os.getenv(
+    "LOCAL_OPEN_MODE", "0").lower() in ("1", "true", "yes")
+# 未配置 API_AUTH_TOKEN 时是否允许 /api/* 直接放行。默认关闭——忘配令牌
+# 不应该悄悄降级成无认证服务，那是最容易被漏掉的上线事故。本地开发
+# 不想每次带令牌时显式设置 LOCAL_OPEN_MODE=1。
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 # /admin/* 管理端点的专用令牌（X-Admin-Token 头部）。

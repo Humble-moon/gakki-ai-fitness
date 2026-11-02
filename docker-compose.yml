@@ -1,4 +1,4 @@
-# 本地演示用的基础服务。
+# 本地与自托管部署的完整拓扑：应用进程 + 四个依赖服务。
 #
 # 两条默认约束，改之前先想清楚：
 #   1. 端口一律绑 127.0.0.1。这些是开发期依赖，没有理由监听所有网络接口——
@@ -8,6 +8,40 @@
 #      `docker compose up -d` 开箱即用；对外部署时请在 .env 里覆盖，
 #      不要沿用演示密码。
 services:
+  app:
+    build: .
+    ports: ["127.0.0.1:8503:8503"]
+    env_file: .env
+    # 容器内用服务名互连；.env 里写的是宿主机视角的 localhost:5433/6380，
+    # 不覆盖会让容器去连自己。
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - MINIO_ENDPOINT=minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+      minio:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8503/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    volumes:
+      # 命名卷而不是 bind mount：SQLite 检查点与审核库要可写，
+      # 而宿主机目录的 uid 与容器内非 root 用户对不上。
+      - app_data:/app/data
+
   postgres:
     image: pgvector/pgvector:pg16
     ports: ["127.0.0.1:5433:5432"]
@@ -17,6 +51,13 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-fitness_assistant}
     volumes:
       - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ai_fitness} -d ${POSTGRES_DB:-fitness_assistant}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   neo4j:
     image: neo4j:5.20
@@ -27,12 +68,19 @@ services:
       - NEO4J_server_memory_heap_max__size=1g
     volumes:
       - neo4j_data:/data
+    restart: unless-stopped
 
   redis:
     image: redis/redis-stack:latest
     ports: ["127.0.0.1:6380:6379", "127.0.0.1:8002:8001"]
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   minio:
     image: minio/minio:latest
@@ -43,8 +91,10 @@ services:
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio_data:/data
+    restart: unless-stopped
 
 volumes:
+  app_data:
   pg_data:
   neo4j_data:
   redis_data:
