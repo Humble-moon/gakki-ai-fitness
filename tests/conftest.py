@@ -34,6 +34,15 @@ from dotenv import load_dotenv
 # 重复调用无副作用。
 load_dotenv()
 
+# 测试不配置 API 令牌，显式打开本地放行——生产默认是失败关闭的。
+os.environ.setdefault("LOCAL_OPEN_MODE", "1")
+# 既有用例大量直接传裸 athlete_key；生产默认要求服务端令牌。
+os.environ.setdefault("ALLOW_LEGACY_GUEST_KEY", "1")
+# 离线套件不保证本机有 PostgreSQL/Redis，就绪探针只检查配置。
+os.environ.setdefault("HEALTH_PROBE_DEPENDENCIES", "0")
+# 测试不跑启动迁移：它需要真实数据库，且与用例验证的业务逻辑无关。
+os.environ.setdefault("AUTO_MIGRATE", "0")
+
 #: 一眼可辨的占位值；不是真实凭据。
 _PLACEHOLDER_KEY = "test-placeholder-key-not-a-real-credential"
 #: RFC 2606 保留域名，保证任何真实请求都会立即失败。
@@ -104,3 +113,16 @@ def _reset_rate_limiter():
     except Exception:  # noqa: BLE001 — 重置失败不该让测试本身报错
         pass
     yield
+
+
+@pytest.fixture(autouse=True)
+def _legacy_guest_key_window(monkeypatch):
+    """测试沿用裸 athlete_key。
+
+    生产默认已关闭这个窗口（游客身份必须由服务端签发）。既有用例大量
+    直接传 ``athlete_key``，它们验证的是业务逻辑而不是身份来源；逐个
+    换成真令牌既嘈杂又会掩盖原本的断言。覆盖身份来源的用例会自己把
+    这个开关改回去。
+    """
+    from src.security import session as session_mod
+    monkeypatch.setattr(session_mod, "ALLOW_LEGACY_GUEST_KEY", True)

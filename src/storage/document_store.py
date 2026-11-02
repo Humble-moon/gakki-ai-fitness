@@ -138,6 +138,45 @@ class DocumentStore:
             {"sid": session_id},
         )
 
+    def list_by_owner(self, owner_key: str) -> list[dict]:
+        """该身份名下全部会话的文档元数据（不含全文）。
+
+        会话键在写入时已加 ``{owner_key}:`` 前缀，所以这里按前缀聚合，
+        而不是要求调用方遍历会话列表——遍历会漏掉已经不再活跃的会话。
+        """
+        rows = self.db.fetch_all(
+            """SELECT id, session_id, filename, file_type, file_size,
+                      page_count, title, has_text, parse_error, created_at
+               FROM user_documents
+               WHERE session_id LIKE :prefix
+               ORDER BY created_at DESC""",
+            {"prefix": f"{owner_key}:%"},
+        )
+        return [
+            {"id": r.id, "session_id": r.session_id, "filename": r.filename,
+             "file_type": r.file_type, "file_size": r.file_size,
+             "page_count": r.page_count, "title": r.title,
+             "has_text": bool(r.has_text), "parse_error": r.parse_error,
+             "created_at": r.created_at.isoformat() if r.created_at else ""}
+            for r in rows
+        ]
+
+    def cleanup_owner(self, owner_key: str) -> dict[str, int]:
+        """删除该身份名下全部会话的文档与切块。"""
+        prefix = f"{owner_key}:%"
+        chunks = self.db.execute(
+            "DELETE FROM document_chunks WHERE session_id LIKE :prefix",
+            {"prefix": prefix},
+        )
+        docs = self.db.execute(
+            "DELETE FROM user_documents WHERE session_id LIKE :prefix",
+            {"prefix": prefix},
+        )
+        return {
+            "documents": getattr(docs, "rowcount", 0) or 0,
+            "chunks": getattr(chunks, "rowcount", 0) or 0,
+        }
+
     def _enforce_limit(self, session_id: str, db=None):
         """保持每个 session 最多 MAX_DOCS_PER_SESSION 个文档。"""
         db = db or self.db

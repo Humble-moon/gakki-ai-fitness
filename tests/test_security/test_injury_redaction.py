@@ -267,7 +267,7 @@ def _provider(monkeypatch, captured, reply_content):
 
     provider._breaker = FakeBreaker()
 
-    def fake_call(client, model_name, messages, temperature):
+    def fake_call(client, model_name, messages, temperature, deadline=None):
         captured.extend(messages)
         return LLMResponse(content=reply_content, model=model_name, tokens=10)
 

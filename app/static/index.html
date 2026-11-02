@@ -4048,11 +4048,38 @@ localStorage.setItem(APP_SESSION_KEY, globalSessionId);
 // 而增肌减脂期体重必然持续变化，等于每周换一个用户。
 // 因此这里生成一次、永不轮换，并由它承载训练日志与已确认的调整。
 const ATHLETE_KEY_STORAGE = 'ironmind_athlete_key';
-let athleteKey = localStorage.getItem(ATHLETE_KEY_STORAGE) ||
-  ((window.crypto && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : 'athlete_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10));
-localStorage.setItem(ATHLETE_KEY_STORAGE, athleteKey);
+// 游客身份由服务端签发（g1_ 前缀的令牌），客户端不再自己生成 UUID：
+// 自编的 key 只是"格式合法"，知道别人的值就能读写对方数据。
+// 旧版本留下的 UUID 会在首次访问时一次性换成令牌，归属键沿用原值。
+let athleteKey = '';
+try {
+  athleteKey = localStorage.getItem(ATHLETE_KEY_STORAGE) || '';
+} catch (e) {}
+
+// 首次访问换取游客令牌；老的本地 UUID 作为 legacy_key 一次性认领。
+// 已经持有令牌时直接返回，不产生额外请求。
+async function ensureGuestIdentity() {
+  if (athleteKey && athleteKey.startsWith('g1_')) return athleteKey;
+  const legacy = athleteKey || null;
+  try {
+    const resp = await fetch('/api/auth/guest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ legacy_key: legacy || '' }),
+    });
+    if (!resp.ok) throw new Error('guest identity failed: ' + resp.status);
+    const data = await resp.json();
+    if (!data.guest_token) throw new Error('missing guest_token');
+    athleteKey = data.guest_token;
+    localStorage.setItem(ATHLETE_KEY_STORAGE, athleteKey);
+    return athleteKey;
+  } catch (err) {
+    // 保持旧值：后续业务请求会得到明确的 400，比静默换成一个
+    // 服务端不认识的 key 更容易排查。
+    console.warn('游客身份获取失败', err);
+    return athleteKey;
+  }
+}
 
 // 演示数据绑定的运动员标识（seed 脚本写入的固定值）
 const DEMO_ATHLETE_KEY = 'demo-athlete';
@@ -6193,7 +6220,8 @@ async function analyzeExercise() {
     ...getProfile(),
     exercise_name: document.getElementById('ex-name').value || '哑铃卧推',
     user_description: document.getElementById('ex-desc').value || '',
-    session_id: globalSessionId
+    session_id: globalSessionId,
+    athlete_key: athleteKey
   };
   let stageEl = null, streamBox = null;
   try {
@@ -6241,6 +6269,7 @@ async function uploadFile() {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('session_id', globalSessionId);
+  formData.append('athlete_key', athleteKey);
 
   // Show uploading state
   const area = document.getElementById('uploaded-files');
@@ -6570,7 +6599,7 @@ async function loadLogHistory() {
 // ── 演示数据绑定 ──
 // seed 脚本按固定的 demo-athlete 写入，而浏览器里的 athlete_key 是随机 UUID，
 // 两者不匹配图表就是空的。这个按钮消除演示前唯一需要人工干预的环节。
-function loadDemoData() {
+async function loadDemoData() {
   // 登录态下禁用：演示数据挂在共享的 demo-athlete 身份上，登录用户切过去
   // 会看到"自己的数据全没了"，而实际上是查到了另一个身份。按钮已在
   // renderSession 里隐藏，这里再兜一次——隐藏不足以阻止程序化调用。
@@ -6578,8 +6607,22 @@ function loadDemoData() {
     showStatus('log-status', '演示数据为游客态专用，请先退出登录');
     return;
   }
-  athleteKey = DEMO_ATHLETE_KEY;
-  localStorage.setItem(ATHLETE_KEY_STORAGE, athleteKey);
+  // 演示数据也走服务端签发的令牌：owner_key 仍是 demo-athlete，
+  // 但客户端不能直接把它当成身份传给后端。
+  try {
+    const resp = await fetch('/api/auth/guest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ legacy_key: DEMO_ATHLETE_KEY }),
+    });
+    if (!resp.ok) throw new Error('demo identity failed: ' + resp.status);
+    const data = await resp.json();
+    athleteKey = data.guest_token;
+    localStorage.setItem(ATHLETE_KEY_STORAGE, athleteKey);
+  } catch (err) {
+    showStatus('log-status', '演示数据切换失败，请稍后重试');
+    return;
+  }
   showStatus('log-status', '已切换到演示数据，正在刷新…');
   loadLogHistory();
   loadTrainingStats();
@@ -7574,7 +7617,10 @@ function initTrainingTabs() {
   loadExerciseImages();
   // 先问服务端登录态再拉数据：否则会先用游客身份查一遍训练日志，
   // 登录用户会看到一瞬间的空图表，再被账号数据替换。
-  loadSession().then(() => {
+  loadSession().then(async () => {
+    // 游客身份先就绪再拉业务数据：令牌没拿到时请求会 400，
+    // 先用旧值查一遍只会让界面闪一下错误。
+    if (!currentUser) await ensureGuestIdentity();
     // 放行判定。两条本机标记：游客放行、以及"上次登录过"的乐观提示。
     // 游客标记必须保留——刷新反复弹登录页等于把游客挡在门外。
     let guestPass = false, authHint = false;

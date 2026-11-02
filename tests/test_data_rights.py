@@ -153,7 +153,8 @@ class TestExport:
         assert len(body["training_logs"]) == 1
         assert len(body["body_measurements"]) == 1
         assert body["long_term_memory"] == {"goal": "增肌"}
-        assert body["conversation"]["session_id"] == "s-1"
+        # 会话按身份命名空间隔离，导出返回服务端实际使用的键。
+        assert body["conversation"]["session_id"] == "athlete-abc:s-1"
         assert "exported_at" in body
 
     def test_export_includes_plan_body_not_just_summary(self, rig):
@@ -214,11 +215,14 @@ class TestDeleteBehaviour:
         assert body["deleted"] == {
             "training_logs": 5, "body_measurements": 1,
             "long_term_keys": 3, "plans": 1, "conversation_keys": 2,
+            # 上传文档与待审工件同属个人数据，删除范围必须覆盖它们。
+            "documents": {"documents": 0, "chunks": 0},
+            "review_artifacts": 0,
         }
         assert store.deleted == ["athlete-abc"]
         assert measures.deleted == ["athlete-abc"]
         assert long_term.purged == ["athlete-abc"]
-        assert conversation.purged == ["s-1"]
+        assert conversation.purged == ["athlete-abc:s-1"]
 
     def test_deletes_body_measurements(self, rig):
         """体测记录是个人健康数据，漏删就等于"删除我的数据"没删干净。"""

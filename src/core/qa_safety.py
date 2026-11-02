@@ -52,7 +52,10 @@ SAFETY_KEYWORDS: tuple[str, ...] = (
 EMERGENCY_KEYWORDS: tuple[str, ...] = (
     # 心血管
     "胸闷", "胸口闷", "心慌", "心悸", "心跳加速", "心跳很快", "心跳得厉害",
-    "心跳过速", "脉搏很快",
+    "心跳快", "心跳特别快", "心跳剧烈", "心跳过速", "脉搏很快",
+    # 心肌缺血的典型描述：压迫感与压榨感比"疼"更能指向心血管事件，
+    # 而"胸肌酸痛"这类训练后常见感受不会命中。
+    "胸口压迫", "胸口像被压", "压迫感", "压榨感",
     # 神经 / 脑供血
     "头晕", "眩晕", "晕眩", "晕厥", "晕倒", "昏倒", "昏过去", "晕过去",
     "眼前发黑", "眼前一黑", "意识模糊", "意识不清", "失去意识",
@@ -151,6 +154,44 @@ def normalize_question(text: str) -> str:
     return out
 
 
+#: 紧邻急症词之前的否定形式。只认"没有X""无X""不存在X"这类直接否定，
+#: 不把"没休息好，训练时胸闷"里的"没"算进来——所以窗口很短，且遇到
+#: 转折词或标点立即失效。
+_NEGATION_TAIL = re.compile(r"(没有|没|无|不存在|未|不)\s*$")
+
+#: 出现这些词说明否定已经被转折推翻，例如"没有休息，但胸闷得厉害"。
+_TURNING_WORDS = ("但", "却", "不过", "然而", "可是", "但是", "反而")
+
+_PUNCTUATION = "，。；！？,.;!?"
+
+
+def _negated_at(text: str, start: int) -> bool:
+    """急症词在 ``start`` 处是否处于否定语境。"""
+    prefix = text[max(0, start - 6):start]
+    if any(ch in prefix for ch in _PUNCTUATION):
+        return False
+    if any(word in prefix for word in _TURNING_WORDS):
+        return False
+    return bool(_NEGATION_TAIL.search(prefix))
+
+
+def _find_affirmed(text: str, keywords) -> bool:
+    """词表中是否存在一处未被否定的命中。
+
+    急症表与一般安全表共用这一判断，避免两处各写一份否定逻辑后慢慢走样。
+    """
+    for keyword in keywords:
+        start = 0
+        while True:
+            index = text.find(keyword, start)
+            if index < 0:
+                break
+            if not _negated_at(text, index):
+                return True
+            start = index + len(keyword)
+    return False
+
+
 def detect_emergency(question: str) -> bool:
     """判断问题是否包含运动急症信号。
 
@@ -161,10 +202,13 @@ def detect_emergency(question: str) -> bool:
     单独成表而非并入 ``SAFETY_KEYWORDS``，是因为两者的话术不可互换：
     急症若被按普通伤病话术处置（"先观察一下""下次注意"），会延误就医。
 
+    命中后还要看语境：用户说"没有胸闷""不存在呼吸困难"是在排除症状，
+    按命中处理会把人吓一跳，也会让急症话术失去分量。因此逐个匹配位置
+    做一次否定判断，只要有一个未被否定的命中就判为急症。
+
     同样走 ``normalize_question``，使零宽字符等绕过手法对急症词一并失效。
     """
-    normalized = normalize_question(question)
-    return any(kw in normalized for kw in EMERGENCY_KEYWORDS)
+    return _find_affirmed(normalize_question(question), EMERGENCY_KEYWORDS)
 
 
 def detect_safety_concern(
@@ -187,11 +231,11 @@ def detect_safety_concern(
         命中任一层即返回 True。
     """
     normalized = normalize_question(question)
-    if any(kw in normalized for kw in SAFETY_KEYWORDS):
+    if _find_affirmed(normalized, SAFETY_KEYWORDS):
         return True
     # 急症词独立成表（话术更强），但必须在这里兜底：即使某个调用点尚未
     # 升级到急症话术，也绝不能让急症漏过安全约束。
-    if any(kw in normalized for kw in EMERGENCY_KEYWORDS):
+    if _find_affirmed(normalized, EMERGENCY_KEYWORDS):
         return True
     if injuries:
         return True

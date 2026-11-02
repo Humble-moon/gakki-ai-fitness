@@ -22,6 +22,7 @@ API 端点总览：
 import json
 import logging
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 # 将项目根目录加入 Python 模块搜索路径，确保 src.* 导入正常
@@ -41,6 +42,7 @@ from src.health import readiness_checks
 from src.llm.provider import LLMUnavailableError
 from src.graph import build_inputs, build_runtime, graph_stream_events
 from src.hitl.review_resolution import make_resolution
+from src.hitl.review_storage import is_review_expired, review_expires_at
 from src import config
 from src.security.api_guard import (AdminAuthMiddleware, ApiKeyMiddleware,
                                     CostLimitMiddleware, RateLimitMiddleware,
@@ -48,6 +50,7 @@ from src.security.api_guard import (AdminAuthMiddleware, ApiKeyMiddleware,
 from src.security.cost_guard import CostGuard
 from src.security.session import (
     Principal,
+    scoped_session_id,
     user_owner_key,
 )
 from app.auth_api import (
@@ -59,6 +62,9 @@ from src.storage.redis_client import RedisClient
 from src.llm.cost_tracker import cost_tracker
 from langgraph.types import Command
 
+from src.observability.logging import RequestIdMiddleware, configure_logging
+
+configure_logging()
 logger = logging.getLogger(__name__)
 _TERMINAL_EVENTS = {"done", "error", "cancelled"}
 STREAM_HEADERS = {
@@ -73,9 +79,23 @@ STREAM_HEADERS = {
 # 一直是 FastAPI 默认开启的，此前缺的只是标题之外的说明，点进去是一份没有
 # 描述、没有分组的端点清单。定位与运行契约以 docs/project-fact-baseline.md 为准，
 # 不要在这里写"生产级""多租户"这类与事实不符的措辞。
+@asynccontextmanager
+async def lifespan(app):
+    """启动期：先把库结构升到 head，再开始接收请求。
+
+    迁移失败直接抛异常拒绝启动——带着不匹配的 schema 提供服务，
+    比启动失败更难排查。
+    """
+    if config.AUTO_MIGRATE:
+        from src.db_migrate import upgrade_to_head
+        upgrade_to_head()
+    yield
+
+
 app = FastAPI(
     title="IRON MIND · AI Fitness Coach",
     version="0.1.0",
+    lifespan=lifespan,
     description=(
         "本地运行的 AI 健身私教。Multi-Agent 生成个性化训练计划，"
         "GraphRAG 做伤病推理，混合检索的知识问答带来源引用。\n\n"
@@ -109,7 +129,9 @@ def health_ready():
 # 浏览器会收到 401 而不是跨源策略，前端表现为"跨域请求莫名失败"。
 app.add_middleware(ApiKeyMiddleware, token=config.API_AUTH_TOKEN,
                    # 登录/注册/登出必须能在无凭据时访问，否则形成鸡生蛋
-                   exempt_prefixes=("/api/auth/",))
+                   exempt_prefixes=("/api/auth/",),
+                   # 未配令牌时默认失败关闭，本地放行必须是显式选择。
+                   allow_open_mode=config.LOCAL_OPEN_MODE)
 app.add_middleware(AdminAuthMiddleware,
                    admin_token=config.ADMIN_TOKEN,
                    api_token=config.API_AUTH_TOKEN)
@@ -132,6 +154,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# 请求关联 ID 最后注册 → 最外层：连被限流或 CORS 拒绝的响应
+# 也能带上 X-Request-ID，便于把客户端报错和日志对上。
+app.add_middleware(RequestIdMiddleware)
 
 # 账号相关路由（注册/登录/登出/会话查询）
 app.include_router(auth_router)
@@ -238,6 +263,8 @@ class AnalysisRequest(BaseModel):
     # 用户对自己做动作时的感受描述
     session_id: Optional[str] = Field(None, pattern=r"^[A-Za-z0-9._:-]{1,128}$")
     # 会话 ID，用于多轮对话上下文（同样要挡住 glob 通配符）
+    athlete_key: Optional[str] = None
+    # 游客身份令牌。分析结果会写入会话记忆，必须先把会话收进身份命名空间。
 
 
 class QuestionRequest(BaseModel):
@@ -475,15 +502,17 @@ def generate_plan(req: PlanRequest,
     """
     profile = _profile_from_request(req)
     owner_key = require_owner_key(principal, req.athlete_key)
+    session_id = scoped_session_id(owner_key, req.session_id)
     return StreamingResponse(
-        _stream_events(orch.generate_plan_stream(profile, req.query, req.session_id,
+        _stream_events(orch.generate_plan_stream(profile, req.query, session_id,
                                                  athlete_key=owner_key)),
         media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
 
 @app.post("/api/analyze-exercise")
-def analyze_exercise(req: AnalysisRequest):
+def analyze_exercise(req: AnalysisRequest,
+                     principal: Principal = Depends(get_current_principal)):
     """
     POST /api/analyze-exercise - 流式分析动作姿势（SSE）
 
@@ -510,9 +539,13 @@ def analyze_exercise(req: AnalysisRequest):
         3. 以 SSE 格式返回
     """
     profile = _profile_from_request(req)
+    # 分析结果会写进会话记忆，会话必须先收进身份命名空间，否则任何知道
+    # session_id 的人都能读到别人的对话上下文。
+    owner_key = require_owner_key(principal, req.athlete_key)
+    session_id = scoped_session_id(owner_key, req.session_id)
     return StreamingResponse(
         _stream_events(orch.analyze_exercise_stream(
-            req.exercise_name, req.user_description, profile, req.session_id)),
+            req.exercise_name, req.user_description, profile, session_id)),
         media_type="text/event-stream", headers=STREAM_HEADERS
     )
 
@@ -549,8 +582,9 @@ def ask_question(req: QuestionRequest,
     """
     profile = _profile_from_request(req)
     owner_key = require_owner_key(principal, req.athlete_key)
+    session_id = scoped_session_id(owner_key, req.session_id)
     return StreamingResponse(
-        _stream_events(orch.answer_question_stream(req.question, profile, req.session_id,
+        _stream_events(orch.answer_question_stream(req.question, profile, session_id,
                                                    athlete_key=owner_key)),
         media_type="text/event-stream", headers=STREAM_HEADERS
     )
@@ -560,6 +594,8 @@ def ask_question(req: QuestionRequest,
 async def upload_document(
     file: UploadFile = File(...),
     session_id: str = Form(...),
+    athlete_key: Optional[str] = Form(None),
+    principal: Principal = Depends(get_current_principal),
 ):
     """上传 PDF/Word/MD 文档，解析并存入 session 级文档库。
 
@@ -573,6 +609,11 @@ async def upload_document(
     """
     from src.parsers import parse_file
     from src.storage.document_store import MAX_FILE_SIZE
+
+    # 文档按会话分区，而会话必须收进身份命名空间：否则任何知道
+    # session_id 的调用者都能在问答里检索到别人上传的文档。
+    owner_key = require_owner_key(principal, athlete_key)
+    session_id = scoped_session_id(owner_key, session_id)
 
     # 读文件内容
     content = await file.read()
@@ -843,6 +884,8 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
         })
 
     athlete_key = require_owner_key(principal, athlete_key)
+    # 会话与业务身份同属一份数据，读/删都要走同一命名空间。
+    session_id = scoped_session_id(athlete_key, session_id)
     payload: dict = {
         "athlete_key": athlete_key,
         "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -851,6 +894,7 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
         "saved_plans": [],
         "long_term_memory": {},
         "conversation": None,
+        "documents": [],
         "note": (
             "本文件包含你的全部个人数据。训练计划由 AI 生成，仅供参考，"
             "不构成医疗建议。"
@@ -898,6 +942,13 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
         logger.warning("[data-rights] 导出长期记忆失败：%s", exc)
         payload["long_term_memory_error"] = str(exc)
 
+    try:
+        # 上传文档也算个人数据：用户有权拿走自己传过的内容清单。
+        payload["documents"] = orch.documents.list_by_owner(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[data-rights] 导出上传文档失败：%s", exc)
+        payload["documents_error"] = str(exc)
+
     if session_id:
         try:
             payload["conversation"] = {
@@ -941,6 +992,8 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
         })
 
     athlete_key = require_owner_key(principal, athlete_key)
+    # 会话与业务身份同属一份数据，读/删都要走同一命名空间。
+    session_id = scoped_session_id(athlete_key, session_id)
     logger.warning("[data-rights] 收到删除请求 subject=%s session_id=%s",
                    athlete_key, session_id or "-")
 
@@ -973,6 +1026,21 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     except Exception as exc:  # noqa: BLE001
         logger.error("[data-rights] 删除已保存计划失败：%s", exc)
         result["errors"]["plans"] = str(exc)
+
+    try:
+        result["deleted"]["documents"] = orch.documents.cleanup_owner(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[data-rights] 删除上传文档失败：%s", exc)
+        result["errors"]["documents"] = str(exc)
+
+    try:
+        # 审核「工件」是待处理的业务对象，随用户数据删除；
+        # 审核「决定」属于审计轨迹，保留不删（见 ReviewResolutionStore）。
+        result["deleted"]["review_artifacts"] = (
+            graph_runtime.deps.review_store.delete_by_owner(athlete_key))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[data-rights] 删除审核工件失败：%s", exc)
+        result["errors"]["reviews"] = str(exc)
 
     if session_id:
         try:
@@ -1615,9 +1683,10 @@ def generate_plan_v2(req: PlanRequest,
     profile = _profile_from_request(req)
     thread_id = graph_runtime.new_thread_id()
     config = graph_runtime.config_for(thread_id)
-    inputs = build_inputs(profile, query=req.query, session_id=req.session_id,
-                          thread_id=thread_id,
-                          athlete_key=require_owner_key(principal, req.athlete_key))
+    owner_key = require_owner_key(principal, req.athlete_key)
+    inputs = build_inputs(profile, query=req.query,
+                          session_id=scoped_session_id(owner_key, req.session_id),
+                          thread_id=thread_id, athlete_key=owner_key)
     try:
         state = graph_runtime.graph.invoke(inputs, config)
     except GoalConsistencyError as exc:
@@ -1639,9 +1708,10 @@ def generate_plan_v2_stream(req: PlanRequest,
     profile = _profile_from_request(req)
     thread_id = graph_runtime.new_thread_id()
     config = graph_runtime.config_for(thread_id)
-    inputs = build_inputs(profile, query=req.query, session_id=req.session_id,
-                          thread_id=thread_id,
-                          athlete_key=require_owner_key(principal, req.athlete_key))
+    owner_key = require_owner_key(principal, req.athlete_key)
+    inputs = build_inputs(profile, query=req.query,
+                          session_id=scoped_session_id(owner_key, req.session_id),
+                          thread_id=thread_id, athlete_key=owner_key)
     return StreamingResponse(
         _stream_events(graph_stream_events(graph_runtime, inputs, config)),
         media_type="text/event-stream", headers=STREAM_HEADERS,
@@ -1679,12 +1749,19 @@ def get_review_v2(review_id: str,
     if principal.is_authenticated and not _review_owned_by(
             artifact, user_owner_key(principal.user_id)):
         return _review_denied_response()
+    try:
+        expires_at = review_expires_at(artifact.created_at).isoformat()
+    except (TypeError, ValueError):
+        expires_at = None
     resolution = graph_runtime.resolutions.get(review_id)
     return {
         "review": {
             "review_id": artifact.review_id,
             "status": artifact.status,
             "created_at": artifact.created_at,
+            # 过期只影响"还能不能解除"，不改写 status，前端契约保持不变。
+            "expires_at": expires_at,
+            "expired": is_review_expired(artifact),
             "issues": artifact.issues,
             "severity": artifact.severity,
             "prohibited_actions": artifact.prohibited_actions,
@@ -1715,6 +1792,14 @@ def resolve_review_v2(review_id: str, req: ReviewResolveRequest,
             artifact, user_owner_key(principal.user_id)):
         return _review_denied_response()
 
+    # 过期工件不再恢复执行：否则 manual 模式下一条永远没人处理的待审请求
+    # 会一直把线程停在 review_gate。只拒绝解除，不删任何记录。
+    if artifact is not None and is_review_expired(artifact):
+        return JSONResponse(status_code=409, content={"error": {
+            "code": "REVIEW_EXPIRED",
+            "message": "该审核请求已超过有效期，请重新生成计划。",
+        }})
+
     resolved_thread = thread_id or graph_runtime.thread_index.thread_for(review_id)
     if not resolved_thread:
         return JSONResponse(status_code=404,
@@ -1724,11 +1809,15 @@ def resolve_review_v2(review_id: str, req: ReviewResolveRequest,
     if "review_gate" not in (snapshot.next or ()):
         return JSONResponse(status_code=409,
                             content={"error": {"code": "REVIEW_ALREADY_RESOLVED"}})
-    resolution = make_resolution(review_id, req.decision, req.reviewer, req.comment)
+    # 审核记录必须可追溯：登录用户用账号名，游客用工件的归属键。
+    # 请求体里的 reviewer 只当初次提交的展示名，不能作为身份来源——
+    # 否则任何人都能填一个别人的名字，让审计轨迹失去意义。
+    reviewer = principal.username or (artifact.owner_key if artifact else "guest")
+    resolution = make_resolution(review_id, req.decision, reviewer, req.comment)
     graph_runtime.resolutions.record(resolution)
     state = graph_runtime.graph.invoke(
         Command(resume={"decision": req.decision, "review_id": review_id,
-                        "reviewer": req.reviewer, "comment": req.comment}),
+                        "reviewer": reviewer, "comment": req.comment}),
         config)
     return {
         "thread_id": resolved_thread,

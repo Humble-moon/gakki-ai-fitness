@@ -7,7 +7,7 @@ from src.security.api_guard import (AdminAuthMiddleware, ApiKeyMiddleware,
                                     RateLimitMiddleware)
 
 
-def _build_app(*, api_token="", admin_token="", rpm=60):
+def _build_app(*, api_token="", admin_token="", rpm=60, allow_open_mode=True):
     app = FastAPI()
 
     @app.get("/health/live")
@@ -28,17 +28,29 @@ def _build_app(*, api_token="", admin_token="", rpm=60):
 
     app.add_middleware(AdminAuthMiddleware, admin_token=admin_token,
                        api_token=api_token)
-    app.add_middleware(ApiKeyMiddleware, token=api_token)
+    app.add_middleware(ApiKeyMiddleware, token=api_token,
+                       allow_open_mode=allow_open_mode)
     app.add_middleware(RateLimitMiddleware, requests_per_minute=rpm)
     return TestClient(app)
 
 
 # ---------- API key auth ----------
 
-def test_auth_disabled_by_default():
-    client = _build_app()
-    assert client.get("/api/ping").status_code == 200
+def test_auth_fails_closed_when_token_is_missing():
+    """忘配令牌不能悄悄变成无认证服务。"""
+    client = _build_app(allow_open_mode=False)
+    blocked = client.get("/api/ping")
+    assert blocked.status_code == 503
+    assert blocked.json()["error"] == "api_auth_not_configured"
+    # 非业务路径不受影响：首页与探针仍可访问。
     assert client.get("/").status_code == 200
+    assert client.get("/health/live").status_code == 200
+
+
+def test_auth_open_mode_allows_local_development():
+    """本地开发必须显式打开这个开关，默认不生效。"""
+    client = _build_app(allow_open_mode=True)
+    assert client.get("/api/ping").status_code == 200
 
 
 def test_auth_rejects_missing_and_accepts_valid_tokens():

@@ -73,11 +73,15 @@ class ApiKeyMiddleware:
     """
 
     def __init__(self, app, token: str = "", protected_prefix: str = "/api",
-                 exempt_prefixes: tuple = ()):
+                 exempt_prefixes: tuple = (), allow_open_mode: bool = False):
         self.app = app
         self.token = token
         self.protected_prefix = protected_prefix
         self.exempt_prefixes = exempt_prefixes
+        # 没有令牌时默认失败关闭。放行必须是一个显式决定（LOCAL_OPEN_MODE=1），
+        # 不能因为"忘了配"就悄悄变成无认证服务——这是最容易被漏掉的一类
+        # 上线事故：本地一切正常，暴露到网络后所有人都能直接调。
+        self.allow_open_mode = allow_open_mode
 
     def _authorized(self, scope) -> bool:
         auth = _header(scope, "authorization")
@@ -90,7 +94,7 @@ class ApiKeyMiddleware:
         return False
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or not self.token:
+        if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         # CORS 预检不带凭据（浏览器规范如此），拦下它就等于永远走不到 CORS 层，
@@ -106,6 +110,18 @@ class ApiKeyMiddleware:
         if any(path.startswith(p) for p in self.exempt_prefixes):
             await self.app(scope, receive, send)
             return
+
+        if not self.token:
+            if self.allow_open_mode:
+                await self.app(scope, receive, send)
+                return
+            await _json_response(send, 503, {
+                "error": "api_auth_not_configured",
+                "message": ("服务未配置 API_AUTH_TOKEN，业务接口按失败关闭原则拒绝访问。"
+                            "本地开发可显式设置 LOCAL_OPEN_MODE=1。"),
+            })
+            return
+
         if self._authorized(scope):
             await self.app(scope, receive, send)
             return

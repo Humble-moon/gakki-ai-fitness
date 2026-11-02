@@ -28,6 +28,7 @@ from src.security.session import (
     GuestKeyError,
     Principal,
     SessionStore,
+    get_guest_identity_store,
     is_safe_guest_key,
     resolve_owner_key,
     user_owner_key,
@@ -145,6 +146,18 @@ def require_owner_key(principal: Principal, client_key: str | None) -> str:
 class Credentials(BaseModel):
     username: str = ""
     password: str = ""
+
+
+class GuestIssueRequest(BaseModel):
+    """换取游客身份。
+
+    ``legacy_key`` 只用于一次性迁移：老版本客户端把 UUID 存在 localStorage，
+    换令牌时要沿用它作为归属键，否则历史数据会找不到。新客户端不传。
+    """
+
+    legacy_key: str | None = None
+    # 首次访问时前端还没有旧键，会传 null；允许 None 而不是要求空字符串，
+    # 否则一个新用户的第一跳就是 422。
 
 
 class ClaimRequest(BaseModel):
@@ -309,6 +322,19 @@ def _is_claimable(guest_key: str, current_owner: str) -> tuple[bool, str]:
     return True, ""
 
 
+@router.post("/guest")
+def issue_guest(body: GuestIssueRequest | None = None):
+    """签发游客身份令牌。
+
+    客户端不能自己生成 athlete_key：那只是一个"格式合法"的字符串，
+    知道别人的就能读写对方数据。这里由服务端生成不可猜测的令牌，
+    归属键单独存在服务端，令牌与数据之间不再由客户端说了算。
+    """
+    legacy = (body.legacy_key if body else "") or None
+    token, owner = get_guest_identity_store().issue(legacy_key=legacy)
+    return {"guest_token": token, "athlete_key": owner}
+
+
 @router.post("/claim")
 def claim_guest_data(
     body: ClaimRequest,
@@ -330,6 +356,21 @@ def claim_guest_data(
     from src.core.plan_finalization import make_user_key
 
     owner = user_owner_key(principal.user_id)
+
+    # 游客身份必须由服务端令牌解析出来。直接拿请求体里的字符串当 owner，
+    # 等于让调用者自选迁移哪份数据——知道别人的 key 就能把它搬进自己账号。
+    raw_guest_key = (body.guest_key or "").strip()
+    if raw_guest_key:
+        try:
+            guest_owner = resolve_owner_key(ANONYMOUS, raw_guest_key)
+        except GuestKeyError as exc:
+            raise HTTPException(status_code=400, detail={
+                "error": "invalid_guest_key",
+                "message": str(exc),
+            })
+    else:
+        guest_owner = ""
+
     store = get_user_store()
     if not store.enabled:
         raise _unavailable()
@@ -341,10 +382,10 @@ def claim_guest_data(
     result = {"owner_key": owner, "claimed": {}, "skipped": [], "notes": []}
 
     # ---- 1. 游客 UUID 名下的数据 ----
-    ok, reason = _is_claimable(body.guest_key, owner)
+    ok, reason = _is_claimable(guest_owner, owner)
     if ok:
         try:
-            result["claimed"]["training_logs"] = trained.rekey(body.guest_key, owner)
+            result["claimed"]["training_logs"] = trained.rekey(guest_owner, owner)
         except Exception as exc:  # noqa: BLE001 - 单源失败不阻断其余来源
             logger.warning("[claim] 训练日志认领失败：%s", exc)
             result["claimed"]["training_logs_error"] = str(exc)
@@ -353,13 +394,13 @@ def claim_guest_data(
             measures.ensure_table()
             if measures.enabled:
                 result["claimed"]["body_measurements"] = measures.rekey(
-                    body.guest_key, owner)
+                    guest_owner, owner)
         except Exception as exc:  # noqa: BLE001
             logger.warning("[claim] 体测记录认领失败：%s", exc)
             result["claimed"]["body_measurements_error"] = str(exc)
 
         try:
-            moved = memory.rekey(body.guest_key, owner)
+            moved = memory.rekey(guest_owner, owner)
             result["claimed"]["long_term"] = moved["moved"]
             if moved["skipped"]:
                 result["notes"].append(
@@ -369,7 +410,7 @@ def claim_guest_data(
         except Exception as exc:  # noqa: BLE001
             logger.warning("[claim] 长期记忆认领失败：%s", exc)
             result["claimed"]["long_term_error"] = str(exc)
-    elif body.guest_key:
+    elif guest_owner:
         result["skipped"].append({"source": "guest_key", "reason": reason})
 
     # ---- 2. 画像指纹名下的数据（尽力而为）----

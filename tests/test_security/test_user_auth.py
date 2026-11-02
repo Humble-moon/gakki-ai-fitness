@@ -160,13 +160,43 @@ def test_logged_in_user_key_ignores_client_supplied_key():
     assert resolve_owner_key(alice, "u:8") == "u:7"
 
 
-def test_guest_key_is_used_and_validated():
+def test_guest_key_is_rejected_without_server_token(monkeypatch):
+    """裸 key 不是所有权证明：知道别人的值就能读写对方数据，默认拒绝。"""
+    from src.security import session as session_mod
+
+    monkeypatch.setattr(session_mod, "ALLOW_LEGACY_GUEST_KEY", False)
+    with pytest.raises(GuestKeyError):
+        resolve_owner_key(ANONYMOUS, "abc-123_def.ghi")
+    with pytest.raises(GuestKeyError):
+        resolve_owner_key(ANONYMOUS, "demo-athlete")
+    with pytest.raises(GuestKeyError):
+        resolve_owner_key(
+            ANONYMOUS, "f47ac10b-58cc-4372-a567-0e02b2c3d479")
+
+
+def test_legacy_guest_key_window(monkeypatch):
+    """迁移窗口内才接受旧 key；窗口结束即 400。"""
+    from src.security import session as session_mod
+
+    monkeypatch.setattr(session_mod, "ALLOW_LEGACY_GUEST_KEY", True)
     assert resolve_owner_key(ANONYMOUS, "abc-123_def.ghi") == "abc-123_def.ghi"
     assert resolve_owner_key(ANONYMOUS, "  padded-key  ") == "padded-key"
-    # 历史与演示用过的形态必须仍然可用
     assert resolve_owner_key(ANONYMOUS, "demo-athlete") == "demo-athlete"
-    assert resolve_owner_key(
-        ANONYMOUS, "f47ac10b-58cc-4372-a567-0e02b2c3d479").startswith("f47ac10b")
+
+
+def test_guest_token_resolves_to_server_owner_key(monkeypatch):
+    """令牌由服务端签发，客户端只能出示、不能编造归属键。"""
+    from src.security import session as session_mod
+
+    class _FakeStore:
+        def resolve(self, token):
+            return "guest-abc" if token == "g1_valid" else None
+
+    monkeypatch.setattr(session_mod, "get_guest_identity_store",
+                        lambda: _FakeStore())
+    assert resolve_owner_key(ANONYMOUS, "g1_valid") == "guest-abc"
+    with pytest.raises(GuestKeyError):
+        resolve_owner_key(ANONYMOUS, "g1_unknown")
 
 
 @pytest.mark.parametrize("bad", ["", "   ", None, "has space", "sl/ash", "emi:colon",
@@ -379,17 +409,52 @@ def test_logged_in_user_cannot_read_another_key_sdata(authed_client, monkeypatch
     assert seen["key"] == "u:1", "服务端必须用登录身份，忽略客户端传来的 key"
 
 
-def test_guest_requests_require_a_valid_athlete_key(authed_client, monkeypatch):
-    """游客身份是显式的：没有合法标识就不能确定数据算谁的。"""
+def test_guest_endpoint_issues_server_side_token(authed_client, monkeypatch):
+    """签发端点是游客身份的唯一入口：令牌由服务端生成，不接受客户端自选。"""
+    seen = {}
+
+    class _FakeStore:
+        def issue(self, legacy_key=None):
+            seen["legacy"] = legacy_key
+            return "g1_issuedtoken", legacy_key or "guest-created"
+
+    # auth_api 是 from ... import 的具名绑定，要 patch 到它自己的命名空间。
+    monkeypatch.setattr("app.auth_api.get_guest_identity_store",
+                        lambda: _FakeStore())
+    client, _ = authed_client
+
+    issued = client.post("/api/auth/guest", json={})
+    assert issued.status_code == 200
+    assert issued.json()["guest_token"] == "g1_issuedtoken"
+    assert issued.json()["athlete_key"] == "guest-created"
+    assert seen["legacy"] is None
+
+    claimed = client.post("/api/auth/guest",
+                          json={"legacy_key": "f47ac10b-58cc-4372-a567-0e02b2c3d479"})
+    assert claimed.status_code == 200
+    assert claimed.json()["athlete_key"].startswith("f47ac10b")
+
+
+def test_guest_requests_require_a_valid_guest_token(authed_client, monkeypatch):
+    """游客身份是显式的：没有服务端令牌就不能确定数据算谁的。"""
     from app import server
+    from src.security import session as session_mod
+
+    class _FakeStore:
+        def resolve(self, token):
+            return "guest-device-1" if token == "g1_valid" else None
 
     monkeypatch.setattr(server, "_get_training_log_store", lambda: _EmptyStore())
+    monkeypatch.setattr(session_mod, "get_guest_identity_store",
+                        lambda: _FakeStore())
     client, _ = authed_client
     missing = client.get("/api/training-stats")
     assert missing.status_code == 400
     malformed = client.get("/api/training-stats", params={"athlete_key": "bad key!"})
     assert malformed.status_code == 400
-    ok = client.get("/api/training-stats", params={"athlete_key": "guest-device-1"})
+    unknown = client.get("/api/training-stats", params={"athlete_key": "g1_unknown"})
+    assert unknown.status_code == 400
+    ok = client.get("/api/training-stats", params={"athlete_key": "g1_valid"})
     assert ok.status_code == 200
 
 
@@ -414,6 +479,7 @@ PUBLIC_API_ROUTES = {
     "/api/auth/login": "登录前必须可达",
     "/api/auth/logout": "登出必须能对过期会话执行",
     "/api/auth/session": "查询登录态，未登录时返回 未登录",
+    "/api/auth/guest": "签发游客身份令牌，必须在没有任何身份时可达",
     "/api/analyze-exercise": "按请求体里的画像即时分析，不读写任何用户级持久化数据",
     "/api/upload-document": "上传文件按 session_id 归属（会话级，非账号级），未接入账号身份",
     "/api/exercise-images": "动作名到静态图片路径的固定映射，不含任何用户数据",
@@ -558,22 +624,31 @@ def test_claim_requires_login(claim_client):
 
 
 @pytest.mark.parametrize(("guest_key", "reason_kind"), [
-    ("u:2", "不能认领其他账号"),
     ("demo-athlete", "演示数据为共享内容"),
     ("", "未提供"),
 ])
 def test_claim_refuses_ineligible_sources(claim_client, guest_key, reason_kind):
-    """这三类来源必须被拒。
-
-    u: 开头的是别人的账号数据——认领它等于转移他人数据；
-    demo-athlete 是所有人共用的演示身份，认领会把共享内容混进个人账号。
-    """
+    """合法但不可认领的来源：不迁移，并在结果里说明原因。"""
     client, logs, memory = claim_client
     body = client.post("/api/auth/claim",
                        json={"guest_key": guest_key, "include_profile_fingerprint": False}).json()
     assert logs.rekeys == [], f"{guest_key} 不该触发迁移"
     if guest_key:
         assert any(reason_kind in s["reason"] for s in body["skipped"]), body["skipped"]
+
+
+def test_claim_rejects_account_key_as_guest_source(claim_client):
+    """u: 开头的是别人的账号数据；认领它等于转移他人数据。
+
+    这条在身份解析阶段就拒绝，不再进入"跳过并说明"的分支——它不是
+    一个可讨论的边界情况，而是明确的越权尝试。
+    """
+    client, logs, memory = claim_client
+    resp = client.post("/api/auth/claim",
+                       json={"guest_key": "u:2", "include_profile_fingerprint": False})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["error"] == "invalid_guest_key"
+    assert logs.rekeys == []
 
 
 def test_claim_never_overwrites_account_data(claim_client):
