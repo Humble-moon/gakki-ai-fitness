@@ -933,6 +933,19 @@ body {
   font-size: 11px;
   color: var(--chalk-faint);
 }
+.workout-ex-last {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--forge-amber-dim);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
 .workout-ex-state {
   margin-left: auto;
   font-family: var(--font-mono);
@@ -973,6 +986,14 @@ body {
   border-color: var(--accent-ink);
   box-shadow: 0 0 0 3px var(--forge-amber-dim);
 }
+/* 数字输入框自带的上下箭头在训练场景里没有用（点一次只 ±1），
+   还会把输入区挤窄。键盘与滚轮仍然可用。 */
+.workout-input input::-webkit-outer-spin-button,
+.workout-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.workout-input input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .workout-sets {
   display: flex;
   flex-wrap: wrap;
@@ -6980,10 +7001,15 @@ function buildWorkoutEx(entry, index) {
   inputs.appendChild(repsField.wrap);
   card.appendChild(inputs);
 
+  weightField.input.dataset.role = 'weight';
+  repsField.input.dataset.role = 'reps';
   weightField.input.addEventListener('input', () => {
+    // touched 标记让异步返回的"上次数据"不覆盖用户已经改过的值。
+    weightField.input.dataset.touched = '1';
     if (workoutState) workoutState.entries[index].weight = weightField.input.value;
   });
   repsField.input.addEventListener('input', () => {
+    repsField.input.dataset.touched = '1';
     if (workoutState) workoutState.entries[index].reps = repsField.input.value;
   });
 
@@ -7205,6 +7231,75 @@ function openWorkout(day, planMeta) {
 
   document.addEventListener('keydown', onWorkoutKeydown);
   closeBtn.focus();
+  // 面板先出来，历史数据随后回填：不为了预填把打开动作卡在网络上。
+  hydrateWorkoutLastData();
+}
+
+function formatLastDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return String(value || '');
+  return `${Number(match[2])}月${Number(match[3])}日`;
+}
+
+function formatWorkoutWeight(value) {
+  const number = Number(value);
+  if (!number) return '';
+  return Number.isInteger(number) ? String(number) : number.toFixed(1);
+}
+
+/* 拉最近 100 条日志，按动作名取「最近一次」。
+   日志已按日期倒序，所以第一次出现的记录就是上一次。
+   请求失败不提示：预填是增强项，拿不到就保持空输入，训练照常。 */
+async function hydrateWorkoutLastData() {
+  if (!workoutState || !athleteKey) return;
+  const state = workoutState;
+  try {
+    const resp = await fetch(
+      `/api/training-logs?athlete_key=${encodeURIComponent(athleteKey)}&limit=100`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (workoutState !== state) return;   // 面板已关闭或换成了别的计划
+
+    const last = {};
+    (data.logs || []).forEach(log => {
+      (log.entries || []).forEach(entry => {
+        const name = String(entry.exercise_name || '').trim();
+        if (name && !last[name]) last[name] = { entry, log_date: log.log_date };
+      });
+    });
+
+    state.entries.forEach((entry, index) => {
+      const record = last[String(entry.name).trim()];
+      if (!record) return;
+      const card = state.cards[index];
+      if (!card) return;
+
+      const meta = card.querySelector('.workout-ex-meta');
+      if (meta && !card.querySelector('.workout-ex-last')) {
+        const parts = [
+          `上次 ${formatLastDate(record.log_date)}`,
+          `${record.entry.sets} 组 × ${record.entry.reps} 次`,
+        ];
+        if (Number(record.entry.weight) > 0) {
+          parts.push(`${formatWorkoutWeight(record.entry.weight)} kg`);
+        }
+        meta.after(el('div', 'workout-ex-last', parts.join(' · ')));
+      }
+
+      const weightInput = card.querySelector('input[data-role="weight"]');
+      const repsInput = card.querySelector('input[data-role="reps"]');
+      if (weightInput && !weightInput.dataset.touched && Number(record.entry.weight) > 0) {
+        weightInput.value = String(record.entry.weight);
+        entry.weight = weightInput.value;
+      }
+      if (repsInput && !repsInput.dataset.touched && Number(record.entry.reps) > 0) {
+        repsInput.value = String(record.entry.reps);
+        entry.reps = repsInput.value;
+      }
+    });
+  } catch (e) {
+    // 见函数注释：预填失败不打断训练。
+  }
 }
 
 async function finishWorkout() {
