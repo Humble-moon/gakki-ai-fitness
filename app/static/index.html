@@ -954,53 +954,53 @@ body {
   white-space: nowrap;
 }
 .workout-ex.is-done .workout-ex-state { color: var(--accent-ink); }
-.workout-ex-inputs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+/* 逐组记录：组号 | 重量 | 次数 | 完成。
+   每组独立输入是这一版的核心——递增组、递减组、临时减重都能如实记下，
+   汇总字段只作为统计口径继续保留。 */
+.workout-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin-top: 12px;
 }
-.workout-input { display: flex; flex-direction: column; gap: 4px; }
-.workout-input span {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: var(--chalk-faint);
+.workout-set-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr) 40px;
+  gap: 8px;
+  align-items: center;
 }
-.workout-input input {
+.workout-set-index {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--chalk-faint);
+  text-align: center;
+}
+.workout-set-row input {
   width: 100%;
-  min-height: 42px;
-  padding: 9px 12px;
+  min-height: 40px;
+  padding: 8px 10px;
   background: var(--bg-deep);
   border: 1px solid var(--steel-light);
   border-radius: var(--radius-sm);
   color: var(--chalk);
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
-.workout-input input:focus {
+.workout-set-row input:focus {
   outline: none;
   border-color: var(--accent-ink);
   box-shadow: 0 0 0 3px var(--forge-amber-dim);
 }
-/* 数字输入框自带的上下箭头在训练场景里没有用（点一次只 ±1），
-   还会把输入区挤窄。键盘与滚轮仍然可用。 */
-.workout-input input::-webkit-outer-spin-button,
-.workout-input input::-webkit-inner-spin-button {
+/* 数字输入框的上下箭头在训练中没有用（点一次只 ±1），还会挤窄输入区。 */
+.workout-set-row input::-webkit-outer-spin-button,
+.workout-set-row input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-.workout-input input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-.workout-sets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-.set-dot {
+.workout-set-row input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.set-check {
   width: 40px;
   height: 40px;
   display: grid;
@@ -1008,20 +1008,22 @@ body {
   border: 1px solid var(--steel-light);
   border-radius: 50%;
   background: var(--bg-elevated);
-  color: var(--chalk-dim);
-  font-family: var(--font-mono);
-  font-size: 13px;
+  color: var(--chalk-faint);
+  font-size: 15px;
   cursor: pointer;
   transition: all 0.15s var(--ease-out);
 }
-.set-dot:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
-.set-dot:active { transform: scale(0.94); }
-.set-dot:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.set-dot.done {
+.set-check:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
+.set-check:active { transform: scale(0.94); }
+.set-check:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.workout-set-row.is-done input {
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.04);
+}
+.workout-set-row.is-done .set-check {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: var(--on-accent);
-  transform: scale(1.03);
 }
 
 .workout-footer {
@@ -1118,8 +1120,9 @@ body {
   .workout-progress { padding: 10px 16px 0; }
   .workout-body { padding: 12px 16px; gap: 10px; }
   /* 16px 是 iOS 不缩放输入框的门槛；触控区跟着放到 48px。 */
-  .workout-input input { font-size: 16px; min-height: 48px; }
-  .set-dot { width: 44px; height: 44px; }
+  .workout-set-row { grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 6px; }
+  .workout-set-row input { font-size: 16px; min-height: 48px; }
+  .set-check { width: 44px; height: 44px; }
   .workout-footer { padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); }
 }
 
@@ -1359,17 +1362,9 @@ body {
   font-size: 12px;
 }
 .qa-coach-context strong { color: var(--chalk); font-weight: 600; }
-.qa-hero-kicker { color: var(--accent-ink); font: 600 11px var(--font-mono); letter-spacing: 2px; text-transform: uppercase; }
-/* 中文微标签。上面那支是给拉丁字母的：等宽 + 2px 字距 + 大写，英文缩写串
-   读起来利落；换成中文就全反了——字距把四个字撑得松散，等宽栈又没有中文
-   字形（靠浏览器兜底，和全站黑体不是一套）。中文标签走这支：正文字体、
-   几乎不加字距、字号提到 12px（11px 的中文笔画已经开始糊）。 */
-.qa-kicker-cn { color: var(--accent-ink); font-family: var(--font-body); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
 .qa-lead { max-width: 650px; color: var(--chalk); font-size: 16px; line-height: 1.7; }
 .qa-topic-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .qa-topic-list .eq-chip { border-color: rgba(var(--safe-rgb),.35); }
-.qa-secondary-topics { margin-top: 12px; color: var(--chalk-faint); font-size: 12px; }
-.qa-secondary-topics summary { cursor: pointer; color: var(--chalk-dim); }
 .qa-safety-note { margin-top: 14px; color: var(--chalk-faint); font-size: 12px; line-height: 1.6; }
 .qa-answer-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; color: var(--chalk-faint); font: 11px var(--font-mono); }
 .qa-retry { margin-top: 12px; }
@@ -1389,11 +1384,6 @@ body {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-.qa-header-copy {
-  color: var(--text-secondary, var(--chalk-dim));
-  max-width: 620px;
-  line-height: 1.65;
 }
 .qa-output {
   min-height: 360px;
@@ -1452,12 +1442,82 @@ body {
   font-size: 12px;
 }
 #qa-new-session-btn,
-#file-upload-area,
 #btn-ask {
   min-height: 44px;
 }
 .qa-chat-container::-webkit-scrollbar { width: 4px; }
 .qa-chat-container::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 2px; }
+
+/* ── 知识问答：收紧信息层级 ──
+   原来同一件事说了五遍：英文眉标、大标题、两段说明、卡片标题、上传格式、
+   "无需上传也可以直接提问"、"点击提问发送"。这里每件事只说一次，发送按钮
+   从通栏大按钮收成常规主按钮，把注意力还给输入框和回答。 */
+.qa-header { margin-bottom: 14px; align-items: flex-start; }
+.qa-header-main { min-width: 0; }
+.qa-header h2 { margin: 0 0 6px; }
+.qa-header .qa-lead {
+  max-width: 720px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--chalk-dim);
+}
+.qa-coach-context { margin: 10px 0 14px; padding: 9px 12px; }
+.qa-composer { margin-top: 0; padding: 12px; }
+.qa-composer .query-input { min-height: 76px; font-size: 14px; }
+.qa-composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.qa-upload-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px dashed var(--steel-light);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--chalk-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out);
+}
+.qa-upload-chip:hover,
+.qa-upload-chip.is-drag {
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
+  background: var(--forge-amber-dim);
+}
+.qa-upload-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.qa-upload-hint { color: var(--chalk-faint); font-size: 11px; }
+.qa-composer-footer { justify-content: flex-end; margin-top: 10px; }
+.qa-send {
+  width: auto;
+  min-width: 132px;
+  padding: 12px 30px;
+}
+#qa-upload-status { min-height: 0; margin-top: 8px; font-size: 12px; }
+#qa-upload-status:empty { display: none; }
+/* 空状态已经占了首屏，统计三格全是 0 只会增加噪音；有对话后再出现。 */
+#qa-welcome:not([hidden]) ~ #qa-meta { display: none; }
+.qa-welcome { padding: 6px 2px 2px; }
+.qa-coach-lead h3 { margin: 0 0 4px; font-size: 17px; }
+.qa-coach-lead p { margin: 0; font-size: 13px; color: var(--chalk-dim); }
+.qa-topic-list { margin-top: 12px; }
+.qa-safety-note { margin-top: 10px; }
+
+@media (max-width: 767px) {
+  .qa-header { flex-direction: column; gap: 8px; }
+  .qa-upload-chip { width: auto; min-height: 40px; }
+  .qa-upload-hint { display: none; }
+  /* 触屏没有 Shift 键，这条提示只会在手机上占位置。 */
+  .qa-keyboard-hint { display: none; }
+  .qa-send { width: 100%; }
+}
 @media (max-width: 375px) {
   .workspace { padding-left: 12px; padding-right: 12px; }
   .qa-header h2 { font-size: 24px; }
@@ -1490,8 +1550,7 @@ body {
     align-items: stretch;
     flex-direction: column;
   }
-  .qa-composer-footer > button,
-  #file-upload-area {
+  .qa-composer-footer > button {
     width: 100%;
     min-height: 44px;
   }
@@ -2914,7 +2973,7 @@ body {
   .plan-ex-name { grid-column: 1 / -1; font-size: 14px; line-height: 1.4; }
   .plan-ex-sets, .plan-ex-reps, .plan-ex-rest { font-size: 11px; white-space: nowrap; text-align: left; }
   .plan-ex-notes { grid-column: 1 / -1; font-size: 11px; line-height: 1.55; color: var(--chalk-dim); }
-  .file-upload-area, #file-upload-area { min-height: 44px; }
+  .file-upload-area { min-height: 44px; }
   .query-input { min-height: 96px; }
   .btn-secondary, .tag, .eq-chip, .iterate-chip { min-height: 44px; }
   .btn-generate { min-height: 48px; }
@@ -3107,6 +3166,21 @@ body {
   justify-content: flex-end;
   padding-top: 10px;
 }
+.log-detail-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 8px 14px;
+}
+.log-detail-set {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--chalk-faint);
+}
+.log-detail-set span:last-child { color: var(--chalk-dim); }
 
 .log-month { margin-bottom: 18px; }
 .log-month-head {
@@ -4093,11 +4167,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     <!-- Q&A Tab -->
     <section class="tab-content feature-panel qa-workspace" id="panel-qa" role="tabpanel" aria-labelledby="tab-qa">
       <header class="qa-header" id="qa-header">
-        <div>
-          <p class="qa-hero-kicker">COACH KNOWLEDGE DESK · IRON MIND</p>
+        <div class="qa-header-main">
           <h2>知识问答</h2>
-          <p class="qa-lead">把今天的训练问题交给教练。先说清楚你的情况，再一起拆解下一步。</p>
-          <p class="qa-header-copy">训练、动作、恢复与营养都可以直接提问；回答会尽量标注依据，并在涉及伤病时提醒你谨慎判断。</p>
+          <p class="qa-lead">训练、动作、恢复、营养都可以问。回答会标注依据，涉及伤病时会提醒你就医。</p>
         </div>
         <div class="qa-header-actions">
           <span class="session-badge" id="qa-session-badge" hidden>多轮对话中</span>
@@ -4107,32 +4179,41 @@ input[type="date"]::-webkit-calendar-picker-indicator {
       <div class="qa-coach-context" id="qa-coach-context" aria-live="polite" aria-label="当前教练信息"></div>
 
       <div class="qa-composer" id="qa-composer">
-        <label class="query-field-label" for="qa-query">健身问题</label>
-        <textarea class="query-input" id="qa-query" placeholder="输入你的健身问题，如：硬拉的时候下背酸正常吗？减脂期怎么安排碳水？"></textarea>
-        <div id="file-upload-area" role="button" tabindex="0" aria-controls="file-input" aria-describedby="qa-upload-help" onclick="document.getElementById('file-input').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('file-input').click()}" ondragover="this.style.borderColor='var(--forge-amber)';this.style.background='var(--forge-amber-dim)';return false" ondragleave="this.style.borderColor='var(--steel-light)';this.style.background='var(--bg-card)';return false" ondrop="handleFileDrop(event);this.style.borderColor='var(--steel-light)';this.style.background='var(--bg-card)';return false">
-          <span aria-hidden="true">&#128206;</span>
-          <span>添加资料（可选）</span>
-          <span id="qa-upload-help">文件格式：PDF、Word、纯文本，单个不超过 20MB</span>
-          <input type="file" id="file-input" accept=".pdf,.docx,.doc,.md,.txt" hidden onchange="uploadFile()"/>
+        <textarea class="query-input" id="qa-query" placeholder="输入问题，例如：硬拉时下背酸，今天怎么调整？"></textarea>
+        <div class="qa-composer-tools">
+          <div id="file-upload-area" class="qa-upload-chip" role="button" tabindex="0"
+               aria-controls="file-input" aria-describedby="qa-upload-help"
+               onclick="document.getElementById('file-input').click()"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('file-input').click()}"
+               ondragover="event.preventDefault();this.classList.add('is-drag');return false"
+               ondragleave="this.classList.remove('is-drag');return false"
+               ondrop="handleFileDrop(event);this.classList.remove('is-drag');return false">
+            <span aria-hidden="true">&#128206;</span>
+            <span>添加资料</span>
+            <input type="file" id="file-input" accept=".pdf,.docx,.doc,.md,.txt" hidden onchange="uploadFile()"/>
+          </div>
+          <span class="qa-upload-hint" id="qa-upload-help">PDF / Word / 文本，单个不超过 20MB</span>
+          <span class="qa-keyboard-hint" id="qa-keyboard-hint">Shift + Enter 换行</span>
         </div>
         <div id="uploaded-files" aria-live="polite"></div>
-        <div id="qa-upload-status" aria-live="polite">无需上传也可以直接提问。</div>
+        <div id="qa-upload-status" aria-live="polite"></div>
         <div class="qa-composer-footer">
-          <span class="qa-keyboard-hint" id="qa-keyboard-hint">点击“提问”发送，Shift+Enter 换行</span>
-          <button class="btn-generate" id="btn-ask" type="button" onclick="askQuestion()">▸ 提问</button>
+          <button class="btn-generate qa-send" id="btn-ask" type="button" onclick="askQuestion()">▸ 提问</button>
         </div>
       </div>
 
       <div id="qa-output" class="qa-output" aria-live="polite">
         <div class="qa-welcome" id="qa-welcome">
-          <div class="qa-coach-lead"><span class="qa-kicker-cn">教练对话</span><h3>从一个具体场景开始</h3><p>告诉我你正在做什么、哪里不舒服或想达成什么目标。我会先给结论，再说明阶段、依据与安全边界。</p></div>
+          <div class="qa-coach-lead">
+            <h3>从一个具体场景开始</h3>
+            <p>描述你在做什么、哪里不舒服、想达到什么目标。先给结论，再说依据。</p>
+          </div>
           <div class="qa-topic-list">
             <button type="button" class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">硬拉时下背酸，今天该怎么调整？</button>
             <button type="button" class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">减脂期训练前后怎么安排碳水？</button>
             <button type="button" class="eq-chip" onclick="document.getElementById('qa-query').value=this.textContent;askQuestion()">深蹲膝盖不适，有哪些替代动作？</button>
           </div>
-          <details class="qa-secondary-topics"><summary>更多可聊主题</summary><p>恢复、蛋白质、肩袖训练、训练频率与器械选择。</p></details>
-          <p class="qa-safety-note">安全提醒：问答用于训练知识参考，不能替代医生或康复师的诊断。</p>
+          <p class="qa-safety-note">问答用于训练参考，不能替代医生或康复师的诊断。</p>
         </div>
         <div class="qa-chat" id="qa-chat" hidden></div>
         <div class="qa-meta" id="qa-meta" aria-label="问答统计">
@@ -6772,7 +6853,7 @@ function handleFileDrop(e) {
 function removeFile() {
   document.getElementById('uploaded-files')?.replaceChildren();
   const status = document.getElementById('qa-upload-status');
-  if (status) status.textContent = '无需上传也可以直接提问。';
+  if (status) status.textContent = '';
   const input = document.getElementById('file-input');
   if (input) input.value = '';
 }
@@ -7047,17 +7128,50 @@ function formatWorkoutClock(seconds) {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function makeWorkoutInput(labelText, inputMode, value) {
-  const wrap = el('label', 'workout-input');
-  wrap.appendChild(el('span', '', labelText));
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.inputMode = inputMode;
-  input.step = inputMode === 'numeric' ? '1' : 'any';
-  input.min = '0';
-  if (value !== undefined && value !== null && value !== '') input.value = value;
-  wrap.appendChild(input);
-  return { wrap, input };
+function buildWorkoutSetRow(entry, index, setIndex, card) {
+  const row = entry.rows[setIndex];
+  const node = el('div', 'workout-set-row');
+  node.dataset.set = String(setIndex);
+  node.appendChild(el('span', 'workout-set-index', String(setIndex + 1)));
+
+  const weightInput = document.createElement('input');
+  weightInput.type = 'number';
+  weightInput.inputMode = 'decimal';
+  weightInput.step = 'any';
+  weightInput.min = '0';
+  weightInput.placeholder = 'kg';
+  weightInput.dataset.role = 'weight';
+  if (row.weight !== '') weightInput.value = row.weight;
+  weightInput.addEventListener('input', () => {
+    // touched 标记让异步返回的"上次数据"不覆盖用户已经改过的值。
+    weightInput.dataset.touched = '1';
+    row.weight = weightInput.value;
+  });
+
+  const repsInput = document.createElement('input');
+  repsInput.type = 'number';
+  repsInput.inputMode = 'numeric';
+  repsInput.step = '1';
+  repsInput.min = '0';
+  repsInput.placeholder = '次';
+  repsInput.dataset.role = 'reps';
+  if (row.reps !== '') repsInput.value = row.reps;
+  repsInput.addEventListener('input', () => {
+    repsInput.dataset.touched = '1';
+    row.reps = repsInput.value;
+  });
+
+  const check = el('button', 'set-check', '✓');
+  check.type = 'button';
+  check.dataset.set = String(setIndex);
+  check.setAttribute('aria-label', `第 ${setIndex + 1} 组完成`);
+  check.setAttribute('aria-pressed', 'false');
+  check.addEventListener('click', () => toggleWorkoutSet(index, setIndex, card));
+
+  node.appendChild(weightInput);
+  node.appendChild(repsInput);
+  node.appendChild(check);
+  return node;
 }
 
 function buildWorkoutEx(entry, index) {
@@ -7074,62 +7188,41 @@ function buildWorkoutEx(entry, index) {
   head.appendChild(state);
   card.appendChild(head);
 
-  const inputs = el('div', 'workout-ex-inputs');
-  const weightField = makeWorkoutInput('重量 kg', 'decimal', entry.weight);
-  const repsField = makeWorkoutInput('次数', 'numeric', entry.reps);
-  inputs.appendChild(weightField.wrap);
-  inputs.appendChild(repsField.wrap);
-  card.appendChild(inputs);
-
-  weightField.input.dataset.role = 'weight';
-  repsField.input.dataset.role = 'reps';
-  weightField.input.addEventListener('input', () => {
-    // touched 标记让异步返回的"上次数据"不覆盖用户已经改过的值。
-    weightField.input.dataset.touched = '1';
-    if (workoutState) workoutState.entries[index].weight = weightField.input.value;
-  });
-  repsField.input.addEventListener('input', () => {
-    repsField.input.dataset.touched = '1';
-    if (workoutState) workoutState.entries[index].reps = repsField.input.value;
-  });
-
   const sets = el('div', 'workout-sets');
-  for (let i = 0; i < entry.targetSets; i += 1) {
-    const dot = el('button', 'set-dot', String(i + 1));
-    dot.type = 'button';
-    dot.dataset.set = String(i);
-    dot.setAttribute('aria-label', `第 ${i + 1} 组`);
-    dot.setAttribute('aria-pressed', 'false');
-    dot.addEventListener('click', () => toggleWorkoutSet(index, i, card));
-    sets.appendChild(dot);
-  }
+  entry.rows.forEach((row, setIndex) => {
+    sets.appendChild(buildWorkoutSetRow(entry, index, setIndex, card));
+  });
   card.appendChild(sets);
   return card;
 }
 
 function toggleWorkoutSet(index, setIndex, card) {
   if (!workoutState) return;
-  const dot = card.querySelector(`.set-dot[data-set="${setIndex}"]`);
-  if (!dot) return;
   const entry = workoutState.entries[index];
-  const wasDone = dot.classList.contains('done');
+  const row = entry.rows[setIndex];
+  if (!row) return;
+  const node = card.querySelector(`.workout-set-row[data-set="${setIndex}"]`);
+  if (!node) return;
 
-  dot.classList.toggle('done', !wasDone);
-  dot.textContent = wasDone ? String(setIndex + 1) : '✓';
-  dot.setAttribute('aria-pressed', String(!wasDone));
-  entry.done = card.querySelectorAll('.set-dot.done').length;
+  const wasDone = row.done;
+  row.done = !wasDone;
+  node.classList.toggle('is-done', row.done);
+  const check = node.querySelector('.set-check');
+  if (check) check.setAttribute('aria-pressed', String(row.done));
 
+  const doneCount = entry.rows.filter(item => item.done).length;
+  entry.done = doneCount;
   const state = card.querySelector('.workout-ex-state');
-  if (state) state.textContent = `${entry.done}/${entry.targetSets}`;
-  card.classList.toggle('is-done', entry.done >= entry.targetSets);
-  card.classList.toggle('is-active', entry.done > 0 && entry.done < entry.targetSets);
+  if (state) state.textContent = `${doneCount}/${entry.targetSets}`;
+  card.classList.toggle('is-done', doneCount >= entry.targetSets);
+  card.classList.toggle('is-active', doneCount > 0 && doneCount < entry.targetSets);
 
   // 只有"完成一组"才启动休息；取消误点时不该反而开始计时。
-  if (!wasDone) startWorkoutRest(entry.restSeconds);
+  if (row.done) startWorkoutRest(entry.restSeconds);
 
   // 一个动作练完就把下一个带到视野里。训练时手上有汗、注意力在动作上，
   // 不该再花一步去滚动找下一个动作。
-  if (!wasDone && entry.done >= entry.targetSets && workoutState.cards[index + 1]) {
+  if (row.done && doneCount >= entry.targetSets && workoutState.cards[index + 1]) {
     workoutState.cards[index + 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   updateWorkoutProgress();
@@ -7195,15 +7288,24 @@ function openWorkout(day, planMeta) {
   if (!day || !Array.isArray(day.exercises) || !day.exercises.length) return;
   if (workoutState) closeWorkout(true);
 
-  const entries = day.exercises.map(exercise => ({
-    name: exercise?.name || '未命名动作',
-    targetSets: Math.max(1, parseInt(exercise?.sets, 10) || 3),
-    targetReps: exercise?.reps || '',
-    restSeconds: workoutRestSeconds(exercise?.rest),
-    weight: '',
-    reps: String(workoutRepsTarget(exercise?.reps)),
-    done: 0,
-  }));
+  const entries = day.exercises.map(exercise => {
+    const targetSets = Math.max(1, parseInt(exercise?.sets, 10) || 3);
+    const defaultReps = String(workoutRepsTarget(exercise?.reps));
+    return {
+      name: exercise?.name || '未命名动作',
+      targetSets,
+      targetReps: exercise?.reps || '',
+      restSeconds: workoutRestSeconds(exercise?.rest),
+      // 每组独立一行：重量、次数、是否完成。默认次数取计划区间的中位数，
+      // 重量留空（没有历史时不该猜一个可能受伤的数字）。
+      rows: Array.from({ length: targetSets }, () => ({
+        weight: '',
+        reps: defaultReps,
+        done: false,
+      })),
+      done: 0,
+    };
+  });
 
   const overlay = el('div', 'workout-overlay');
   overlay.setAttribute('role', 'dialog');
@@ -7330,6 +7432,23 @@ function formatWorkoutWeight(value) {
 /* 拉最近 100 条日志，按动作名取「最近一次」。
    日志已按日期倒序，所以第一次出现的记录就是上一次。
    请求失败不提示：预填是增强项，拿不到就保持空输入，训练照常。 */
+function summarizeLastSets(entry) {
+  const detail = Array.isArray(entry.sets_detail)
+    ? entry.sets_detail.filter(item => item && item.completed !== false)
+    : [];
+  if (!detail.length) {
+    const weight = Number(entry.weight) > 0
+      ? ` · ${formatWorkoutWeight(entry.weight)} kg` : '';
+    return `${entry.sets} 组 × ${entry.reps} 次${weight}`;
+  }
+  const weights = detail.map(item => Number(item.weight) || 0);
+  if (weights.every(value => value === weights[0])) {
+    const weight = weights[0] > 0 ? ` · ${formatWorkoutWeight(weights[0])} kg` : '';
+    return `${detail.length} 组 × ${detail[0].reps} 次${weight}`;
+  }
+  return `${detail.length} 组 · ${weights.map(value => formatWorkoutWeight(value) || '0').join('/')} kg`;
+}
+
 async function hydrateWorkoutLastData() {
   if (!workoutState || !athleteKey) return;
   const state = workoutState;
@@ -7356,26 +7475,37 @@ async function hydrateWorkoutLastData() {
 
       const meta = card.querySelector('.workout-ex-meta');
       if (meta && !card.querySelector('.workout-ex-last')) {
-        const parts = [
-          `上次 ${formatLastDate(record.log_date)}`,
-          `${record.entry.sets} 组 × ${record.entry.reps} 次`,
-        ];
-        if (Number(record.entry.weight) > 0) {
-          parts.push(`${formatWorkoutWeight(record.entry.weight)} kg`);
-        }
-        meta.after(el('div', 'workout-ex-last', parts.join(' · ')));
+        meta.after(el('div', 'workout-ex-last',
+          `上次 ${formatLastDate(record.log_date)} · ${summarizeLastSets(record.entry)}`));
       }
 
-      const weightInput = card.querySelector('input[data-role="weight"]');
-      const repsInput = card.querySelector('input[data-role="reps"]');
-      if (weightInput && !weightInput.dataset.touched && Number(record.entry.weight) > 0) {
-        weightInput.value = String(record.entry.weight);
-        entry.weight = weightInput.value;
-      }
-      if (repsInput && !repsInput.dataset.touched && Number(record.entry.reps) > 0) {
-        repsInput.value = String(record.entry.reps);
-        entry.reps = repsInput.value;
-      }
+      const detail = Array.isArray(record.entry.sets_detail)
+        ? record.entry.sets_detail.filter(item => item && item.completed !== false)
+        : [];
+      // 有逐组明细就按组回填；旧记录只有汇总值时，用同一个值填满所有组。
+      entry.rows.forEach((row, rowIndex) => {
+        const template = detail.length
+          ? detail[Math.min(rowIndex, detail.length - 1)]
+          : null;
+        const weightValue = template
+          ? Number(template.weight) || 0
+          : Number(record.entry.weight) || 0;
+        const repsValue = template
+          ? Number(template.reps) || 0
+          : Number(record.entry.reps) || 0;
+        const node = card.querySelector(`.workout-set-row[data-set="${rowIndex}"]`);
+        if (!node) return;
+        const weightInput = node.querySelector('input[data-role="weight"]');
+        const repsInput = node.querySelector('input[data-role="reps"]');
+        if (weightInput && !weightInput.dataset.touched && weightValue > 0) {
+          weightInput.value = String(weightValue);
+          row.weight = weightInput.value;
+        }
+        if (repsInput && !repsInput.dataset.touched && repsValue > 0) {
+          repsInput.value = String(repsValue);
+          row.reps = repsInput.value;
+        }
+      });
     });
   } catch (e) {
     // 见函数注释：预填失败不打断训练。
@@ -7386,15 +7516,35 @@ async function finishWorkout() {
   if (!workoutState) return;
   const { entries, day, planMeta } = workoutState;
   const completed = entries
-    .filter(entry => entry.done > 0)
-    .map(entry => ({
-      exercise_name: entry.name,
-      sets: entry.done,
-      reps: parseInt(entry.reps, 10) || 0,
-      weight: parseFloat(entry.weight) || 0,
-      rpe: null,
-      completed: true,
-    }));
+    .filter(entry => entry.rows.some(row => row.done))
+    .map(entry => {
+      const doneRows = entry.rows.filter(row => row.done);
+      const detail = doneRows.map((row, index) => ({
+        set: index + 1,
+        weight: parseFloat(row.weight) || 0,
+        reps: parseInt(row.reps, 10) || 0,
+        completed: true,
+      }));
+      // 代表值取最重的一组：容量与 1RM 估算都以它为口径。
+      // 自重动作全部为 0 时，退化为第一组。
+      let representative = detail[0];
+      detail.forEach(item => {
+        if (item.weight > representative.weight
+            || (item.weight === representative.weight
+                && item.reps > representative.reps)) {
+          representative = item;
+        }
+      });
+      return {
+        exercise_name: entry.name,
+        sets: detail.length,
+        reps: representative.reps,
+        weight: representative.weight,
+        rpe: null,
+        sets_detail: detail,
+        completed: true,
+      };
+    });
   if (!completed.length) {
     workoutState.hint.textContent = '至少完成一组再保存。';
     return;
@@ -7446,9 +7596,16 @@ function formatLogDate(value) {
 }
 
 function logVolume(log) {
-  return (log.entries || []).reduce((sum, entry) =>
-    sum + (Number(entry.sets) || 0) * (Number(entry.reps) || 0)
-      * (Number(entry.weight) || 0), 0);
+  return (log.entries || []).reduce((sum, entry) => {
+    // 有逐组明细就按组算：递增组用汇总值（组数 × 代表重量）会低估容量。
+    const detail = Array.isArray(entry.sets_detail) ? entry.sets_detail : [];
+    if (detail.length) {
+      return sum + detail.reduce((inner, item) =>
+        inner + (Number(item.weight) || 0) * (Number(item.reps) || 0), 0);
+    }
+    return sum + (Number(entry.sets) || 0) * (Number(entry.reps) || 0)
+      * (Number(entry.weight) || 0);
+  }, 0);
 }
 
 function groupLogsByMonth(logs) {
@@ -7486,6 +7643,20 @@ function renderLogItem(log) {
     row.appendChild(el('span', 'log-detail-metric',
       `${entry.sets} 组 × ${entry.reps} 次${weight}`));
     detail.appendChild(row);
+
+    const sets = Array.isArray(entry.sets_detail) ? entry.sets_detail : [];
+    if (sets.length > 1) {
+      // 只有真正逐组记过才展开，单组或旧记录与上面那行重复。
+      const list = el('div', 'log-detail-sets');
+      sets.forEach(item => {
+        const line = el('div', 'log-detail-set');
+        line.appendChild(el('span', '', `第 ${item.set} 组`));
+        line.appendChild(el('span', '',
+          `${formatWorkoutWeight(item.weight) || '0'} kg × ${item.reps} 次`));
+        list.appendChild(line);
+      });
+      detail.appendChild(list);
+    }
   });
   if (!entries.length) {
     detail.appendChild(el('div', 'log-detail-row', '这次训练没有动作明细。'));

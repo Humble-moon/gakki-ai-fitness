@@ -129,14 +129,20 @@ def test_qa_workspace_has_title_meta_and_composer_regions():
 
 
 def test_qa_visual_contract_prioritizes_coach_guidance_and_safe_context():
-    assert 'class="qa-hero-kicker"' in HTML
+    # 说明只保留一次：英文眉标、第二段说明与「更多主题」已移除，
+    # 首屏不应该把同一件事重复五遍。
+    assert 'class="qa-header-main"' in HTML
+    assert 'qa-hero-kicker' not in HTML
+    assert 'qa-header-copy' not in HTML
+    assert 'qa-secondary-topics' not in HTML
     assert 'class="qa-lead"' in HTML
     assert 'class="qa-topic-list"' in HTML
-    assert 'class="qa-secondary-topics"' in HTML
     assert 'function renderQaCoachContext(' in HTML
     assert 'textContent' in HTML[HTML.index("function renderQaCoachContext"):HTML.index("function renderQaCoachContext") + 1200]
     assert 'class="qa-safety-note"' in HTML
     assert 'qa-answer-meta' in HTML
+    # 空状态不展示全 0 的统计三格
+    assert '#qa-welcome:not([hidden]) ~ #qa-meta' in HTML
 
 
 def test_qa_upload_is_keyboard_accessible_and_sets_safe_status():
@@ -144,8 +150,9 @@ def test_qa_upload_is_keyboard_accessible_and_sets_safe_status():
     assert 'tabindex="0"' in HTML[HTML.index('id="file-upload-area"') - 100:HTML.index('id="file-upload-area"') + 500]
     assert 'onkeydown="' in HTML[HTML.index('id="file-upload-area"') - 100:HTML.index('id="file-upload-area"') + 500]
     assert 'id="qa-upload-status"' in HTML
-    assert '无需上传也可以直接提问' in HTML
-    assert '文件格式' in HTML
+    # 状态行空时不占位；上传结果由它反馈，不再常驻一句说明文案。
+    assert '#qa-upload-status:empty { display: none; }' in HTML
+    assert 'PDF / Word / 文本' in HTML
 
 
 def test_qa_failure_preserves_draft_and_exposes_retry_without_race():
