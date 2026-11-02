@@ -9,6 +9,7 @@
 的调用路径上（init_db 只在 seed() 和知识库摄入时触发，纯 API 启动不会调）。
 """
 
+import json
 import logging
 from datetime import date, datetime, timedelta
 
@@ -21,6 +22,48 @@ MAX_ATHLETE_KEY_LEN = 64
 
 # 单次查询返回的日志条数上限，防止一次拉爆内存
 MAX_LOGS_PER_QUERY = 200
+
+#: 单个动作最多保存多少组逐组明细。超过 100 组已不属于正常训练记录。
+MAX_SETS_DETAIL = 100
+_MAX_WEIGHT_KG = 2000.0
+_MAX_REPS = 1000
+
+
+def _clean_sets_detail(raw) -> list[dict]:
+    """清洗逐组明细：只保留数值字段，限制组数与取值范围。
+
+    JSON 列是用户输入直接落库的地方，不能整包存进去：多余字段会长期占库，
+    非数值会被前端渲染成 [object Object]，超范围值会污染容量统计。
+    组号按数组顺序重排，避免重复或跳号。
+    """
+    if not isinstance(raw, list):
+        return []
+    cleaned: list[dict] = []
+    for index, item in enumerate(raw[:MAX_SETS_DETAIL], 1):
+        if not isinstance(item, dict):
+            continue
+        try:
+            weight = min(max(float(item.get("weight") or 0.0), 0.0), _MAX_WEIGHT_KG)
+            reps = min(max(int(item.get("reps") or 0), 0), _MAX_REPS)
+        except (TypeError, ValueError):
+            continue
+        cleaned.append({
+            "set": index,
+            "weight": round(weight, 2),
+            "reps": reps,
+            "completed": bool(item.get("completed", True)),
+        })
+    return cleaned
+
+
+def _parse_sets_detail(raw) -> list[dict]:
+    """读取逐组明细。psycopg 正常会直接返回 list，字符串是兜底。"""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return []
+    return raw if isinstance(raw, list) else []
 
 
 class TrainingLogStore:
@@ -122,16 +165,18 @@ class TrainingLogStore:
                 name = (entry.get("exercise_name") or "").strip()
                 if not name:
                     continue                # 跳过没有动作名的空行，不写脏数据
+                sets_detail = _clean_sets_detail(entry.get("sets_detail"))
                 tx.execute(
                     """INSERT INTO training_log_entries
                        (log_id, athlete_key, exercise_name, sets, reps, weight,
-                        rpe, completed, created_at)
-                       VALUES (:lid, :ak, :en, :st, :rp, :wt, :rpe, :cp, :ts)""",
+                        rpe, sets_detail, completed, created_at)
+                       VALUES (:lid, :ak, :en, :st, :rp, :wt, :rpe, :sd, :cp, :ts)""",
                     {"lid": log_id, "ak": athlete_key[:MAX_ATHLETE_KEY_LEN],
                      "en": name[:100], "st": int(entry.get("sets") or 0),
                      "rp": int(entry.get("reps") or 0),
                      "wt": float(entry.get("weight") or 0.0),
                      "rpe": entry.get("rpe"),
+                     "sd": json.dumps(sets_detail, ensure_ascii=False) if sets_detail else None,
                      "cp": 1 if entry.get("completed", True) else 0,
                      "ts": datetime.utcnow()},
                 )
@@ -196,7 +241,8 @@ class TrainingLogStore:
 
         log_ids = [r.id for r in logs]
         entries = self.db.fetch_all(
-            """SELECT log_id, exercise_name, sets, reps, weight, rpe, completed
+            """SELECT log_id, exercise_name, sets, reps, weight, rpe,
+                      sets_detail, completed
                FROM training_log_entries
                WHERE log_id = ANY(:ids)
                ORDER BY id ASC""",
@@ -208,7 +254,9 @@ class TrainingLogStore:
             by_log.setdefault(e.log_id, []).append({
                 "exercise_name": e.exercise_name,
                 "sets": e.sets, "reps": e.reps, "weight": float(e.weight or 0.0),
-                "rpe": e.rpe, "completed": bool(e.completed),
+                "rpe": e.rpe,
+                "sets_detail": _parse_sets_detail(e.sets_detail),
+                "completed": bool(e.completed),
             })
 
         return [

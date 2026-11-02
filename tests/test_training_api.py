@@ -363,3 +363,23 @@ async def test_advice_falls_back_when_report_structure_is_unusable(client, store
     assert body["summary_source"] == "rule"
     assert body["summary_detail"] is None
     assert body["summary"]
+
+
+@pytest.mark.anyio
+async def test_create_log_passes_sets_detail_to_store(client, store):
+    """逐组明细原样进入存储层，汇总字段保持不变。"""
+    detail = [
+        {"set": 1, "weight": 50, "reps": 10, "completed": True},
+        {"set": 2, "weight": 52.5, "reps": 9, "completed": True},
+    ]
+    resp = await client.post("/api/training-logs", json={
+        "athlete_key": "k1",
+        "entries": [{
+            "exercise_name": "卧推", "sets": 2, "reps": 10, "weight": 52.5,
+            "sets_detail": detail,
+        }],
+    })
+    assert resp.status_code == 200
+    saved = store.saved_calls[0]["entries"][0]
+    assert saved["sets_detail"] == detail
+    assert saved["sets"] == 2 and saved["weight"] == 52.5

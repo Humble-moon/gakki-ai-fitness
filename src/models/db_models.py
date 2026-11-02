@@ -367,6 +367,10 @@ class TrainingLogEntry(Base):
     # 使用重量（kg）；自重动作记 0
     rpe = Column(Float)
     # 该动作主观疲劳度 1~10，可空
+    sets_detail = Column(JSON)
+    # 逐组明细：[{"set": 1, "weight": 50.0, "reps": 10, "completed": true}]
+    # 汇总字段（sets/reps/weight）继续保留：统计、1RM 估算与旧客户端都按它们读，
+    # 逐组数据只是更细的一层，不替代汇总值。
     completed = Column(Integer, default=1)
     # 1=按计划完成, 0=跳过/未完成；完成率 = AVG(completed)
     created_at = Column(DateTime, default=datetime.utcnow)

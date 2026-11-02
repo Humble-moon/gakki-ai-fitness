@@ -332,6 +332,9 @@ class TrainingLogEntryInput(BaseModel):
     # 统计类接口全部持续 500，且无法自愈。
     rpe: Optional[float] = Field(None, ge=0, le=10, allow_inf_nan=False)
     # 该动作主观疲劳度 1~10
+    sets_detail: Optional[list[dict]] = None
+    # 逐组明细（可选）：[{"weight": 50, "reps": 10, "completed": true}, ...]
+    # 汇总字段继续保留，旧客户端不传这一项也能正常保存；存储层会清洗与截断。
     completed: bool = True
     # 是否按计划完成
 
