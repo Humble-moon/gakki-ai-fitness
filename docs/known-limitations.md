@@ -68,11 +68,11 @@ RAGAS 对 68 条查询的评测结果（`eval/ragas_results.json`）：
 
 **业务接口默认失败关闭。** 未配置 `API_AUTH_TOKEN` 时 `/api/*` 返回 503，而不是静默放行；本地开发必须显式设置 `LOCAL_OPEN_MODE=1`。`/admin/*` 在无令牌时一律 403。
 
-**运行契约仍是 `localhost:8503`。** 应用已容器化、带健康检查与重启策略，但**没有**多副本、负载均衡、跨进程限流：限流器与熔断器仍是进程内状态，因此 `workers=1`。要横向扩展，先把这些状态迁到 Redis。
+**限流与熔断已可跨进程共享，但应用仍是单副本部署。** `SHARED_STATE_BACKEND=auto` 时，限流窗口与熔断状态存放在 Redis，两个副本共用同一份配额（`scripts/verify_two_replicas.py` 实测 16 次请求只放行 5 次）；Redis 不可用时回退为每实例计数。**没有**的是多副本编排、负载均衡与共享的审核工件存储：审核工件与计划仍是 SQLite 单文件，多副本会各写各的。
 
 **成本控制是单机级别的。** 当日 LLM 成本上限依赖 Redis 计数，Redis 故障时降级为放行。参考量级：单份训练计划约 ¥0.32（含数十次模型调用），单次问答约 ¥0.01。
 
-**运维能力范围。** 已有：启动期 `alembic upgrade head`、结构化 JSON 日志与 `X-Request-ID` 关联、`/health/live` 与探测 PostgreSQL/Redis 的 `/health/ready`、`pg_dump` 备份与恢复脚本、依赖精确锁定。**没有**：指标导出（Prometheus/OpenTelemetry）、告警、日志聚合、审计表、数据保留期自动清理。
+**运维能力范围。** 已有：启动期 `alembic upgrade head`、结构化 JSON 日志与 `X-Request-ID` 关联、`/health/live` 与探测 PostgreSQL/Redis 的 `/health/ready`、`pg_dump` 备份与恢复脚本、依赖精确锁定、Prometheus 文本指标（`/admin/metrics/prometheus`）与三个 SLI（`/admin/sli`：请求成功率、P95 延迟、LLM 调用失败率）、只追加的审计表（登录、审核创建与解除、数据导出与删除，`/admin/audit-events`）、CI 覆盖率门槛（70%）与锁定依赖漏洞扫描。**没有**：告警规则、日志聚合、指标长期存储、数据保留期自动清理、审计表归档。
 
 ## 六、不可由仓库独立复核的部分
 

@@ -275,7 +275,8 @@ class TestRealToolRegistryIntegration:
     """
 
     @pytest.fixture(scope="class")
-    def registry(self):
+    @classmethod
+    def registry(cls):
         from src.mcp.tool_registry import ToolRegistry
 
         return ToolRegistry()

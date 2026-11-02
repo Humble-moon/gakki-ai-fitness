@@ -1,6 +1,6 @@
 PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
 
-.PHONY: facts test e2e eval demo-help demo demo-check e2e-offline backup restore migrate
+.PHONY: facts test e2e eval demo-help demo demo-check e2e-offline backup restore migrate verify-shared verify-replicas audit
 
 facts:
 	$(PYTHON) scripts/verify_project_facts.py --json
@@ -34,3 +34,15 @@ restore:
 
 migrate:
 	$(PYTHON) -c "from src.db_migrate import upgrade_to_head; upgrade_to_head()"
+
+# 两个脚本都要求本机 Redis 可用；不可用时以非零码退出并说明原因。
+verify-shared:
+	$(PYTHON) scripts/verify_shared_state.py
+
+verify-replicas:
+	$(PYTHON) scripts/verify_two_replicas.py
+
+audit:
+	$(PYTHON) -m pip_audit -r requirements.lock --strict \
+		--ignore-vuln PYSEC-2026-2447 \
+		--ignore-vuln PYSEC-2026-3046

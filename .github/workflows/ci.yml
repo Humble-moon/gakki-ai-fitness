@@ -32,8 +32,22 @@ jobs:
       - name: Lint (ruff)
         run: python -m ruff check .
 
-      - name: Run offline test suite
-        run: python -m pytest -q
+      - name: Run offline test suite with coverage gate
+        run: |
+          python -m pytest -q \
+            --cov=src --cov=app \
+            --cov-report=term \
+            --cov-fail-under=70
+
+      - name: Audit locked dependencies
+        # 两个无修复版本的上游漏洞暂列白名单：
+        #   PYSEC-2026-2447  diskcache 5.6.3（无修复版本）
+        #   PYSEC-2026-3046  ragas 0.4.3（无修复版本）
+        # 其余漏洞一旦出现就让 CI 失败；升级后应同步删掉对应条目。
+        run: |
+          python -m pip_audit -r requirements.lock --strict \
+            --ignore-vuln PYSEC-2026-2447 \
+            --ignore-vuln PYSEC-2026-3046
 
       - name: Verify project fact baseline
         run: python scripts/verify_project_facts.py
