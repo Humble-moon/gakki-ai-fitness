@@ -769,6 +769,339 @@ body {
 .plan-ex-notes.is-open { display: block; -webkit-line-clamp: unset; overflow: visible; }
 .plan-ex-notes.is-open:hover { color: var(--chalk-dim); }
 
+/* ── 计划卡片的「开始训练」入口 ──
+   次级操作：描边按钮，不与橙色主按钮抢注意力。它只在正式计划里出现，
+   草稿区不渲染——草稿还没过安全检查。 */
+.plan-day-actions { padding: 0 20px 16px; }
+.plan-start-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--steel-light);
+  border-radius: var(--radius-sm);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+}
+.plan-start-btn:hover {
+  border-color: var(--accent-ink);
+  background: var(--forge-amber-dim);
+}
+.plan-start-btn:active { transform: scale(0.985); }
+.plan-start-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* ── 训练中面板 ──
+   覆盖层而不是新页签：训练时用户不该在导航之间找路。
+   桌面居中浮层，窄屏全屏；底部操作区常驻，休息倒计时贴在它上面。 */
+.workout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 20, 22, 0.42);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: workoutFade 0.18s var(--ease-out);
+}
+.workout-shell {
+  width: min(760px, 100%);
+  /* 92vh 而不是 88：常见 4–6 个动作的计划正好落在 88–92 这一段，
+     差 4vh 就会让最后一张卡只露出半行。再多仍然滚动，不影响底部操作区。 */
+  max-height: min(92vh, 980px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+  animation: workoutRise 0.22s var(--ease-out);
+}
+.workout-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--steel);
+  background: var(--bg-panel);
+}
+.workout-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+.workout-title {
+  margin: 2px 0 0;
+  font-family: var(--font-heading);
+  font-size: 19px;
+  line-height: 1.25;
+  color: var(--chalk);
+}
+.workout-clock {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  color: var(--chalk);
+  white-space: nowrap;
+}
+.workout-close {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--steel-light);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--chalk-dim);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.workout-close:hover { color: var(--chalk); border-color: var(--chalk-faint); }
+.workout-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.workout-progress { padding: 12px 22px 0; }
+.workout-progress-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--chalk-dim);
+}
+.workout-progress-bar {
+  height: 4px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+.workout-progress-bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent-strong);
+  border-radius: inherit;
+  transition: width 0.25s var(--ease-out);
+}
+
+.workout-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overscroll-behavior: contain;
+}
+.workout-ex {
+  padding: 14px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--steel);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.workout-ex.is-active { border-color: rgba(var(--accent-rgb), 0.38); box-shadow: 0 0 0 3px var(--forge-amber-dim); }
+.workout-ex.is-done { border-color: rgba(var(--accent-rgb), 0.28); }
+.workout-ex-head { display: flex; align-items: flex-start; gap: 12px; }
+.workout-ex-name {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--chalk);
+}
+.workout-ex-meta {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--chalk-faint);
+}
+.workout-ex-state {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--chalk-dim);
+  white-space: nowrap;
+}
+.workout-ex.is-done .workout-ex-state { color: var(--accent-ink); }
+.workout-ex-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.workout-input { display: flex; flex-direction: column; gap: 4px; }
+.workout-input span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+}
+.workout-input input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  background: var(--bg-deep);
+  border: 1px solid var(--steel-light);
+  border-radius: var(--radius-sm);
+  color: var(--chalk);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.workout-input input:focus {
+  outline: none;
+  border-color: var(--accent-ink);
+  box-shadow: 0 0 0 3px var(--forge-amber-dim);
+}
+.workout-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.set-dot {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--steel-light);
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--chalk-dim);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out);
+}
+.set-dot:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
+.set-dot:active { transform: scale(0.94); }
+.set-dot:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.set-dot.done {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--on-accent);
+  transform: scale(1.03);
+}
+
+.workout-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 22px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--steel);
+  background: var(--bg-panel);
+  /* 内容可滚动时，让操作区像浮在列表之上，而不是把最后一张卡"切掉"。 */
+  box-shadow: 0 -10px 20px rgba(0, 0, 0, 0.04);
+}
+.workout-rest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* 固定最小高度：休息条出现/消失会改变 footer 高度，正在看的动作卡片
+     会跟着上下跳。训练中这种跳动比多占 46px 更难受。46 是计时态的实际
+     高度（20px 数字 + 上下内边距），取 42 仍会差 4px。 */
+  min-height: 46px;
+  padding: 7px 14px;
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  border-radius: var(--radius-sm);
+  background: var(--forge-amber-dim);
+  color: var(--chalk);
+  font-size: 13px;
+}
+.workout-rest.is-idle {
+  border-color: var(--steel);
+  background: transparent;
+}
+.workout-rest-idle {
+  font-size: 12px;
+  color: var(--chalk-faint);
+}
+.workout-rest-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.workout-rest.is-idle .workout-rest-active { display: none; }
+.workout-rest:not(.is-idle) .workout-rest-idle { display: none; }
+.workout-rest strong {
+  min-width: 2ch;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+}
+.workout-rest-actions { margin-left: auto; display: flex; gap: 6px; }
+.workout-rest-actions button {
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.workout-rest-actions button:hover { background: var(--forge-amber-glow); }
+.workout-footer .btn-generate { padding: 14px 24px; }
+.workout-hint {
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--danger);
+  text-align: center;
+}
+
+@keyframes workoutFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes workoutRise {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 767px) {
+  .plan-day-actions { padding: 0 14px 14px; }
+  .plan-start-btn { min-height: 46px; }
+  .workout-overlay { padding: 0; align-items: stretch; }
+  .workout-shell {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: none;
+    border-radius: 0;
+  }
+  .workout-header { padding: 14px 16px; gap: 12px; }
+  .workout-title { font-size: 16px; }
+  .workout-clock { font-size: 18px; }
+  .workout-close { width: 40px; height: 40px; }
+  .workout-progress { padding: 10px 16px 0; }
+  .workout-body { padding: 12px 16px; gap: 10px; }
+  /* 16px 是 iOS 不缩放输入框的门槛；触控区跟着放到 48px。 */
+  .workout-input input { font-size: 16px; min-height: 48px; }
+  .set-dot { width: 44px; height: 44px; }
+  .workout-footer { padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); }
+}
+
 /* ── Tabs: Industrial Gauge Style ── */
 .tabs {
   /* 放不下时换行，而不是被裁掉。
@@ -5792,8 +6125,9 @@ function buildExerciseDemo(name) {
   return wrap;
 }
 
-function renderPlanDays(container, days) {
+function renderPlanDays(container, days, options) {
   if (!container || !Array.isArray(days) || !days.length) return;
+  const opts = options || {};
   const grid = el('div', 'plan-result-grid', '');
   days.forEach((day, index) => {
     const exercises = Array.isArray(day?.exercises) ? day.exercises : [];
@@ -5829,6 +6163,18 @@ function renderPlanDays(container, days) {
       body.appendChild(row);
     });
     card.appendChild(body);
+    // 「开始训练」只给正式计划。草稿区不渲染这个入口——草稿还没过安全检查，
+    // 提供一个"照着练"的按钮等于绕过安全门。
+    if (opts.allowStart) {
+      const actions = el('div', 'plan-day-actions');
+      const start = el('button', 'plan-start-btn', '▸ 开始训练');
+      start.type = 'button';
+      start.addEventListener('click', () => openWorkout(day, {
+        planId: opts.planId || null,
+      }));
+      actions.appendChild(start);
+      card.appendChild(actions);
+    }
     grid.appendChild(card);
   });
   container.appendChild(grid);
@@ -6083,7 +6429,11 @@ function renderPlanResult(container, data) {
   renderPlanExplanation(container, plan.explain);
   const days = Array.isArray(plan.days) ? plan.days : [];
   if (days.length) {
-    renderPlanDays(container, days);
+    // 正式计划才允许从卡片直接开练；plan_id 有就带上，训练记录会挂到该计划下。
+    renderPlanDays(container, days, {
+      allowStart: true,
+      planId: plan.plan_id || null,
+    });
   } else if (plan.raw) container.appendChild(el('div', 'stream-box', plan.raw));
 
   const bar = el('div', 'plan-actions', '');
@@ -6566,6 +6916,349 @@ async function saveTrainingLog() {
     showError('log-error', `保存失败：${e.message}`);
   } finally {
     setBusy('btn-save-log', false);
+  }
+}
+
+// ── 训练中面板：把计划变成今天可执行的训练 ──
+// 交互照搬训练场景里被验证过的那套：点一次组号记一组，随即开始休息倒计时。
+// 数据结构不改成逐组存储——后端 entries 仍是"每个动作一条"，这里把已完成
+// 组数与该动作的重量/次数聚合进去。P0 要解决的是"练的时候不用记一整张表"，
+// 不是改数据模型。
+let workoutState = null;
+
+function workoutRestSeconds(rest) {
+  const match = String(rest || '').match(/(\d+)/);
+  return match ? Math.max(15, parseInt(match[1], 10)) : 60;
+}
+
+function workoutRepsTarget(reps) {
+  const numbers = String(reps || '').match(/\d+/g);
+  if (!numbers || !numbers.length) return 10;
+  const values = numbers.map(Number);
+  return values.length > 1 ? Math.round((values[0] + values[1]) / 2) : values[0];
+}
+
+function formatWorkoutClock(seconds) {
+  const pad = value => String(value).padStart(2, '0');
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function makeWorkoutInput(labelText, inputMode, value) {
+  const wrap = el('label', 'workout-input');
+  wrap.appendChild(el('span', '', labelText));
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.inputMode = inputMode;
+  input.step = inputMode === 'numeric' ? '1' : 'any';
+  input.min = '0';
+  if (value !== undefined && value !== null && value !== '') input.value = value;
+  wrap.appendChild(input);
+  return { wrap, input };
+}
+
+function buildWorkoutEx(entry, index) {
+  const card = el('article', 'workout-ex');
+  card.dataset.index = String(index);
+
+  const head = el('div', 'workout-ex-head');
+  const headText = el('div', '');
+  headText.appendChild(el('h3', 'workout-ex-name', entry.name));
+  const target = `${entry.targetSets} 组${entry.targetReps ? ` × ${entry.targetReps}` : ''}`;
+  headText.appendChild(el('div', 'workout-ex-meta', `目标 ${target} · 休息 ${entry.restSeconds} 秒`));
+  head.appendChild(headText);
+  const state = el('span', 'workout-ex-state', `0/${entry.targetSets}`);
+  head.appendChild(state);
+  card.appendChild(head);
+
+  const inputs = el('div', 'workout-ex-inputs');
+  const weightField = makeWorkoutInput('重量 kg', 'decimal', entry.weight);
+  const repsField = makeWorkoutInput('次数', 'numeric', entry.reps);
+  inputs.appendChild(weightField.wrap);
+  inputs.appendChild(repsField.wrap);
+  card.appendChild(inputs);
+
+  weightField.input.addEventListener('input', () => {
+    if (workoutState) workoutState.entries[index].weight = weightField.input.value;
+  });
+  repsField.input.addEventListener('input', () => {
+    if (workoutState) workoutState.entries[index].reps = repsField.input.value;
+  });
+
+  const sets = el('div', 'workout-sets');
+  for (let i = 0; i < entry.targetSets; i += 1) {
+    const dot = el('button', 'set-dot', String(i + 1));
+    dot.type = 'button';
+    dot.dataset.set = String(i);
+    dot.setAttribute('aria-label', `第 ${i + 1} 组`);
+    dot.setAttribute('aria-pressed', 'false');
+    dot.addEventListener('click', () => toggleWorkoutSet(index, i, card));
+    sets.appendChild(dot);
+  }
+  card.appendChild(sets);
+  return card;
+}
+
+function toggleWorkoutSet(index, setIndex, card) {
+  if (!workoutState) return;
+  const dot = card.querySelector(`.set-dot[data-set="${setIndex}"]`);
+  if (!dot) return;
+  const entry = workoutState.entries[index];
+  const wasDone = dot.classList.contains('done');
+
+  dot.classList.toggle('done', !wasDone);
+  dot.textContent = wasDone ? String(setIndex + 1) : '✓';
+  dot.setAttribute('aria-pressed', String(!wasDone));
+  entry.done = card.querySelectorAll('.set-dot.done').length;
+
+  const state = card.querySelector('.workout-ex-state');
+  if (state) state.textContent = `${entry.done}/${entry.targetSets}`;
+  card.classList.toggle('is-done', entry.done >= entry.targetSets);
+  card.classList.toggle('is-active', entry.done > 0 && entry.done < entry.targetSets);
+
+  // 只有"完成一组"才启动休息；取消误点时不该反而开始计时。
+  if (!wasDone) startWorkoutRest(entry.restSeconds);
+
+  // 一个动作练完就把下一个带到视野里。训练时手上有汗、注意力在动作上，
+  // 不该再花一步去滚动找下一个动作。
+  if (!wasDone && entry.done >= entry.targetSets && workoutState.cards[index + 1]) {
+    workoutState.cards[index + 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  updateWorkoutProgress();
+}
+
+function updateWorkoutProgress() {
+  if (!workoutState) return;
+  const total = workoutState.entries.length;
+  const done = workoutState.entries.filter(entry => entry.done > 0).length;
+  workoutState.progressLabel.textContent = `${done} / ${total} 个动作完成`;
+  workoutState.barFill.style.width = `${total ? Math.round(done / total * 100) : 0}%`;
+}
+
+function startWorkoutRest(seconds) {
+  if (!workoutState) return;
+  clearInterval(workoutState.restTimer);
+  workoutState.restEndAt = Date.now() + seconds * 1000;
+  workoutState.restBar.classList.remove('is-idle');
+  const tick = () => {
+    if (!workoutState) return;
+    const remaining = Math.max(0, Math.ceil((workoutState.restEndAt - Date.now()) / 1000));
+    workoutState.restCount.textContent = String(remaining);
+    if (remaining <= 0) stopWorkoutRest();
+  };
+  tick();
+  // 250ms 一跳：页面切到后台时定时器会被节流，按结束时间戳算剩余秒数
+  // 就不会因为少跑几次而越走越慢。
+  workoutState.restTimer = setInterval(tick, 250);
+}
+
+function stopWorkoutRest() {
+  if (!workoutState) return;
+  clearInterval(workoutState.restTimer);
+  workoutState.restTimer = null;
+  workoutState.restBar.classList.add('is-idle');
+}
+
+function onWorkoutKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeWorkout(false);
+  }
+}
+
+function closeWorkout(force) {
+  if (!workoutState) return;
+  const completedSets = workoutState.entries.reduce(
+    (sum, entry) => sum + (entry.done || 0), 0);
+  if (!force && completedSets > 0) {
+    if (!window.confirm('这次训练还没保存，确定退出？')) return;
+  }
+  clearInterval(workoutState.elapsedTimer);
+  clearInterval(workoutState.restTimer);
+  document.removeEventListener('keydown', onWorkoutKeydown);
+  const previous = workoutState.previousFocus;
+  workoutState.overlay.remove();
+  document.body.style.overflow = '';
+  workoutState = null;
+  if (previous && typeof previous.focus === 'function') previous.focus();
+}
+
+function openWorkout(day, planMeta) {
+  if (!day || !Array.isArray(day.exercises) || !day.exercises.length) return;
+  if (workoutState) closeWorkout(true);
+
+  const entries = day.exercises.map(exercise => ({
+    name: exercise?.name || '未命名动作',
+    targetSets: Math.max(1, parseInt(exercise?.sets, 10) || 3),
+    targetReps: exercise?.reps || '',
+    restSeconds: workoutRestSeconds(exercise?.rest),
+    weight: '',
+    reps: String(workoutRepsTarget(exercise?.reps)),
+    done: 0,
+  }));
+
+  const overlay = el('div', 'workout-overlay');
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'workout-title');
+
+  const shell = el('div', 'workout-shell');
+
+  const header = el('div', 'workout-header');
+  const headText = el('div', '');
+  headText.appendChild(el('span', 'workout-eyebrow', '训练中'));
+  const title = el('h2', 'workout-title', `DAY ${day.day || 1} · ${day.focus || '今日训练'}`);
+  title.id = 'workout-title';
+  headText.appendChild(title);
+  header.appendChild(headText);
+  const clock = el('div', 'workout-clock', '00:00');
+  header.appendChild(clock);
+  const closeBtn = el('button', 'workout-close', '×');
+  closeBtn.type = 'button';
+  closeBtn.setAttribute('aria-label', '退出训练');
+  closeBtn.addEventListener('click', () => closeWorkout(false));
+  header.appendChild(closeBtn);
+  shell.appendChild(header);
+
+  const progress = el('div', 'workout-progress');
+  const progressText = el('div', 'workout-progress-text');
+  const progressLabel = el('span', '', `0 / ${entries.length} 个动作完成`);
+  progressText.appendChild(progressLabel);
+  progressText.appendChild(el('span', '', '点组号记录完成'));
+  progress.appendChild(progressText);
+  const bar = el('div', 'workout-progress-bar');
+  const barFill = el('i', '');
+  bar.appendChild(barFill);
+  progress.appendChild(bar);
+  shell.appendChild(progress);
+
+  const body = el('div', 'workout-body');
+  const cards = entries.map((entry, index) => {
+    const card = buildWorkoutEx(entry, index);
+    body.appendChild(card);
+    return card;
+  });
+  shell.appendChild(body);
+
+  const footer = el('div', 'workout-footer');
+  const restBar = el('div', 'workout-rest is-idle');
+  restBar.appendChild(el('span', 'workout-rest-idle', '完成一组后自动开始休息'));
+  const restActive = el('div', 'workout-rest-active');
+  restActive.appendChild(el('span', '', '休息'));
+  const restCount = el('strong', '', '60');
+  restActive.appendChild(restCount);
+  restActive.appendChild(el('span', '', '秒'));
+  const restActions = el('div', 'workout-rest-actions');
+  const addTime = el('button', '', '+30 秒');
+  addTime.type = 'button';
+  addTime.addEventListener('click', () => {
+    if (workoutState) workoutState.restEndAt += 30000;
+  });
+  const skip = el('button', '', '跳过');
+  skip.type = 'button';
+  skip.addEventListener('click', stopWorkoutRest);
+  restActions.appendChild(addTime);
+  restActions.appendChild(skip);
+  restActive.appendChild(restActions);
+  restBar.appendChild(restActive);
+  footer.appendChild(restBar);
+
+  const hint = el('div', 'workout-hint', '');
+  footer.appendChild(hint);
+
+  const finish = el('button', 'btn-generate', '▸ 完成训练');
+  finish.type = 'button';
+  finish.addEventListener('click', finishWorkout);
+  footer.appendChild(finish);
+  shell.appendChild(footer);
+
+  overlay.appendChild(shell);
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+
+  workoutState = {
+    day,
+    planMeta: planMeta || {},
+    entries,
+    cards,
+    overlay,
+    clock,
+    progressLabel,
+    barFill,
+    restBar,
+    restCount,
+    hint,
+    finish,
+    startedAt: Date.now(),
+    previousFocus: document.activeElement,
+    elapsedTimer: null,
+    restTimer: null,
+    restEndAt: 0,
+  };
+  workoutState.elapsedTimer = setInterval(() => {
+    if (!workoutState) return;
+    clock.textContent = formatWorkoutClock(
+      Math.floor((Date.now() - workoutState.startedAt) / 1000));
+  }, 1000);
+
+  document.addEventListener('keydown', onWorkoutKeydown);
+  closeBtn.focus();
+}
+
+async function finishWorkout() {
+  if (!workoutState) return;
+  const { entries, day, planMeta } = workoutState;
+  const completed = entries
+    .filter(entry => entry.done > 0)
+    .map(entry => ({
+      exercise_name: entry.name,
+      sets: entry.done,
+      reps: parseInt(entry.reps, 10) || 0,
+      weight: parseFloat(entry.weight) || 0,
+      rpe: null,
+      completed: true,
+    }));
+  if (!completed.length) {
+    workoutState.hint.textContent = '至少完成一组再保存。';
+    return;
+  }
+
+  workoutState.hint.textContent = '';
+  workoutState.finish.disabled = true;
+  workoutState.finish.textContent = '保存中...';
+  const durationMin = Math.max(
+    1, Math.round((Date.now() - workoutState.startedAt) / 60000));
+  const payload = {
+    athlete_key: athleteKey,
+    log_date: todayLocalIso(),
+    focus: day.focus || '',
+    session_rpe: null,
+    duration_min: durationMin,
+    entries: completed,
+  };
+  if (planMeta.planId) payload.plan_id = planMeta.planId;
+  if (day.day) payload.day_index = day.day;
+
+  try {
+    const resp = await fetch('/api/training-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error((data.error && data.error.message) || '保存失败');
+    closeWorkout(true);
+    switchTab('log');
+    showStatus('log-status', `已保存 ${data.entries_saved} 个动作，用时 ${durationMin} 分钟。`);
+    loadLogHistory();
+  } catch (e) {
+    if (workoutState) {
+      workoutState.hint.textContent = `保存失败：${e.message}`;
+      workoutState.finish.disabled = false;
+      workoutState.finish.textContent = '▸ 完成训练';
+    }
   }
 }
 
