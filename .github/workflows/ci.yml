@@ -52,6 +52,25 @@ jobs:
       - name: Verify project fact baseline
         run: python scripts/verify_project_facts.py
 
+  container:
+    name: Container build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+
+      # 只构建不推送：Dockerfile 与锁文件坏掉时在合并前就能发现，
+      # 不必等到打 tag 发版才暴露。gha 缓存让后续构建复用依赖层。
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          build-args: |
+            APP_VERSION=ci
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   attribution-guard:
     name: Attribution guard
     runs-on: ubuntu-latest

@@ -1,10 +1,20 @@
 # syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
+# 版本与来源信息由 CI 在打 tag 时传入，用于回滚时确认"这是哪个镜像"。
+# 本地直接 docker build 不传参时是 dev/unknown，不会伪装成已发布版本。
+ARG APP_VERSION=dev
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="ironmind" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.source="https://github.com/Humble-moon/gakki-ai-fitness"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    APP_VERSION=${APP_VERSION}
 
 WORKDIR /app
 
@@ -32,7 +42,7 @@ EXPOSE 8503
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8503/health/ready || exit 1
 
-# workers=1 是有意的：限流器、熔断器与部分成本计数仍是进程内状态，
-# 多 worker 会让同一 IP 的请求落到不同进程、各自计数。要横向扩展，
-# 先把这些状态迁到 Redis（见 docs/known-limitations.md）。
+# workers=1 是有意的：限流与熔断已经可以走 Redis 共享，但审核工件、
+# 保存的计划与 LangGraph 检查点仍是本地 SQLite 单文件，多 worker 会各写各的。
+# 要横向扩展，先把这些存储迁到 PostgreSQL（见 docs/known-limitations.md）。
 CMD ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8503", "--workers", "1"]

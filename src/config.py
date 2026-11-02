@@ -334,6 +334,10 @@ GUEST_TOKEN_TTL_SECONDS = int(os.getenv(
 # 令牌过期只是不能再访问，不会删除数据。
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# 发布版本号：镜像构建时由 CI 以 --build-arg APP_VERSION=<git tag> 注入。
+# 本地运行为 dev，用于区分"开发中的进程"与"某个已发布版本"。
+APP_VERSION = os.getenv("APP_VERSION", "dev")
 # 应用与 uvicorn 的统一日志级别。
 
 LOG_JSON = os.getenv("LOG_JSON", "0").lower() in ("1", "true", "yes")

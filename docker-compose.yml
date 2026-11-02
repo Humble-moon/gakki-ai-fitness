@@ -9,6 +9,9 @@
 #      不要沿用演示密码。
 services:
   app:
+    # 本地开发直接 build；发布部署通过 APP_IMAGE 指定已扫描的镜像。
+    # 两者同时存在时：compose pull 拉镜像，compose up --build 走本地构建。
+    image: ${APP_IMAGE:-ghcr.io/humble-moon/gakki-ai-fitness:latest}
     build: .
     ports: ["127.0.0.1:8503:8503"]
     env_file: .env

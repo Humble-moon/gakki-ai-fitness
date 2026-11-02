@@ -93,6 +93,17 @@ def test_admin_accepts_api_key_when_configured():
     assert ok.status_code == 200
 
 
+def test_admin_accepts_bearer_token_for_scrapers():
+    """Prometheus 只能配标准 Authorization 头，不能配任意自定义头。"""
+    client = _build_app(admin_token="admin-secret")
+    ok = client.get("/admin/metrics",
+                    headers={"Authorization": "Bearer admin-secret"})
+    assert ok.status_code == 200
+    bad = client.get("/admin/metrics",
+                     headers={"Authorization": "Bearer wrong"})
+    assert bad.status_code == 401
+
+
 # ---------- rate limiting ----------
 
 def test_rate_limit_returns_429_with_retry_after():

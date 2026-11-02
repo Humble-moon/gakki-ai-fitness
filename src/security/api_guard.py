@@ -156,12 +156,20 @@ class AdminAuthMiddleware:
         if self.admin_token and supplied_admin == self.admin_token:
             await self.app(scope, receive, send)
             return
+        # Prometheus 的抓取配置只支持标准 Authorization 头（或自定义
+        # credentials_file），没有"任意自定义头"这一档；不认 Bearer
+        # 就只能把令牌塞进 URL，反而更容易进访问日志。
+        supplied_bearer = _header(scope, "authorization") or ""
+        if (self.admin_token and supplied_bearer.startswith("Bearer ")
+                and supplied_bearer[7:] == self.admin_token):
+            await self.app(scope, receive, send)
+            return
         if self.api_token and _header(scope, "x-api-key") == self.api_token:
             await self.app(scope, receive, send)
             return
         await _json_response(send, 401, {
             "error": "admin_unauthorized",
-            "message": "管理端点需要有效的 X-Admin-Token 或 X-API-Key。",
+            "message": "管理端点需要有效的 X-Admin-Token、Authorization: Bearer 或 X-API-Key。",
         })
 
 

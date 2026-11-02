@@ -176,7 +176,12 @@ python app/server.py
 make backup                              # pg_dump → backups/*.sql.gz，默认留 7 份
 make restore FILE=backups/xxx.sql.gz     # 覆盖式恢复，需交互确认
 make migrate                             # 手动执行 alembic upgrade head
+make verify-shared                       # 限流/熔断在实例间共享（需 Redis）
+make verify-replicas                     # 两个真实进程共用一份配额
+make audit                               # 锁定依赖的已知漏洞扫描
 ```
+
+发布与回滚见 [docs/release.md](docs/release.md)；三个 SLI、Prometheus 抓取与告警规则见 [docs/observability.md](docs/observability.md)。
 
 ## 参与开发
 

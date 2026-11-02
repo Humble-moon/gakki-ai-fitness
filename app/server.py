@@ -115,7 +115,9 @@ app = FastAPI(
 
 @app.get("/health/live")
 def health_live():
-    return {"status": "ok"}
+    # 带上版本号：出问题时第一件事是确认"跑的是哪个版本"，
+    # 只回 ok 无法区分本地进程与某个已发布镜像。
+    return {"status": "ok", "version": config.APP_VERSION}
 
 
 @app.get("/health/ready")
