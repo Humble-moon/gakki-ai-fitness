@@ -52,6 +52,7 @@ from openai import OpenAI, APIConnectionError, RateLimitError, APITimeoutError
 
 from src.config import (
     LLM_CONFIGS, LLM_FALLBACK_CHAIN,
+    LLM_REQUEST_TIMEOUT, LLM_TOTAL_BUDGET,
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL,
 )
 from src.llm.cost_tracker import cost_tracker
@@ -267,6 +268,9 @@ class LLMProvider:
                 api_key=cfg["api_key"],
                 base_url=cfg["base_url"],
                 max_retries=0,  # 关闭 SDK 内置重试，由我们的 _call_api_with_retry 统一管理
+                # 没有这个上界，上游不返回时请求会一直挂着；单进程部署下
+                # 几个卡住的请求就能把整个服务堵死。
+                timeout=LLM_REQUEST_TIMEOUT,
             )
             self._models[alias] = cfg["model"]
 
@@ -276,6 +280,7 @@ class LLMProvider:
                 api_key=DEEPSEEK_API_KEY,
                 base_url=DEEPSEEK_BASE_URL,
                 max_retries=0,
+                timeout=LLM_REQUEST_TIMEOUT,
             )
             self._models["default"] = "deepseek-chat"
 
@@ -343,14 +348,22 @@ class LLMProvider:
     # ------------------------------------------------------------------
 
     def _call_api_with_retry(self, client: OpenAI, model_name: str,
-                             messages: list, temperature: float) -> LLMResponse:
+                             messages: list, temperature: float,
+                             deadline: float | None = None) -> LLMResponse:
         """向单个模型发请求，带指数退避重试。
 
         只对网络/限流类瞬时故障重试。逻辑错误（如 API key 无效）
         直接向上抛，不浪费重试次数。
+
+        ``deadline`` 是 ``time.monotonic()`` 表示的时间点，由 ``chat()``
+        统一计算并跨重试、跨降级模型共享——否则"重试 3 次 + 切备用模型"
+        会把墙钟时间叠加成数分钟。
         """
         last_error = None
         for attempt in range(_MAX_RETRIES):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"LLM 总时长预算已耗尽，{model_name} 未完成第 {attempt + 1} 次尝试")
             try:
                 resp = client.chat.completions.create(
                     model=model_name,
@@ -367,6 +380,16 @@ class LLMProvider:
                 last_error = e
                 wait = _BACKOFF_BASE ** attempt
                 summary = _error_summary(e)
+                # 最后一次失败后不再等待：原实现在没有任何后续尝试的情况下
+                # 仍会白等 4s，把故障时的响应时间又拉长一截。
+                budget_left = None if deadline is None else deadline - time.monotonic()
+                if attempt == _MAX_RETRIES - 1 or (
+                        budget_left is not None and wait >= budget_left):
+                    logger.warning(
+                        f"[Retry] {model_name} attempt {attempt + 1}/{_MAX_RETRIES} "
+                        f"failed: {summary} | no retry budget left"
+                    )
+                    break
                 logger.warning(
                     f"[Retry] {model_name} attempt {attempt + 1}/{_MAX_RETRIES} "
                     f"failed: {summary} | waiting {wait}s"
@@ -407,8 +430,16 @@ class LLMProvider:
         chain = self._build_fallback_chain(primary_alias)
         attempted = []
         errors = []
+        # 整个降级链共享一份预算：单次请求有超时，但"3 次重试 × 多个模型"
+        # 叠加起来仍可能拖成数分钟，这里给整条链一个总上界。
+        deadline = time.monotonic() + LLM_TOTAL_BUDGET
 
         for i, alias in enumerate(chain):
+            if time.monotonic() >= deadline:
+                errors.append("budget: 总时长预算耗尽，停止尝试剩余模型")
+                logger.error("[Fallback] 总时长预算耗尽，放弃剩余备用模型")
+                break
+
             cl = self._clients[alias]
             mn = self._models[alias]
             attempted.append(mn)
@@ -420,7 +451,8 @@ class LLMProvider:
                 )
 
             try:
-                resp = self._call_api_with_retry(cl, mn, messages, temperature)
+                resp = self._call_api_with_retry(
+                    cl, mn, messages, temperature, deadline=deadline)
                 resp.attempted_models = attempted
                 if i > 0:
                     resp.degraded = True
@@ -471,8 +503,14 @@ class LLMProvider:
             client, primary_alias, primary_model_name = self._resolve(model)
             chain = self._build_fallback_chain(primary_alias)
             errors = []
+            deadline = time.monotonic() + LLM_TOTAL_BUDGET
 
             for i, alias in enumerate(chain):
+                if time.monotonic() >= deadline:
+                    errors.append("budget: 总时长预算耗尽，停止尝试剩余模型")
+                    logger.error("[Fallback:stream] 总时长预算耗尽，放弃剩余备用模型")
+                    break
+
                 cl = self._clients[alias]
                 mn = self._models[alias]
                 metadata.attempted_models.append(mn)
@@ -482,7 +520,8 @@ class LLMProvider:
 
                 started_output = False
                 try:
-                    stream = self._create_stream_with_retry(cl, mn, messages, temperature)
+                    stream = self._create_stream_with_retry(
+                        cl, mn, messages, temperature, deadline=deadline)
                     total_content = []
                     for chunk in stream:
                         delta = chunk.choices[0].delta
@@ -520,10 +559,18 @@ class LLMProvider:
         return LLMStream(generate(), metadata)
 
     def _create_stream_with_retry(self, client: OpenAI, model_name: str,
-                                  messages: list, temperature: float):
-        """创建流式连接，含指数退避重试。"""
+                                  messages: list, temperature: float,
+                                  deadline: float | None = None):
+        """创建流式连接，含指数退避重试。
+
+        ``deadline`` 与 ``_call_api_with_retry`` 同义：连接建立阶段同样
+        要受总预算约束，否则备用模型会各自重试满三次。
+        """
         last_error = None
         for attempt in range(_MAX_RETRIES):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"LLM 总时长预算已耗尽，{model_name} 未完成第 {attempt + 1} 次流式连接")
             try:
                 return client.chat.completions.create(
                     model=model_name,
@@ -534,9 +581,18 @@ class LLMProvider:
             except _RETRYABLE as e:
                 last_error = e
                 wait = _BACKOFF_BASE ** attempt
+                summary = _error_summary(e)
+                budget_left = None if deadline is None else deadline - time.monotonic()
+                if attempt == _MAX_RETRIES - 1 or (
+                        budget_left is not None and wait >= budget_left):
+                    logger.warning(
+                        f"[Retry:stream] {model_name} attempt {attempt + 1}/{_MAX_RETRIES} "
+                        f"failed: {summary} | no retry budget left"
+                    )
+                    break
                 logger.warning(
                     f"[Retry:stream] {model_name} attempt {attempt + 1}/{_MAX_RETRIES} "
-                    f"failed: {_error_summary(e)} | waiting {wait}s"
+                    f"failed: {summary} | waiting {wait}s"
                 )
                 time.sleep(wait)
             except Exception:

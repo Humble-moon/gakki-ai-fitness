@@ -52,6 +52,7 @@ from src.config import (
     EMBEDDING_INSTRUCT_QUERY,
     EMBEDDING_INSTRUCT_DOCUMENT,
     EMBEDDING_OUTPUT_TYPE,
+    EMBEDDING_REQUEST_TIMEOUT,
 )
 from src.llm.cost_tracker import cost_tracker
 
@@ -93,6 +94,8 @@ class EmbeddingService:
             self._client = OpenAI(
                 api_key=EMBEDDING_API_KEY,
                 base_url=EMBEDDING_BASE_URL,
+                # 检索链路的第一步，卡住会拖垮整个计划生成；给它一个明确上界。
+                timeout=EMBEDDING_REQUEST_TIMEOUT,
             )
         return self._client
 

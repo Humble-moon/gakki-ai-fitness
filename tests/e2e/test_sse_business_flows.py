@@ -40,7 +40,8 @@ async def client(monkeypatch):
     ("path", "payload"),
     [
         ("/api/generate-plan", {"query": "增肌", "athlete_key": "e2e-guest"}),
-        ("/api/analyze-exercise", {"exercise_name": "深蹲"}),
+        ("/api/analyze-exercise",
+         {"exercise_name": "深蹲", "athlete_key": "e2e-guest"}),
         ("/api/ask-question", {"question": "怎么练？", "athlete_key": "e2e-guest"}),
     ],
 )

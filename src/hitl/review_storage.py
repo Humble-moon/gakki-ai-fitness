@@ -20,12 +20,43 @@ Design notes:
 import json
 import sqlite3
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from src.config import REVIEW_ARTIFACT_TTL_SECONDS
 from src.hitl.review_resolution import ReviewResolution
 from src.hitl.review_store import ReviewArtifact
 
 DEFAULT_DB_PATH = "data/hitl_reviews.db"
+
+
+def review_expires_at(created_at: str) -> datetime:
+    """审核工件的过期时刻（UTC）。
+
+    只依赖 ``created_at`` 计算，不改表结构：旧库里已有的工件同样受 TTL
+    约束，不需要补列或迁移。``created_at`` 由本模块以 ISO8601 UTC 写入；
+    兼容早期可能出现的无时区记录，按 UTC 解释。
+    """
+    created = datetime.fromisoformat(created_at)
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created + timedelta(seconds=REVIEW_ARTIFACT_TTL_SECONDS)
+
+
+def is_review_expired(artifact, now: datetime | None = None) -> bool:
+    """工件是否已超过审核有效期。
+
+    过期只影响"还能不能解除"，不改写 ``status``——状态机与前端契约保持
+    原样，避免为了清理而引入新的中间态。
+    """
+    if not getattr(artifact, "created_at", None):
+        return False
+    try:
+        expires = review_expires_at(artifact.created_at)
+    except (TypeError, ValueError):
+        # 无法解析的时间戳不应把用户挡在门外；按未过期处理并保留原始记录。
+        return False
+    return (now or datetime.now(timezone.utc)) >= expires
 
 
 class _SqliteBase:
@@ -128,6 +159,18 @@ class SqliteReviewArtifactStore(_SqliteBase):
             # 用 keys() 判断以兼容"列不存在"的极端情况。
             owner_key=(row["owner_key"] if "owner_key" in row.keys() else ""),
         )
+
+    def delete_by_owner(self, owner_key: str) -> int:
+        """删除该身份名下的工件，返回条数。
+
+        与内存实现保持一致：只删工件，保留已作出的审核决定。
+        """
+        if not owner_key:
+            return 0
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM review_artifacts WHERE owner_key = ?", (owner_key,))
+            return int(cursor.rowcount or 0)
 
     def list_pending(self) -> list[ReviewArtifact]:
         """All artifacts still awaiting review (status = review_pending)."""

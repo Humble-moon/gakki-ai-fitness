@@ -38,7 +38,7 @@ def test_chat_raises_when_all_models_fail(provider, monkeypatch):
 def test_chat_marks_fallback_success_as_degraded(provider, monkeypatch):
     calls = []
 
-    def fail_primary_then_success(client, model, messages, temperature):
+    def fail_primary_then_success(client, model, messages, temperature, deadline=None):
         calls.append(model)
         if model == "primary":
             raise ConnectionError("primary offline")
@@ -103,7 +103,7 @@ def test_stream_falls_back_after_empty_chunks(provider, monkeypatch):
             delta = Delta()
         choices = [Choices()]
 
-    def empty_then_fail(client, model, messages, temperature):
+    def empty_then_fail(client, model, messages, temperature, deadline=None):
         calls.append(model)
         if model == "primary":
             def failed_stream():
@@ -188,7 +188,7 @@ def test_stream_logs_use_bounded_redacted_error_summary(provider, monkeypatch, c
 def test_stream_falls_back_when_primary_returns_zero_chunks(provider, monkeypatch):
     calls = []
 
-    def zero_chunks_then_backup(client, model, messages, temperature):
+    def zero_chunks_then_backup(client, model, messages, temperature, deadline=None):
         calls.append(model)
         if model == "primary":
             return iter(())
@@ -204,7 +204,7 @@ def test_stream_falls_back_when_primary_returns_zero_chunks(provider, monkeypatc
 def test_stream_falls_back_after_metadata_only_and_empty_chunks(provider, monkeypatch):
     calls = []
 
-    def empty_then_backup(client, model, messages, temperature):
+    def empty_then_backup(client, model, messages, temperature, deadline=None):
         calls.append(model)
         if model == "primary":
             return iter([_chunk(None), _chunk("")])
@@ -233,7 +233,7 @@ def test_stream_raises_when_all_models_end_without_text(provider, monkeypatch):
 
 
 def test_stream_exposes_fallback_metadata_without_changing_string_yields(provider, monkeypatch):
-    def primary_empty_then_backup(client, model, messages, temperature):
+    def primary_empty_then_backup(client, model, messages, temperature, deadline=None):
         if model == "primary":
             return iter(())
         return iter([_chunk("backup output")])

@@ -5,9 +5,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from collections import Counter
 from pathlib import Path
+
+# 离线 e2e 不启动 Redis，拿不到服务端签发的游客令牌。这里显式打开旧 key
+# 窗口，让脚本聚焦在业务流上；真实部署默认是关闭的。
+os.environ.setdefault("ALLOW_LEGACY_GUEST_KEY", "1")
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -24,7 +29,8 @@ PAYLOADS = {
     "training_plan": ("/api/generate-plan",
                       {"session_id": "offline", "query": "增肌",
                        "athlete_key": E2E_ATHLETE_KEY}),
-    "exercise_analysis": ("/api/analyze-exercise", {"exercise_name": "深蹲"}),
+    "exercise_analysis": ("/api/analyze-exercise",
+                          {"exercise_name": "深蹲", "athlete_key": E2E_ATHLETE_KEY}),
     "knowledge_question": ("/api/ask-question",
                            {"question": "怎么练？", "athlete_key": E2E_ATHLETE_KEY}),
 }

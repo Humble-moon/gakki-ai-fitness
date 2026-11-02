@@ -59,7 +59,8 @@ async def test_generate_plan_rejects_invalid_goal(client):
     ("path", "payload"),
     [
         ("/api/generate-plan", {"session_id": "offline", "athlete_key": "test-guest"}),
-        ("/api/analyze-exercise", {"exercise_name": "深蹲"}),
+        ("/api/analyze-exercise",
+         {"exercise_name": "深蹲", "athlete_key": "test-guest"}),
         ("/api/ask-question", {"question": "怎么练？", "athlete_key": "test-guest"}),
     ],
 )

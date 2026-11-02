@@ -46,3 +46,17 @@ class InMemoryReviewArtifactStore:
 
     def get(self, review_id: str) -> ReviewArtifact | None:
         return self._artifacts.get(review_id)
+
+    def delete_by_owner(self, owner_key: str) -> int:
+        """删除该身份名下的工件，返回条数。
+
+        只删工件（待处理业务对象），不删已作出的审核决定——后者是
+        审计轨迹，不应随用户数据删除。
+        """
+        if not owner_key:
+            return 0
+        stale = [rid for rid, art in self._artifacts.items()
+                 if getattr(art, "owner_key", "") == owner_key]
+        for rid in stale:
+            del self._artifacts[rid]
+        return len(stale)
