@@ -3030,20 +3030,40 @@ body {
 
 /* 列表项不用通边框，靠底色与悬停浮起区分层次 */
 .log-history-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 16px;
-  padding: 13px 15px;
+  display: block;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   margin-bottom: 8px;
-  transition: background .2s var(--ease-out), transform .2s var(--ease-out), box-shadow .2s var(--ease-out);
+  transition: background .2s var(--ease-out), border-color .2s var(--ease-out);
 }
 .log-history-item:hover {
   background: var(--bg-card-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px -14px rgba(0,0,0,.18);
+  border-color: var(--steel);
+}
+/* 展开时保持白底：内容是明细，不该看起来像另一张可点的卡片。 */
+.log-history-item.is-open {
+  background: var(--bg-elevated);
+  border-color: var(--steel);
+}
+.log-item-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 15px;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.log-item-summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
 }
 .log-history-item .lh-date {
   font-family: var(--font-mono);
@@ -3054,7 +3074,67 @@ body {
 .log-history-item .lh-body {
   color: var(--text-secondary);
   font-size: 13px;
-  text-align: right;
+  text-align: left;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lh-volume {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--chalk-faint);
+  white-space: nowrap;
+}
+.log-item-detail { padding: 0 15px 14px; }
+.log-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--steel-light);
+  font-size: 13px;
+}
+.log-detail-row:last-of-type { border-bottom: none; }
+.log-detail-name { color: var(--chalk); min-width: 0; }
+.log-detail-metric {
+  font-family: var(--font-mono);
+  color: var(--chalk-dim);
+  white-space: nowrap;
+}
+.log-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+}
+
+.log-month { margin-bottom: 18px; }
+.log-month-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0 2px 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--steel);
+}
+.log-month-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--chalk-dim);
+}
+.log-month-count { font-size: 11px; color: var(--chalk-faint); }
+
+@media (max-width: 600px) {
+  .log-item-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+  }
+  .lh-date { grid-column: 1; }
+  .lh-volume { grid-column: 2; }
+  .lh-body { grid-column: 1 / -1; white-space: normal; }
 }
 
 .progress-stats {
@@ -7357,11 +7437,117 @@ async function finishWorkout() {
   }
 }
 
+function formatLogDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return String(value || '');
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  return `${Number(match[2])}月${Number(match[3])}日 ${weekdays[date.getDay()]}`;
+}
+
+function logVolume(log) {
+  return (log.entries || []).reduce((sum, entry) =>
+    sum + (Number(entry.sets) || 0) * (Number(entry.reps) || 0)
+      * (Number(entry.weight) || 0), 0);
+}
+
+function groupLogsByMonth(logs) {
+  const groups = new Map();
+  logs.forEach(log => {
+    const key = String(log.log_date || '').slice(0, 7) || '未知月份';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(log);
+  });
+  return [...groups.entries()].map(([key, items]) => ({ key, items }));
+}
+
+function renderLogItem(log) {
+  const item = el('article', 'log-history-item');
+  const summary = el('button', 'log-item-summary');
+  summary.type = 'button';
+  summary.setAttribute('aria-expanded', 'false');
+  summary.appendChild(el('span', 'lh-date', formatLogDate(log.log_date)));
+  const names = (log.entries || []).map(entry => entry.exercise_name).join('、');
+  summary.appendChild(el('span', 'lh-body',
+    `${log.focus || '训练'} · ${names || '无动作'}`));
+  const volume = logVolume(log);
+  summary.appendChild(el('span', 'lh-volume',
+    volume > 0 ? `${Math.round(volume).toLocaleString('zh-CN')} kg` : ''));
+  item.appendChild(summary);
+
+  const detail = el('div', 'log-item-detail');
+  detail.hidden = true;
+  const entries = Array.isArray(log.entries) ? log.entries : [];
+  entries.forEach(entry => {
+    const row = el('div', 'log-detail-row');
+    row.appendChild(el('span', 'log-detail-name', entry.exercise_name));
+    const weight = Number(entry.weight) > 0
+      ? ` · ${formatWorkoutWeight(entry.weight)} kg` : '';
+    row.appendChild(el('span', 'log-detail-metric',
+      `${entry.sets} 组 × ${entry.reps} 次${weight}`));
+    detail.appendChild(row);
+  });
+  if (!entries.length) {
+    detail.appendChild(el('div', 'log-detail-row', '这次训练没有动作明细。'));
+  }
+  const actions = el('div', 'log-detail-actions');
+  const copy = el('button', 'btn-secondary', '复制这次训练到今天');
+  copy.type = 'button';
+  copy.addEventListener('click', () => copyLogToToday(log));
+  actions.appendChild(copy);
+  detail.appendChild(actions);
+  item.appendChild(detail);
+
+  summary.addEventListener('click', () => {
+    const willOpen = detail.hidden;
+    detail.hidden = !willOpen;
+    item.classList.toggle('is-open', willOpen);
+    summary.setAttribute('aria-expanded', String(willOpen));
+  });
+  return item;
+}
+
+/* 把一次历史训练复制到今天的表单里。
+   只填内容、不直接保存：用户可能只完成了其中几个动作，需要改完再提交。 */
+function copyLogToToday(log) {
+  const entries = Array.isArray(log.entries) ? log.entries : [];
+  if (!entries.length) return;
+  if (collectLogEntries().length
+      && !window.confirm('训练日志里已有内容，复制会覆盖，继续吗？')) {
+    return;
+  }
+  const container = document.getElementById('log-entries');
+  if (!container) return;
+  container.replaceChildren();
+  entries.forEach(entry => addLogEntryRow({
+    exercise_name: entry.exercise_name,
+    sets: entry.sets,
+    reps: entry.reps,
+    weight: entry.weight,
+    rpe: entry.rpe,
+  }));
+
+  const dateInput = document.getElementById('log-date');
+  if (dateInput) dateInput.value = todayLocalIso();
+  const focusInput = document.getElementById('log-focus');
+  if (focusInput) focusInput.value = log.focus || '';
+  const durationInput = document.getElementById('log-duration');
+  if (durationInput && log.duration_min) durationInput.value = log.duration_min;
+
+  switchTab('log');
+  showStatus('log-status', `已复制 ${entries.length} 个动作到今天，确认后保存。`);
+  const save = document.getElementById('btn-save-log');
+  if (save && save.scrollIntoView) {
+    save.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
 async function loadLogHistory() {
   const box = document.getElementById('log-history');
   if (!box) return;
   try {
-    const resp = await fetch(`/api/training-logs?athlete_key=${encodeURIComponent(athleteKey)}&limit=10`);
+    // 50 条覆盖多数人一两个月的训练，按月份分组后仍能一屏看到当月的节奏。
+    const resp = await fetch(`/api/training-logs?athlete_key=${encodeURIComponent(athleteKey)}&limit=50`);
     const data = await resp.json();
     if (!resp.ok) throw new Error((data.error && data.error.message) || '读取失败');
     box.replaceChildren();
@@ -7370,13 +7556,16 @@ async function loadLogHistory() {
         '在上面填好动作明细并保存，这里会按时间倒序列出每一次训练。'));
       return;
     }
-    data.logs.forEach(log => {
-      const item = el('div', 'log-history-item');
-      item.appendChild(el('span', 'lh-date', log.log_date));
-      const names = log.entries.map(e => e.exercise_name).join('、');
-      item.appendChild(el('span', 'lh-body',
-        `${log.focus || '训练'} · ${names || '无动作'}`));
-      box.appendChild(item);
+    groupLogsByMonth(data.logs).forEach(group => {
+      const section = el('section', 'log-month');
+      const head = el('div', 'log-month-head');
+      const parts = group.key.split('-');
+      head.appendChild(el('span', 'log-month-title',
+        group.key === '未知月份' ? '未知月份' : `${parts[0]} 年 ${Number(parts[1])} 月`));
+      head.appendChild(el('span', 'log-month-count', `${group.items.length} 次`));
+      section.appendChild(head);
+      group.items.forEach(log => section.appendChild(renderLogItem(log)));
+      box.appendChild(section);
     });
   } catch (e) {
     box.replaceChildren();
