@@ -175,6 +175,11 @@ def _negated_at(text: str, start: int) -> bool:
     return bool(_NEGATION_TAIL.search(prefix))
 
 
+def negated_at(text: str, start: int) -> bool:
+    """公开版否定语境判断（饮食危机检测共用，避免另抄一份否定逻辑）。"""
+    return _negated_at(text, start)
+
+
 def _find_affirmed(text: str, keywords) -> bool:
     """词表中是否存在一处未被否定的命中。
 
@@ -190,6 +195,11 @@ def _find_affirmed(text: str, keywords) -> bool:
                 return True
             start = index + len(keyword)
     return False
+
+
+def find_affirmed_keyword(text: str, keywords) -> bool:
+    """公开版「存在未被否定的命中」。饮食侧危机词表复用同一实现。"""
+    return _find_affirmed(text, keywords)
 
 
 def detect_emergency(question: str) -> bool:

@@ -281,3 +281,135 @@ def test_decimal_weight_actually_changes_the_calculation():
     b = calc_calorie_target(62, height_cm=172, age=30, sex="男",
                             goal="增肌", days_per_week=4)
     assert a["bmr"] != b["bmr"], "小数没有影响 BMR，说明计算被取整了"
+
+
+# ----------------------------------------------------------------------
+# 饮食侧扩展：宏量 / 护栏 / 日拆分 / 餐分配
+# ----------------------------------------------------------------------
+
+from src.core.nutrition import (  # noqa: E402
+    allocate_meals,
+    apply_energy_guardrails,
+    split_day_targets,
+    split_macros,
+)
+
+
+def test_calc_returns_macros_without_changing_legacy_keys():
+    """增返 fat_g/carbs_g 是 additive：训练侧依赖的旧键值一个都不能变。"""
+    r = calc_calorie_target(80, 180, 30, "男", "增肌", 4)
+    assert r["daily_kcal"] == 3173 and r["protein_g"] == 144
+    # 蛋白 576 kcal → 剩余 2597 → 脂肪 25% = 649.25 → 72g；碳水 1947.75 → 487g
+    assert r["fat_g"] == round((3172.85 - 144 * 4) * 0.25 / 9)
+    assert r["carbs_g"] == round((3172.85 - 144 * 4) * 0.75 / 4)
+
+
+@pytest.mark.parametrize("daily,protein", [(3173, 144), (1463, 120), (2000, 100), (500, 144)])
+def test_split_macros_energy_conservation(daily, protein):
+    """4P + 9F + 4C 必须约等于日目标（三个取整最多偏差 8 kcal）。
+
+    蛋白已超预算时守恒不适用——那时脂肪/碳水归 0，超出部分由上层护栏告知用户。
+    """
+    m = split_macros(daily, protein)
+    if 4 * protein > daily:
+        assert m == {"fat_g": 0, "carbs_g": 0}
+        return
+    reconstructed = 4 * protein + 9 * m["fat_g"] + 4 * m["carbs_g"]
+    assert abs(daily - reconstructed) <= 8
+    assert m["fat_g"] >= 0 and m["carbs_g"] >= 0
+
+
+def test_split_macros_never_negative_when_protein_fills_budget():
+    m = split_macros(500, 144)  # 蛋白 576 kcal > 500
+    assert m == {"fat_g": 0, "carbs_g": 0}
+
+
+def test_guardrails_block_deficit_for_minors():
+    targets = calc_calorie_target(50, 160, 15, "女", "减脂", 3)
+    guarded = apply_energy_guardrails(targets, weight_kg=50, age=15, height_cm=160)
+    assert guarded["flags"]["deficit_blocked"] is True
+    assert guarded["targets"]["daily_kcal"] == guarded["targets"]["tdee"]
+    assert guarded["targets"]["delta_pct"] == 0
+    assert any("青少年" in w for w in guarded["warnings"])
+
+
+def test_guardrails_block_deficit_for_low_bmi():
+    targets = calc_calorie_target(45, 170, 25, "女", "减脂", 3)  # BMI 15.6
+    guarded = apply_energy_guardrails(targets, weight_kg=45, age=25, height_cm=170)
+    assert guarded["flags"]["deficit_blocked"] is True
+    assert guarded["flags"]["very_low_bmi"] is True
+    assert any("BMI 低于 16" in w for w in guarded["warnings"])
+
+
+def test_guardrails_floor_clamps_and_relabels_delta():
+    # 50kg/160cm/30岁/女/减脂/1练：BMR 1189，TDEE 1426.8，目标 1141.4 < 1200
+    targets = calc_calorie_target(50, 160, 30, "女", "减脂", 1)
+    guarded = apply_energy_guardrails(targets, weight_kg=50, age=30, height_cm=160)
+    assert guarded["flags"]["floor_applied"] is True
+    assert guarded["flags"]["deficit_blocked"] is False  # BMI 19.5，不属禁缺口人群
+    assert guarded["targets"]["daily_kcal"] == 1200
+    assert guarded["targets"]["delta_pct"] == round((1200 / targets["tdee"] - 1) * 100)
+    assert "安全下限" in guarded["targets"]["basis"]
+
+
+def test_guardrails_leave_healthy_bulk_untouched_and_do_not_mutate_input():
+    targets = calc_calorie_target(80, 180, 30, "男", "增肌", 4)
+    snapshot = dict(targets)
+    guarded = apply_energy_guardrails(targets, weight_kg=80, age=30, height_cm=180)
+    assert targets == snapshot, "护栏不得修改入参"
+    assert guarded["warnings"] == []
+    assert guarded["flags"] == {"deficit_blocked": False, "floor_applied": False,
+                                "very_low_bmi": False}
+    assert guarded["targets"]["daily_kcal"] == 3173
+
+
+def test_guardrails_warn_when_protein_fills_budget():
+    # 小体重档案（BMR 1189 → floor 1200），人为把蛋白推到 400g（1600 kcal > 1200）
+    targets = calc_calorie_target(50, 160, 30, "女", "维持", 1)
+    targets = dict(targets, daily_kcal=1200, protein_g=400, delta_pct=0)
+    guarded = apply_energy_guardrails(targets, weight_kg=50, age=30, height_cm=160)
+    assert any("占满热量预算" in w for w in guarded["warnings"])
+    assert guarded["targets"]["carbs_g"] == 0
+
+
+@pytest.mark.parametrize("days", range(0, 8))
+def test_split_day_targets_weekly_weighted_conservation(days):
+    daily = 2500
+    split = split_day_targets(daily, days)
+    train, rest = split["training_day_kcal"], split["rest_day_kcal"]
+    # 取整后周加权均值与日目标偏差 ≤ 1 kcal；未取整前严格守恒
+    assert abs((days * train + (7 - days) * rest) / 7 - daily) <= 1
+    assert split["weekly_mean_kcal"] == daily
+    if 0 < days < 7:
+        assert train > daily > rest
+    if days == 7:
+        assert train == daily and rest < daily  # 休息日模板仍生成
+
+
+@pytest.mark.parametrize("day", [1463, 2000, 2500, 3173])
+@pytest.mark.parametrize("count", [3, 4])
+def test_allocate_meals_kcal_sum_is_exact(day, count):
+    meals = allocate_meals(day, 144, meal_count=count)
+    assert sum(m["kcal_target"] for m in meals) == day
+    assert [m["meal"] for m in meals] == (
+        ["早餐", "午餐", "晚餐"] if count == 3 else ["早餐", "午餐", "晚餐", "加餐"])
+    for m in meals:
+        assert abs(m["protein_target_g"] - 144 / count) <= 0.1
+
+
+def test_allocate_meals_protein_is_evenly_split_not_hardcoded_band():
+    """50kg 减脂者日蛋白 100g 分 4 餐 = 25g/餐，不能硬套 30-40g 参考带。"""
+    meals = allocate_meals(1500, 100, meal_count=4)
+    assert all(m["protein_target_g"] == 25.0 for m in meals)
+
+
+def test_allocate_meals_rejects_unsupported_count():
+    with pytest.raises(ValueError):
+        allocate_meals(2000, 144, meal_count=5)
+
+
+def test_nutrition_module_stays_zero_dependency():
+    """模块 docstring 的契约：不 import 项目内任何东西（技能工具委托到此）。"""
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[2] / "src" / "core" / "nutrition.py").read_text(encoding="utf-8")
+    assert "from src." not in source and "import src" not in source

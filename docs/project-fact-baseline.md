@@ -17,6 +17,7 @@ python scripts/verify_project_facts.py --json
 | 事实 | 证据路径 | 状态 | 统计日期 | 对外话术 |
 |---|---|---|---|---|
 | 种子动作 338 条 | `data/seed_exercises.json` 的 JSON list 长度 | 已复核 | 2026-08-19 | 当前仓库包含 338 条种子动作记录 |
+| 种子食物 121 条 | `data/seed_foods.json` 的 `foods` 列表长度 | 已复核 | 2026-11-19 | 饮食功能食物库含 121 条记录，名字带生熟状态，逐条过 Atwater 一致性测试 |
 | 知识 Markdown 162 篇 | `data/knowledge/**/*.md` 文件数 | 已复核 | 2026-08-19 | 当前仓库包含 162 篇知识 Markdown |
 | 主 Golden 206 条 | `eval/golden_dataset/queries.json` 的 JSON list 长度 | 已复核 | 2026-08-19 | 主 Golden 数据集有 206 条记录 |
 | 知识子集 54 条 | `eval/golden_dataset/knowledge_queries.json` 的 JSON list 长度 | 已复核 | 2026-08-19 | 知识评测子集有 54 条记录 |
@@ -28,7 +29,7 @@ python scripts/verify_project_facts.py --json
 
 仓库代码和文档可见 FastAPI + SSE 入口、自研 Orchestrator，以及 Planner、Retriever、Writer、FactChecker 分层；还包含 GraphRAG、MCP、Redis 语义缓存、Provider 熔断器和安全规则引擎。安全审查的默认处置是「冲突动作自动替换 → 替换不掉则拒绝」，不产生等待审核的中间态；旧的送审闭环（工件创建 → 中断暂停 → resolve 接口恢复 → 解除记录）作为 `COACH_REVIEW_MODE=manual` 下的开发期工具保留，已全链路打通并具备重启存活性（见下节）。GraphRAG、MCP 和部分高级能力应以实际配置与依赖可用性为前提。
 
-当前运行契约为 `localhost:8503`，SSE 入口包括 `/api/generate-plan`、`/api/analyze-exercise` 和 `/api/ask-question`。默认测试通过 `pytest` 排除 `integration` 与 `live` 标记；需要外部服务或真实模型的评测必须显式 opt-in。
+当前运行契约为 `localhost:8503`，SSE 入口包括 `/api/generate-plan`、`/api/analyze-exercise` 和 `/api/ask-question`。饮食功能走独立 JSON 端点（`/api/diet-plans/*`、`/api/diet-logs`、`/api/diet-stats`），不进 LangGraph、不新增 SSE 消费。默认测试通过 `pytest` 排除 `integration` 与 `live` 标记；需要外部服务或真实模型的评测必须显式 opt-in。
 
 ## 2026-09-03 工程加固（可复核）
 
@@ -120,13 +121,29 @@ python scripts/verify_project_facts.py --json
 
 **动作库查询修复**：`target_muscles` 是 json 列却用 `ILIKE` 查询，PostgreSQL 无 `json ~~* unknown` 操作符 → 整条 SQL 报错并**静默降级到 3 条演示数据**（实测 `search_by_muscle("胸")` 只返回 1 条）。已改为 `jsonb_array_elements_text` 展开，修复后返回 20 条。该缺陷能长期存活，是因为 `tests/test_advanced.py` 与 `tests/test_mcp_v2.py` 的 autouse fixture 强制关闭数据库分支——整个 MCP 工具层测试都在 3 条演示数据上跑；现补 `tests/test_exercise_query_sql.py`（离线断言 SQL 形态 + 集成层连真实库）。
 
+## 2026-11-19 饮食计划与记录（可复核）
+
+| 事实 | 证据路径 | 状态 |
+|---|---|---|
+| 食物库 121 条，六类，名字带生熟状态 + 别名 + 封闭过敏原词表（10 标签）；逐条 Atwater 一致性 CI（误差 ≤10%） | `data/seed_foods.json`、`src/rag/food_catalog.py`、`tests/test_rag/test_food_catalog.py` | 已实现+已测试 |
+| 热量/宏量/护栏/日拆分/餐分配全部确定性计算（Mifflin-St Jeor → TDEE → 目标偏移；蛋白 g/kg → 脂肪占剩余 25% → 碳水补齐；周加权守恒 k=0.15；daily≥max(BMR,1200)；未成年/BMI<18.5 禁缺口；肾病蛋白 ≤0.8g/kg） | `src/core/nutrition.py`、`tests/test_core/test_nutrition.py` | 已实现+已测试 |
+| LLM 只选食物+克数，服务端按食物库逐行重算覆盖模型数字；库外食物摘除+重算，绝不交付无宏量食物行 | `src/agents/diet_writer.py`、`tests/test_agents/test_diet_writer.py` | 已实现+已测试 |
+| 确定性克数校准（真实 E2E 暴露模型选量蛋白达标但热量短三成后补）：蛋白先调、热量后补；按类别/密度设单食物合理上限（纯油 15g/坚果 30g/蛋白粉 60g/熟主食 400g/水果 250g 等），缺口在多种碳水间分摊；现有食物到上限仍不足时从禁忌已滤除的食物库补主食；校准后仍低于目标一成以上如实披露缺口 | `src/agents/diet_writer.py` `calibrate_portions`、`src/core/diet_service.py`、`tests/test_agents/test_diet_calibration.py` | 已实现+已测试+真实 E2E 复核 |
+| 饮食安全分流：过敏/疾病硬阻断永不降级 warning；确定性替换优先 → LLM 重写 ≤2 轮 → 摘除兜底 → 拒绝；危机两档（硬拒绝 diet_crisis_stopped / 软无缺口+关怀照常交付）；急症复用 qa_safety 同一词表与话术 | `src/core/diet_safety.py`、`src/core/diet_finalization.py`、`tests/test_core/test_diet_safety.py`、`tests/test_core/test_diet_finalization.py` | 已实现+已测试 |
+| 饮食偏好记忆并集读回 + 仅非空写入（防过敏史被空值覆盖）；写单点 persist_long_term_profile | `src/core/diet_service.py`、`src/core/plan_finalization.py`、`tests/test_core/test_diet_service.py` | 已实现+已测试 |
+| diet_plans / diet_logs 两表（餐为原子单位，UNIQUE(owner,date,meal) upsert 覆盖；custom 手动估算单食物 ≤2000kcal/单餐 ≤3000kcal 钳制）；alembic 迁移已在真库跑过 | `src/models/db_models.py`、`alembic/versions/f7a8b9c0d1e2_add_diet_tables.py`、`src/storage/diet_*_store.py`、`tests/test_storage/test_diet_stores*.py` | 已实现+已测试（含真库 integration） |
+| 独立 JSON 端点（generate/CRUD/logs/stats），不进 LangGraph、不新增 SSE；摄入统计日类型按实际训练日志日期判定；导出/删除/游客认领覆盖两新表 | `app/server.py`、`app/auth_api.py`、`src/core/diet_analytics.py`、`tests/test_diet_api.py`、`tests/test_data_rights.py` | 已实现+已测试 |
+| 前端第 7 页签 + 二级页签（生成/列表/记录/统计）；五种终态各有出口；「吃了这餐」一键记录；ECharts 三层降级；consumeSse 计数仍 4 | `app/static/index.html`、`tests/test_diet_frontend_contract.py`（36 条） | 已实现+已测试 |
+
+**口径说明**：餐次热量比例（早 28%/午 37%/晚 30%/加 5%；3 餐 30/40/30）是设计常数，可解释面板如实标注，不伪称知识出处；蛋白按日总量均分，知识文档「每餐 30-40g」只作大体重参考带。饮食计划未上线真实用户验证，不声称业务成效；LLM 全挂时走 generation_failed，不做模板餐单降级（留待后续）。
+
 ## 未核验与历史结果
 
 **开发时间线（仓库不可独立复核，主动声明）**：本项目自 **2026-04** 起在本地开发，**2026-07-01 才初始化 Git 仓库**并开始产生提交历史。因此 `git log` 的最早提交（`4960e07`）晚于实际开工时间约三个月；且早期提交是在 07-01 上午批量落地的（最早三个提交相隔 3–4 分钟），不代表"当天才开始写第一行代码"。这一段属于开发者的一手陈述，**无法由仓库文件独立复核**，故按本文档标准不计入强事实，仅作背景说明——被问到时以此为准，不主张为可验证事实。
 
 **知识块数量**：README 原声明“824 chunks”，该数字无独立复核依据，已于 2026-09-09 改为 **557**——取自 2026-08-30 扩展语料后的实际摄入输出，与评测 manifest 同源。需要说明的是：块数量存在 PostgreSQL 的 `knowledge_chunks` 表里，`scripts/verify_project_facts.py` 这类静态清单**核验不了它**（脚本能核验的是 `data/seed_exercises.json` 的 338 与 `data/knowledge` 的 162 篇，因为那些是磁盘上的文件）。脚本现在会主动报告“README 当前声称多少块、且该数字无法静态核验”，要重新测量就跑一次 `python -m src.rag.knowledge_ingestion`。历史评测报告和 JSON 结果是可追溯的历史产物，不自动等同于当前版本的生产准确率、医疗级安全、整体零漏报或生产 SLA。
 
-**测试数量**：本文档与 README 都不写死测试用例数，一律以 `pytest` 实际收集为准。静态清单统计的是测试**文件数与函数数**（当前 51 文件 / 334 函数），**该口径只统计模块级 `def test_`，类内测试方法不计入**，因此显著低于实际规模——引用该数字时需说明这一点。参数化展开后的实际用例数更高（当前 `pytest -q` 为 534 passed）。论文截稿口径 295 用例（281 函数参数化展开）是历史事实，不随后续加固而改变。
+**测试数量**：本文档与 README 都不写死测试用例数，一律以 `pytest` 实际收集为准。静态清单统计的是测试**文件数与函数数**（2026-11-19 实测 95 文件 / 778 函数），**该口径只统计模块级 `def test_`，类内测试方法不计入**，因此显著低于实际规模——引用该数字时需说明这一点。参数化展开后的实际用例数更高（2026-11-19 `pytest -q` 为 1665 passed、42 deselected）。论文截稿口径 295 用例（281 函数参数化展开）是历史事实，不随后续加固而改变。
 
 “设计-only”能力、架构图和历史报告中的指标，只有在对应实现、配置、数据版本和运行命令均可复核时，才可升级为当前事实。不要修改原始面试资料来补足证据。
 

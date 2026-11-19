@@ -9,7 +9,7 @@ schemas.py - API 数据模型 / Pydantic Schema 定义
     - core.orchestrator（编排器，接收和返回这些模型的实例）
 调用者：Pydantic v2 运行时。
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Literal
 
 
@@ -150,6 +150,61 @@ class TrainingPlanOutput(BaseModel):
 
     warnings: List[str] = []
     # 警告信息列表，如 ["注意：你的伤病史中包含'腰椎间盘突出'，已自动排除大重量硬拉"]
+
+
+# ============================================================
+# 饮食计划相关模型
+# ============================================================
+class DietFoodItem(BaseModel):
+    """饮食计划中的单个食物项。
+
+    LLM 只允许输出 name + grams：热量与宏量由服务端按食物库确定性重算
+    （「数字结论不交给模型」）。这里不收任何营养数字字段，模型多写的数字
+    会在重算阶段被剥掉。
+    """
+
+    name: str = Field(..., min_length=1, max_length=60)
+    grams: float = Field(..., gt=0, le=2000, allow_inf_nan=False)
+
+
+class DietMeal(BaseModel):
+    """一餐：食物列表 + 可选说明。meal 取值与 nutrition.allocate_meals 的餐次对齐。"""
+
+    meal: Literal["早餐", "午餐", "晚餐", "加餐"]
+    foods: List[DietFoodItem] = Field(..., min_length=1, max_length=8)
+    note: str = ""
+
+
+class DietDay(BaseModel):
+    """一日型：训练日 / 休息日两套之一。"""
+
+    day_type: Literal["训练日", "休息日"]
+    meals: List[DietMeal] = Field(..., min_length=3, max_length=4)
+
+
+class DietPlanOutput(BaseModel):
+    """饮食计划的 LLM 输出 Schema（fail-closed 校验用）。
+
+    服务端随后附加 plan_id / daily_targets / 重算营养 / warnings / explain /
+    delivery_status 等字段；那些不属于 LLM 输出契约，故不在此模型里。
+    """
+
+    plan_name: str = Field(..., min_length=1, max_length=40)
+    goal: TrainingGoal
+    days: List[DietDay] = Field(..., min_length=2, max_length=2)
+    notes: str = ""
+    shopping_list: List[str] = Field(default=[])
+
+    @model_validator(mode="after")
+    def _two_day_types_and_unique_meals(self):
+        types = [d.day_type for d in self.days]
+        if sorted(types) != ["休息日", "训练日"]:
+            raise ValueError("days 必须恰好包含训练日与休息日各一套")
+        for day in self.days:
+            names = [m.meal for m in day.meals]
+            if len(names) != len(set(names)):
+                raise ValueError("同一日型内餐次不得重复")
+        return self
 
 
 # ============================================================

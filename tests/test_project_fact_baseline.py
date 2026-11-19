@@ -22,6 +22,8 @@ def run_fact_script():
 def test_fact_script_reports_current_dataset_counts():
     result = run_fact_script()
     assert result["data_counts"]["seed_exercises"] == 338
+    # 121 = 饮食功能种子食物库（六类，名字带生熟状态，逐条过 Atwater 一致性测试）。
+    assert result["data_counts"]["seed_foods"] == 121
     # 165 = 162（原有：手写 18 + PubMed 62 + LLM 生成 82）+ 3 篇运动处方原则文档。
     # 后三篇是对公开运动处方共识的综述性整理，补上知识库原本缺失的权威来源。
     assert result["data_counts"]["knowledge_markdown"] == 165

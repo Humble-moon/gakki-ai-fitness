@@ -674,6 +674,8 @@ async def upload_document(
 _training_log_store = None
 _plan_store = None
 _body_measure_store = None
+_diet_plan_store = None
+_diet_log_store = None
 
 
 def _get_training_log_store():
@@ -701,6 +703,24 @@ def _get_body_measure_store():
         from src.storage.body_measure_store import BodyMeasureStore
         _body_measure_store = BodyMeasureStore()
     return _body_measure_store
+
+
+def _get_diet_plan_store():
+    """惰性构造饮食计划存储——同 _get_plan_store，避免导入时连库。"""
+    global _diet_plan_store
+    if _diet_plan_store is None:
+        from src.storage.diet_plan_store import DietPlanStore
+        _diet_plan_store = DietPlanStore()
+    return _diet_plan_store
+
+
+def _get_diet_log_store():
+    """惰性构造饮食记录存储——同 _get_training_log_store，避免导入时连库。"""
+    global _diet_log_store
+    if _diet_log_store is None:
+        from src.storage.diet_log_store import DietLogStore
+        _diet_log_store = DietLogStore()
+    return _diet_log_store
 
 
 def _storage_unavailable():
@@ -905,6 +925,8 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
         "training_logs": [],
         "body_measurements": [],
         "saved_plans": [],
+        "diet_plans": [],
+        "diet_logs": [],
         "long_term_memory": {},
         "conversation": None,
         "documents": [],
@@ -948,6 +970,28 @@ def export_user_data(athlete_key: str = "", session_id: Optional[str] = None,
     except Exception as exc:  # noqa: BLE001 - 单源失败不该让整份导出失败
         logger.warning("[data-rights] 导出已保存计划失败：%s", exc)
         payload["saved_plans_error"] = str(exc)
+
+    try:
+        diet_plan_store = _get_diet_plan_store()
+        diet_plan_store.ensure_table()
+        if diet_plan_store.enabled:
+            exported_diets = []
+            for summary in diet_plan_store.list_plans(athlete_key, limit=10_000):
+                full = diet_plan_store.get_plan(athlete_key, summary.get("plan_id"))
+                exported_diets.append(full or summary)
+            payload["diet_plans"] = exported_diets
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[data-rights] 导出饮食计划失败：%s", exc)
+        payload["diet_plans_error"] = str(exc)
+
+    try:
+        diet_log_store = _get_diet_log_store()
+        diet_log_store.ensure_table()
+        if diet_log_store.enabled:
+            payload["diet_logs"] = diet_log_store.get_logs(athlete_key, limit=10_000)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[data-rights] 导出饮食记录失败：%s", exc)
+        payload["diet_logs_error"] = str(exc)
 
     try:
         payload["long_term_memory"] = orch.long_term.get_preferences(athlete_key)
@@ -996,7 +1040,8 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     传来的 athlete_key 被忽略。游客模式沿用自证式 key（本机数据本机可见），
     这条审计日志记录实际删除的主体，便于事后追溯。
 
-    删除范围与导出对齐（训练日志 / 体测记录 / 已保存计划 / 长期记忆 / 会话）。
+    删除范围与导出对齐（训练日志 / 体测记录 / 已保存计划 / 饮食计划 /
+    饮食记录 / 长期记忆 / 会话）。
     **不做部分成功**：任一步抛错都如实返回失败与已完成的部分，不谎报"已全部删除"。
     """
     if not athlete_key and not principal.is_authenticated:
@@ -1045,6 +1090,22 @@ def delete_user_data(athlete_key: str = "", confirm: str = "",
     except Exception as exc:  # noqa: BLE001
         logger.error("[data-rights] 删除已保存计划失败：%s", exc)
         result["errors"]["plans"] = str(exc)
+
+    try:
+        diet_plan_store = _get_diet_plan_store()
+        diet_plan_store.ensure_table()
+        result["deleted"]["diet_plans"] = diet_plan_store.delete_all(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[data-rights] 删除饮食计划失败：%s", exc)
+        result["errors"]["diet_plans"] = str(exc)
+
+    try:
+        diet_log_store = _get_diet_log_store()
+        diet_log_store.ensure_table()
+        result["deleted"]["diet_logs"] = diet_log_store.delete_all(athlete_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[data-rights] 删除饮食记录失败：%s", exc)
+        result["errors"]["diet_logs"] = str(exc)
 
     try:
         result["deleted"]["documents"] = orch.documents.cleanup_owner(athlete_key)
@@ -1373,7 +1434,7 @@ async def apply_training_advice(req: TrainingAdviceApplyRequest,
 # 偏好键的来源归类。面板要如实区分「你填的」和「AI 推的」：后者更该被
 # 质疑。用户看到 training_adjustments 里有一条不合适，应该能单独删掉它，
 # 而不是只能在「全留」和「全清」之间二选一。
-_USER_FILLED_PREF_KEYS = {"profile", "goal", "equipment", "habits"}
+_USER_FILLED_PREF_KEYS = {"profile", "goal", "equipment", "habits", "diet_preferences"}
 _ADJUSTMENT_PREF_KEY = "training_adjustments"
 
 # 偏好新鲜度阈值，与 long_term._get_preference_ages 的口径保持一致
@@ -1888,6 +1949,245 @@ def resolve_review_v2(review_id: str, req: ReviewResolveRequest,
         },
         "delivery": state.get("final_payload"),
     }
+
+
+# ============================================================
+# 饮食计划 / 饮食记录 / 摄入统计（普通 JSON，不使用 SSE）
+#
+# 与训练闭环同组同约定：consumeSse( 计数契约禁止新增流式消费；身份走
+# require_owner_key；错误嵌套 {"error":{code,message}}；越权 404 防枚举；
+# 存储不可用 503。生成端点 async + run_in_threadpool（LLM 全同步，直跑会
+# 冻结事件循环、卡住同进程正在跑的 SSE 流——training-advice 的案底）。
+# ============================================================
+
+class DietGenerateRequest(BaseModel):
+    """饮食生成请求。饮食专属字段自带约束，**不动 PlanRequest**——
+    前端 PROFILE_FIELD_RULES 与 PlanRequest schema 有对齐契约测试。"""
+    height: float = Field(180, ge=100, le=250, allow_inf_nan=False)
+    weight: float = Field(80, ge=30, le=200, allow_inf_nan=False)
+    age: Optional[int] = Field(None, ge=10, le=100)
+    sex: SexInput = "不填"
+    goal: TrainingGoal = "增肌"
+    days_per_week: int = Field(4, ge=1, le=7)
+    injuries: list[str] = []
+    allergies: list[str] = []
+    diseases: list[str] = []
+    avoid_foods: list[str] = []
+    notes: str = Field("", max_length=500)
+    meal_count: int = Field(4, ge=3, le=4)
+    query: str = Field("", max_length=2000)
+    athlete_key: Optional[str] = None
+
+
+@app.post("/api/diet-plans/generate")
+async def generate_diet_plan(req: DietGenerateRequest,
+                             principal: Principal = Depends(get_current_principal)):
+    """生成饮食计划。终态语义在载荷里（safe_delivered / 四种拒绝态），HTTP 恒 200。"""
+    owner = require_owner_key(principal, req.athlete_key)
+    profile = {"height": req.height, "weight": req.weight, "age": req.age,
+               "sex": req.sex, "goal": req.goal, "days_per_week": req.days_per_week,
+               "injuries": req.injuries}
+    prefs = {"allergies": req.allergies, "diseases": req.diseases,
+             "avoid_foods": req.avoid_foods, "notes": req.notes}
+    from src.core.diet_service import build_diet_plan
+    payload = await run_in_threadpool(
+        build_diet_plan, profile, prefs, llm=orch.writer.llm,
+        knowledge=orch.knowledge, long_term=orch.long_term, owner_key=owner,
+        query=req.query, meal_count=req.meal_count)
+    return payload
+
+
+class DietPlanSaveRequest(BaseModel):
+    plan: dict = {}
+    athlete_key: Optional[str] = None
+
+
+@app.get("/api/diet-plans")
+def list_diet_plans(principal: Principal = Depends(get_current_principal),
+                    athlete_key: str = "", limit: int = 50):
+    store = _get_diet_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    owner = require_owner_key(principal, athlete_key or None)
+    return {"plans": store.list_plans(owner, limit=limit)}
+
+
+@app.get("/api/diet-plans/{plan_id}")
+def get_diet_plan(plan_id: int,
+                  principal: Principal = Depends(get_current_principal),
+                  athlete_key: str = ""):
+    store = _get_diet_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    owner = require_owner_key(principal, athlete_key or None)
+    plan = store.get_plan(owner, plan_id)
+    if plan is None:
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "PLAN_NOT_FOUND", "message": "饮食计划不存在。"}})
+    return plan
+
+
+@app.post("/api/diet-plans")
+def save_diet_plan(req: DietPlanSaveRequest,
+                   principal: Principal = Depends(get_current_principal)):
+    """只收已安全交付的饮食计划（被扣下/拒绝的不进历史）。"""
+    store = _get_diet_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    plan = req.plan or {}
+    if plan.get("delivery_status") != "safe_delivered":
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "PLAN_NOT_DELIVERED",
+                      "message": "只能保存已交付的饮食计划。"}})
+    if not plan.get("days"):
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "PLAN_EMPTY",
+                      "message": "该计划没有餐次内容，无需保存。"}})
+    owner = require_owner_key(principal, req.athlete_key)
+    plan_id = store.save(owner, plan)
+    if plan_id is None:
+        return _diet_storage_unavailable()
+    return {"plan_id": plan_id, "saved": True}
+
+
+class DietPlanRenameRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=40)
+    athlete_key: Optional[str] = None
+
+
+@app.patch("/api/diet-plans/{plan_id}")
+def rename_diet_plan(plan_id: int, req: DietPlanRenameRequest,
+                     principal: Principal = Depends(get_current_principal)):
+    store = _get_diet_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    owner = require_owner_key(principal, req.athlete_key)
+    if not store.rename_plan(owner, plan_id, req.title.strip()):
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "PLAN_NOT_FOUND", "message": "饮食计划不存在。"}})
+    return {"renamed": True}
+
+
+@app.delete("/api/diet-plans/{plan_id}")
+def delete_diet_plan(plan_id: int,
+                     principal: Principal = Depends(get_current_principal),
+                     athlete_key: str = ""):
+    store = _get_diet_plan_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    owner = require_owner_key(principal, athlete_key or None)
+    if not store.delete_plan(owner, plan_id):
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "PLAN_NOT_FOUND", "message": "饮食计划不存在。"}})
+    return {"deleted": True}
+
+
+class DietLogRequest(BaseModel):
+    log_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    meal_type: Literal["早餐", "午餐", "晚餐", "加餐"]
+    foods: list[dict] = Field(..., min_length=1, max_length=12)
+    plan_id: Optional[int] = None
+    notes: str = Field("", max_length=512)
+    athlete_key: Optional[str] = None
+
+
+@app.post("/api/diet-logs")
+def create_diet_log(req: DietLogRequest,
+                    principal: Principal = Depends(get_current_principal)):
+    """记一餐；同日同餐重复记＝覆盖。catalog 食物服务端重算，custom 手动估算钳制。"""
+    store = _get_diet_log_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    owner = require_owner_key(principal, req.athlete_key)
+    log_id = store.upsert_meal(owner, req.log_date, req.meal_type, req.foods,
+                               plan_id=req.plan_id, notes=req.notes)
+    if log_id is None:
+        return JSONResponse(status_code=400, content={
+            "error": {"code": "INVALID_DIET_LOG",
+                      "message": "这一餐没记上：食物不在食物库且未标手动估算，或克数/热量超出合理范围。"}})
+    return {"log_id": log_id, "saved": True}
+
+
+@app.get("/api/diet-logs")
+def list_diet_logs(principal: Principal = Depends(get_current_principal),
+                   athlete_key: str = "", days: int = 30):
+    store = _get_diet_log_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    owner = require_owner_key(principal, athlete_key or None)
+    from datetime import date, timedelta
+    since = date.today() - timedelta(days=max(1, min(int(days), 365)) - 1)
+    return {"logs": store.get_logs(owner, since=since)}
+
+
+@app.delete("/api/diet-logs/{log_id}")
+def delete_diet_log(log_id: int,
+                    principal: Principal = Depends(get_current_principal),
+                    athlete_key: str = ""):
+    store = _get_diet_log_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    owner = require_owner_key(principal, athlete_key or None)
+    if not store.delete_log(owner, log_id):
+        return JSONResponse(status_code=404, content={
+            "error": {"code": "LOG_NOT_FOUND", "message": "饮食记录不存在。"}})
+    return {"deleted": True}
+
+
+@app.get("/api/diet-stats")
+def diet_stats(principal: Principal = Depends(get_current_principal),
+               athlete_key: str = "", days: int = 14,
+               weight: Optional[float] = None, height: Optional[float] = None,
+               age: Optional[int] = None, sex: str = "不填",
+               goal: str = "增肌", days_per_week: int = 4):
+    """摄入 vs 目标。日类型按实际训练日志日期判定（与计划模板两问两答）。"""
+    store = _get_diet_log_store()
+    store.ensure_table()
+    if not store.enabled:
+        return _diet_storage_unavailable()
+    owner = require_owner_key(principal, athlete_key or None)
+    from datetime import date, timedelta
+    window = max(1, min(int(days), 90))
+    since = date.today() - timedelta(days=window - 1)
+    logs = store.get_logs(owner, since=since, limit=1000)
+
+    targets = None
+    if weight is not None:
+        from src.core.nutrition import apply_energy_guardrails, calc_calorie_target, split_day_targets
+        raw = calc_calorie_target(weight, height, age, sex, goal, days_per_week)
+        targets = apply_energy_guardrails(raw, weight_kg=weight, age=age,
+                                          height_cm=height)["targets"]
+        targets.update(split_day_targets(targets["daily_kcal"], days_per_week))
+
+    training_dates = None
+    try:
+        tstore = _get_training_log_store()
+        tstore.ensure_table()
+        if tstore.enabled:
+            # TrainingLogStore 按周取数：窗口向上取整到周，再按日期窗过滤。
+            tlogs = tstore.get_logs(owner, weeks=(window + 6) // 7 + 1, limit=1000)
+            training_dates = {log.get("log_date") for log in tlogs
+                              if log.get("log_date") and log["log_date"] >= since.isoformat()}
+    except Exception as exc:  # noqa: BLE001 - 训练史缺失只降级分类，不阻断统计
+        logger.debug("[diet-stats] 训练日期读取跳过：%s", exc)
+
+    from src.core.diet_analytics import compute_diet_stats
+    return compute_diet_stats(logs, targets=targets, training_dates=training_dates,
+                              window_days=window)
+
+
+def _diet_storage_unavailable():
+    return JSONResponse(status_code=503, content={
+        "error": {"code": "STORAGE_UNAVAILABLE",
+                  "message": "饮食数据服务暂时不可用，请确认数据服务已启动"}})
 
 
 # ============================================================

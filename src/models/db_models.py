@@ -10,7 +10,7 @@ db_models.py - 数据库表结构定义（ORM 模型层）
     - main.py 中的 seed() 函数（初始化表结构和种子数据）
 调用者：SQLAlchemy + pgvector 扩展。
 """
-from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Date, Text, Index, Boolean, create_engine, text
+from sqlalchemy import Column, Integer, String, Float, JSON, DateTime, Date, Text, Index, Boolean, UniqueConstraint, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from pgvector.sqlalchemy import Vector
@@ -436,6 +436,66 @@ class BodyMeasurement(Base):
     )
     # 复合索引：趋势查询的固定形态是
     # WHERE athlete_key = :k AND measure_date >= :since ORDER BY measure_date
+
+
+# ============================================================
+# 饮食计划表 (diet_plans)
+# 与 training_plans 同构：owner_key 字符串身份 + plan_data JSON 快照
+# ============================================================
+class DietPlan(Base):
+    """饮食计划快照：生成并安全交付后自动收录的一份「吃」的处方。
+
+    与 training_plans 同一套归属约定（owner_key 字符串，不用整数 user_id）。
+    plan_data 结构：{"daily_targets": {...}, "days": [{"day_type": "训练日",
+    "meals": [{"meal": "早餐", "foods": [{name, grams, kcal, protein_g, ...}]}]}],
+    "nutrition": {...}, "explain": {...}}。营养数字一律服务端重算后入库。
+    """
+
+    __tablename__ = "diet_plans"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_key = Column(String(64), nullable=False, index=True)
+    goal = Column(String(20))
+    plan_data = Column(JSON, nullable=False)
+    confidence = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============================================================
+# 饮食记录表 (diet_logs)
+# 一餐一条（餐是原子单位）；有意偏离训练日志的主从两表结构
+# ============================================================
+class DietLog(Base):
+    """饮食记录：某日某餐实际吃了什么。
+
+    与 training_logs 主从两表的偏离是有意为之：训练一次课有几十个动作明细、
+    需要逐组聚合；一餐只有几样食物，foods JSON 单列即可原子写入，不存在
+    「明细写一半留下空主表」的问题。UNIQUE(owner_key, log_date, meal_type)
+    让重复记同一餐＝覆盖（非技术用户的直觉是「改」不是「加」）。
+
+    foods 条目：{name, grams, kcal, protein_g, fat_g, carbs_g, source}；
+    source="catalog" 的数字由服务端按食物库重算，source="custom" 为用户
+    手动估算（外卖/食堂兜底），统计里单列估算占比。
+    """
+
+    __tablename__ = "diet_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_key = Column(String(64), nullable=False, index=True)
+    log_date = Column(Date, nullable=False)
+    meal_type = Column(String(16), nullable=False)
+    foods = Column(JSON, nullable=False)
+    plan_id = Column(Integer, nullable=True)
+    # 溯源：一键「吃了这餐」时记录来源饮食计划 id；手动记录为 NULL
+    notes = Column(String(512), default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("owner_key", "log_date", "meal_type",
+                         name="uq_diet_logs_owner_date_meal"),
+        Index("ix_diet_logs_owner_date", "owner_key", "log_date"),
+    )
 
 
 # ============================================================

@@ -1,9 +1,9 @@
 """个人数据导出与删除。
 
 健康数据属于个人信息，用户必须能取回、也能删掉自己产生的全部内容。
-这两个端点覆盖四类存储：训练日志（PostgreSQL）、已保存计划（PostgreSQL）、
-长期记忆（Redis）、会话（Redis）。缓存不在范围内——它是"同一份身体数据
-+ 同一目标命中同一份计划"的去重产物，不绑定个人身份。
+这两个端点覆盖六类存储：训练日志、已保存计划、饮食计划、饮食记录
+（以上 PostgreSQL），长期记忆、会话（以上 Redis）。缓存不在范围内——
+它是"同一份身体数据 + 同一目标命中同一份计划"的去重产物，不绑定个人身份。
 
 删除是不可逆操作，因此本文件重点钉三件事：
   1. 没有显式确认时**绝不能删**
@@ -117,6 +117,75 @@ class _FakeBodyMeasureStore:
         return len(self.rows)
 
 
+class _FakeDietPlanStore:
+    """饮食计划替身：与训练计划同等对待——导出要正文，删除要计数。"""
+
+    def __init__(self):
+        self.enabled = True
+        self.deleted: list = []
+        self.raise_on_delete = False
+
+    def ensure_table(self):
+        pass
+
+    def list_plans(self, owner_key, limit=20):
+        return [{"plan_id": 11, "title": "增肌饮食", "goal": "增肌"}]
+
+    def get_plan(self, owner_key, plan_id):
+        return {"plan_id": plan_id, "plan_name": "增肌饮食",
+                "days": [{"day_type": "训练日", "meals": []}]}
+
+    def delete_all(self, owner_key):
+        if self.raise_on_delete:
+            raise RuntimeError("pg down")
+        self.deleted.append(owner_key)
+        return 1
+
+
+class _FakeDietLogStore:
+    """饮食记录替身：摄入流水也是个人健康数据。"""
+
+    def __init__(self):
+        self.enabled = True
+        self.deleted: list = []
+        self.raise_on_delete = False
+        self.rows = [
+            {"id": 1, "log_date": "2026-11-19", "meal_type": "早餐",
+             "kcal": 300, "protein_g": 10, "custom_kcal": 0, "foods": []},
+        ]
+
+    def ensure_table(self):
+        pass
+
+    def get_logs(self, athlete_key, since=None, limit=200):
+        return list(self.rows)
+
+    def delete_all(self, athlete_key):
+        if self.raise_on_delete:
+            raise RuntimeError("pg down")
+        self.deleted.append(athlete_key)
+        return len(self.rows)
+
+
+class _Rig:
+    """兼容旧的六元位置解包，同时让新测试按名取饮食替身。"""
+
+    def __init__(self, client, long_term, conversation, store, plans, measures,
+                 diet_plans, diet_logs):
+        self.client = client
+        self.long_term = long_term
+        self.conversation = conversation
+        self.store = store
+        self.plans = plans
+        self.measures = measures
+        self.diet_plans = diet_plans
+        self.diet_logs = diet_logs
+
+    def __iter__(self):
+        return iter((self.client, self.long_term, self.conversation,
+                     self.store, self.plans, self.measures))
+
+
 @pytest.fixture
 def rig(monkeypatch):
     from app import server
@@ -124,15 +193,19 @@ def rig(monkeypatch):
     long_term, conversation, store = _FakeLongTerm(), _FakeConversation(), _FakeLogStore()
     plans = _FakePlanStore()
     measures = _FakeBodyMeasureStore()
+    diet_plans, diet_logs = _FakeDietPlanStore(), _FakeDietLogStore()
     long_term.prefs["athlete-abc"] = {"goal": "增肌"}
     monkeypatch.setattr(server.orch, "long_term", long_term, raising=False)
     monkeypatch.setattr(server.orch, "conversation", conversation, raising=False)
     monkeypatch.setattr(server, "_get_training_log_store", lambda: store)
     monkeypatch.setattr(server, "_get_plan_store", lambda: plans)
     monkeypatch.setattr(server, "_get_body_measure_store", lambda: measures)
+    monkeypatch.setattr(server, "_get_diet_plan_store", lambda: diet_plans)
+    monkeypatch.setattr(server, "_get_diet_log_store", lambda: diet_logs)
 
     client = TestClient(server.app)
-    return client, long_term, conversation, store, plans, measures
+    return _Rig(client, long_term, conversation, store, plans, measures,
+                diet_plans, diet_logs)
 
 
 class TestExport:
@@ -165,6 +238,22 @@ class TestExport:
         assert len(plans) == 1
         assert plans[0]["days"], "导出的是摘要——少了正文"
         assert plans[0]["plan_name"] == "4天增肌计划"
+
+    def test_export_includes_diet_sources(self, rig):
+        """饮食计划要正文、饮食记录要流水——少一类，「全部数据」就不成立。"""
+        body = rig.client.get("/api/user-data/export?athlete_key=athlete-abc").json()
+        assert len(body["diet_plans"]) == 1
+        assert body["diet_plans"][0]["days"], "饮食计划导出的是摘要——少了正文"
+        assert len(body["diet_logs"]) == 1
+        assert body["diet_logs"][0]["meal_type"] == "早餐"
+
+    def test_diet_export_failure_does_not_kill_the_export(self, rig, monkeypatch):
+        monkeypatch.setattr(rig.diet_logs, "get_logs",
+                            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("pg down")))
+        body = rig.client.get("/api/user-data/export?athlete_key=athlete-abc").json()
+        assert body["diet_logs"] == []
+        assert "diet_logs_error" in body
+        assert len(body["diet_plans"]) == 1  # 其他源不受影响
 
     def test_session_optional(self, rig):
         client, *_ = rig
@@ -215,6 +304,8 @@ class TestDeleteBehaviour:
         assert body["deleted"] == {
             "training_logs": 5, "body_measurements": 1,
             "long_term_keys": 3, "plans": 1, "conversation_keys": 2,
+            # 饮食计划与饮食记录同属个人健康数据，删除范围必须覆盖。
+            "diet_plans": 1, "diet_logs": 1,
             # 上传文档与待审工件同属个人数据，删除范围必须覆盖它们。
             "documents": {"documents": 0, "chunks": 0},
             "review_artifacts": 0,
@@ -241,6 +332,27 @@ class TestDeleteBehaviour:
         ).json()
         assert plans.deleted == ["athlete-abc"]
         assert body["deleted"]["plans"] == 1
+
+    def test_deletes_diet_sources(self, rig):
+        """饮食计划与摄入流水漏删＝「删不干净」，与训练侧同等对待。"""
+        body = rig.client.delete(
+            "/api/user-data?athlete_key=athlete-abc&confirm=DELETE&session_id=s-1"
+        ).json()
+        assert rig.diet_plans.deleted == ["athlete-abc"]
+        assert rig.diet_logs.deleted == ["athlete-abc"]
+        assert body["deleted"]["diet_plans"] == 1
+        assert body["deleted"]["diet_logs"] == 1
+
+    def test_diet_delete_failure_is_reported(self, rig):
+        rig.diet_plans.raise_on_delete = True
+        resp = rig.client.delete(
+            "/api/user-data?athlete_key=athlete-abc&confirm=DELETE&session_id=s-1")
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
+        assert "diet_plans" in body["errors"]
+        assert "diet_plans" not in body["deleted"]
+        assert body["deleted"]["diet_logs"] == 1  # 成功的源如实记录
 
     def test_session_optional(self, rig):
         client, _, conversation, _, _, _ = rig

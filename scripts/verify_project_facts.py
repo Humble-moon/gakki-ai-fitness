@@ -20,12 +20,18 @@ def _load_json(path: Path, warnings: list[str]) -> Any | None:
     return None
 
 
-def _json_length(path: Path, warnings: list[str]) -> int | None:
-    value = _load_json(path, warnings)
+def _json_length(path: Path, warnings: list[str], key: str | None = None) -> int | None:
+    raw = _load_json(path, warnings)
+    value = raw
+    if key is not None:
+        # 有的种子文件顶层是 dict（如 seed_foods.json 的 {"foods": [...]}），
+        # 计数取指定键下的列表；文件本身缺失时不重复告警。
+        value = raw.get(key) if isinstance(raw, dict) else None
     if isinstance(value, list):
         return len(value)
-    if value is not None:
-        warnings.append(f"expected JSON list: {path.as_posix()}")
+    if raw is not None:
+        suffix = f" at key '{key}'" if key else ""
+        warnings.append(f"expected JSON list{suffix}: {path.as_posix()}")
     return None
 
 
@@ -33,6 +39,7 @@ def collect_facts(repo_root: Path) -> dict[str, Any]:
     warnings: list[str] = []
     data_counts: dict[str, int | None] = {
         "seed_exercises": _json_length(repo_root / "data/seed_exercises.json", warnings),
+        "seed_foods": _json_length(repo_root / "data/seed_foods.json", warnings, key="foods"),
         "knowledge_markdown": len(list((repo_root / "data/knowledge").rglob("*.md"))),
     }
     eval_counts: dict[str, int | None] = {

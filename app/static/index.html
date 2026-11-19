@@ -1147,7 +1147,9 @@ body {
        极窄   → 回到下方 ≤767px 媒体查询的 minmax(96px)，3 列 × 2 行
      空轨道由 auto-fit 自动折叠，所以宽屏不会留白。 */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /* 128px：七个入口在 1440px 视口下一行放得下；更窄时按可用宽度折行。
+     150px 时七个入口会变成 6+1，第二行孤零零一个标签。 */
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   gap: 4px;
   padding: 5px;
   background: var(--bg-panel);
@@ -3730,6 +3732,118 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0;
   cursor: pointer;
 }
+/* ── 饮食计划 ─────────────────────────────────────────────
+   二级页签比顶层小一档（功能内的分区，不是并列功能）；
+   食物行用固定比例 grid，纵向列边界对齐（同 plan-ex-row 的教训：
+   auto 列按行内容各自解算会左右漂）。数字一律 tabular-nums。
+   选中 chip 用橙色低透明度铺底 + 深橙文字——白字配 #ff6b35 只有
+   2.9:1，小字号过不了 WCAG，填充色不配白字是本站配色规矩。 */
+.diet-subtabs { margin-bottom: 18px; }
+.diet-subtabs .tab-btn { padding: 8px 16px; font-size: 13px; }
+.diet-subpanel { min-width: 0; }
+.diet-pref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.diet-disease-field, .diet-meal-field { margin-bottom: 14px; }
+.diet-field-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+.diet-chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.diet-chip {
+  position: relative; display: inline-flex; align-items: center;
+  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-elevated);
+  font-size: 13px; color: var(--text-secondary); user-select: none;
+}
+.diet-chip input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.diet-chip:hover { border-color: var(--steel-light); }
+.diet-chip:has(input:checked) {
+  background: rgba(var(--accent-rgb), 0.10);
+  border-color: var(--accent-orange);
+  color: var(--accent-ink); font-weight: 600;
+}
+.diet-chip:has(input:focus-visible) { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.diet-notes-input { min-height: 64px; }
+.diet-result { margin-top: 20px; display: grid; gap: 16px; }
+.diet-plan-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.diet-plan-head h3 { margin: 0; }
+.diet-goal-pill {
+  padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: rgba(var(--accent-rgb), 0.10); color: var(--accent-ink);
+}
+.diet-num { font-variant-numeric: tabular-nums; }
+.diet-targets { display: flex; flex-wrap: wrap; gap: 10px; }
+.diet-basis { font-size: 12px; color: var(--text-muted); margin: 0; }
+.diet-warnings {
+  border: 1px solid rgba(var(--warn-rgb), 0.20);
+  background: rgba(var(--warn-rgb), 0.04);
+  border-radius: var(--radius-sm); padding: 12px 14px;
+}
+.diet-warnings-title { font-size: 13px; font-weight: 700; color: var(--warn); margin: 0 0 6px; }
+.diet-warnings ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.diet-warnings li { font-size: 13px; color: var(--text-secondary); }
+.diet-day-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.diet-day-header {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 12px 16px; background: var(--bg-panel); border-bottom: 1px solid var(--border);
+}
+.diet-day-header h4 { margin: 0; font-size: 15px; }
+.diet-day-kcal { font-size: 13px; color: var(--text-secondary); }
+.diet-day-body { padding: 10px 16px 14px; display: grid; gap: 14px; }
+.diet-meal-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.diet-meal-name { font-weight: 600; font-size: 14px; }
+.diet-meal-totals { font-size: 12px; color: var(--text-muted); }
+.diet-eat-btn {
+  margin-left: auto; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-elevated);
+  font-size: 12px; color: var(--accent-ink);
+}
+.diet-eat-btn:hover { border-color: var(--accent-orange); }
+.diet-eat-btn:disabled { color: var(--status-safe); cursor: default; border-color: rgba(var(--safe-rgb), 0.35); }
+.diet-food-head, .diet-food-row {
+  display: grid; grid-template-columns: minmax(0, 1.6fr) 72px 84px minmax(0, 1fr);
+  gap: 8px; align-items: baseline;
+}
+.diet-food-head { font-size: 11px; color: var(--text-muted); padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.diet-food-head .diet-col-num { text-align: right; }
+.diet-food-row { padding: 6px 0; border-bottom: 1px dashed rgba(var(--border-rgb), 0.9); font-size: 13px; }
+.diet-food-row:last-child { border-bottom: none; }
+.diet-food-name { color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+.diet-food-grams, .diet-food-kcal { color: var(--text-secondary); text-align: right; }
+.diet-food-macros { color: var(--text-muted); font-size: 12px; text-align: right; }
+.diet-section-title { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.diet-shopping ul { margin: 0; padding-left: 20px; columns: 2; column-gap: 28px; font-size: 13px; color: var(--text-secondary); }
+.diet-shopping li { margin-bottom: 4px; break-inside: avoid; }
+.diet-notes-block { font-size: 13px; color: var(--text-secondary); margin: 0; }
+.diet-save-bar { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--status-safe); }
+.diet-log-food-row {
+  display: grid; grid-template-columns: minmax(0, 1.5fr) 96px auto 32px;
+  gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.diet-log-food-row input[type="text"], .diet-log-food-row input[type="number"] { width: 100%; }
+.diet-custom-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+.diet-custom-fields { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.diet-custom-fields label { font-size: 12px; color: var(--text-muted); display: grid; gap: 4px; }
+.diet-history-day { margin-bottom: 14px; }
+.diet-history-date { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+.diet-history-meal {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 6px 0; border-bottom: 1px dashed rgba(var(--border-rgb), 0.9); font-size: 13px;
+}
+.diet-history-meal-name { font-weight: 600; flex: 0 0 auto; }
+.diet-history-foods { flex: 1; min-width: 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.diet-history-kcal { color: var(--text-muted); flex: 0 0 auto; }
+.diet-custom-badge {
+  flex: 0 0 auto; padding: 1px 8px; border-radius: 999px; font-size: 11px;
+  background: rgba(var(--warn-rgb), 0.10); color: var(--warn);
+}
+.diet-history-remove { flex: 0 0 auto; }
+@media (max-width: 767px) {
+  .diet-pref-grid { grid-template-columns: 1fr; }
+  .diet-subtabs { overflow-x: auto; }
+  .diet-subtabs .tab-btn { white-space: nowrap; }
+  .diet-food-head, .diet-food-row { grid-template-columns: minmax(0, 1.4fr) 60px 70px; }
+  .diet-food-macros, .diet-food-head .diet-col-macros { display: none; }
+  .diet-shopping ul { columns: 1; }
+  .diet-log-food-row { grid-template-columns: minmax(0, 1fr) 80px 32px; }
+  .diet-custom-toggle { grid-column: 1 / -1; }
+}
 </style>
 </head>
 <body>
@@ -4036,6 +4150,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
       <button id="tab-qa" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-qa" tabindex="-1" type="button"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>知识问答</button>
       <button id="tab-log" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-log" tabindex="-1" type="button"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>训练日志</button>
       <button id="tab-progress" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-progress" tabindex="-1" type="button"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>训练分析</button>
+      <button id="tab-diet" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-diet" tabindex="-1" type="button"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>饮食计划</button>
     </div>
 
     <!-- Plan Tab -->
@@ -4363,6 +4478,156 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         <div id="memory-error" role="alert" hidden></div>
       </div>
     </section>
+
+    <!-- Diet Tab：饮食计划 / 我的饮食计划 / 饮食记录 / 摄入统计。
+         二级页签复用 activateTab 的 scoped 机制（按 closest tablist 切换），
+         与登录页那组页签互不干扰。身体数据沿用左侧档案，这里只填饮食专属项。 -->
+    <section class="tab-content feature-panel" id="panel-diet" role="tabpanel" aria-labelledby="tab-diet">
+      <div class="tabs diet-subtabs" role="tablist" aria-label="饮食功能">
+        <button id="tab-diet-generate" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-diet-generate" tabindex="0" type="button">计划生成</button>
+        <button id="tab-diet-saved" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-diet-saved" tabindex="-1" type="button">我的饮食计划</button>
+        <button id="tab-diet-log" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-diet-log" tabindex="-1" type="button">饮食记录</button>
+        <button id="tab-diet-stats" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-diet-stats" tabindex="-1" type="button">摄入统计</button>
+      </div>
+
+      <div class="tab-content diet-subpanel active" id="panel-diet-generate" role="tabpanel" aria-labelledby="tab-diet-generate">
+        <div class="feature-card">
+          <div class="result-header">
+            <h3>生成饮食计划</h3>
+            <p class="section-hint">身体数据与目标沿用左侧档案，训练日/休息日两套餐单自动联动</p>
+          </div>
+          <div class="diet-pref-grid">
+            <div class="field">
+              <label for="diet-allergies">过敏食物</label>
+              <input type="text" id="diet-allergies" placeholder="如 花生、虾蟹（顿号或逗号分隔）">
+            </div>
+            <div class="field">
+              <label for="diet-avoid">忌口</label>
+              <input type="text" id="diet-avoid" placeholder="如 香菜、内脏（顿号或逗号分隔）">
+            </div>
+          </div>
+          <div class="field diet-disease-field">
+            <span class="diet-field-label" id="diet-diseases-label">健康状况（可多选）</span>
+            <div class="diet-chip-group" role="group" aria-labelledby="diet-diseases-label" id="diet-diseases">
+              <label class="diet-chip"><input type="checkbox" value="糖尿病"><span>糖尿病</span></label>
+              <label class="diet-chip"><input type="checkbox" value="痛风"><span>痛风</span></label>
+              <label class="diet-chip"><input type="checkbox" value="高血压"><span>高血压</span></label>
+              <label class="diet-chip"><input type="checkbox" value="肾病"><span>肾病</span></label>
+              <label class="diet-chip"><input type="checkbox" value="乳糖不耐"><span>乳糖不耐</span></label>
+              <label class="diet-chip"><input type="checkbox" value="乳糜泻"><span>乳糜泻</span></label>
+              <label class="diet-chip"><input type="checkbox" value="孕期"><span>孕期</span></label>
+              <label class="diet-chip"><input type="checkbox" value="哺乳期"><span>哺乳期</span></label>
+            </div>
+          </div>
+          <div class="field diet-meal-field">
+            <span class="diet-field-label" id="diet-meal-count-label">餐次安排</span>
+            <div class="diet-chip-group" role="radiogroup" aria-labelledby="diet-meal-count-label">
+              <label class="diet-chip"><input type="radio" name="diet-meal-count" value="4" checked><span>三餐 + 加餐</span></label>
+              <label class="diet-chip"><input type="radio" name="diet-meal-count" value="3"><span>只要三餐</span></label>
+            </div>
+          </div>
+          <div class="query-field">
+            <div class="query-field-head">
+              <label class="query-field-label" for="diet-notes">饮食备注</label>
+              <span class="query-field-hint">选填 · 如「不吃辣」「早上赶时间」</span>
+            </div>
+            <textarea class="query-input diet-notes-input" id="diet-notes" maxlength="500" placeholder="口味偏好、做饭条件、饮食习惯等"></textarea>
+          </div>
+          <div class="query-field">
+            <div class="query-field-head">
+              <label class="query-field-label" for="diet-query">补充说明</label>
+              <span class="query-field-hint">选填 · 写得越具体，餐单越贴合</span>
+            </div>
+            <textarea class="query-input" id="diet-query" maxlength="2000" placeholder="如：帮我配一周的饭，预算有限，尽量用常见食材"></textarea>
+          </div>
+          <div class="log-actions">
+            <button class="btn-generate" id="btn-generate-diet" type="button">▸ 生成饮食计划</button>
+          </div>
+          <div id="diet-status" class="status-panel" role="status" aria-live="polite" hidden></div>
+          <div id="diet-error" class="error-panel" role="alert" hidden></div>
+        </div>
+        <div id="diet-result" class="diet-result" aria-live="polite">
+          <div class="empty-composed">
+            <div class="ec-mark">&#127860;</div>
+            <div class="ec-title">练得对，也要吃对</div>
+            <div class="ec-hint">填好左侧档案与上面的饮食偏好，生成训练日/休息日两套餐单：具体食物、克数、热量，还能一键记入饮食记录。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-content diet-subpanel" id="panel-diet-saved" role="tabpanel" aria-labelledby="tab-diet-saved">
+        <div class="saved-plans-head">
+          <h3>我的饮食计划</h3>
+          <p>生成过的饮食计划都会自动收在这里，可以重命名或删掉。登录后跟账号走，换设备也能找回。</p>
+        </div>
+        <div id="diet-plans-list" class="saved-plans-list"></div>
+        <div id="diet-plans-empty" class="saved-plans-empty" hidden>
+          <p class="saved-plans-empty-title">还没有饮食计划</p>
+          <p class="saved-plans-empty-hint">到「计划生成」生成一份，它会自动出现在这里。</p>
+        </div>
+      </div>
+
+      <div class="tab-content diet-subpanel" id="panel-diet-log" role="tabpanel" aria-labelledby="tab-diet-log">
+        <div class="feature-card log-composer">
+          <div class="result-header">
+            <h3>记录这一餐</h3>
+            <p class="section-hint">同一天同一餐重复记录会覆盖；外卖食堂查不到的食物可以手动估算</p>
+          </div>
+          <div class="row log-meta-row">
+            <div class="field">
+              <label for="diet-log-date">日期</label>
+              <input type="date" id="diet-log-date">
+            </div>
+            <div class="field diet-meal-type-field">
+              <span class="diet-field-label" id="diet-log-meal-label">餐次</span>
+              <div class="diet-chip-group" role="radiogroup" aria-labelledby="diet-log-meal-label" id="diet-log-meal">
+                <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="早餐" checked><span>早餐</span></label>
+                <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="午餐"><span>午餐</span></label>
+                <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="晚餐"><span>晚餐</span></label>
+                <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="加餐"><span>加餐</span></label>
+              </div>
+            </div>
+          </div>
+          <div class="log-entries-head">
+            <span>食物明细</span>
+            <button class="btn-secondary" id="btn-add-diet-food" type="button">＋ 添加食物</button>
+          </div>
+          <div id="diet-log-foods"></div>
+          <div class="field">
+            <label for="diet-log-notes">备注</label>
+            <input type="text" id="diet-log-notes" maxlength="512" placeholder="如：食堂打的，油偏多">
+          </div>
+          <div class="log-actions">
+            <button class="btn-generate" id="btn-save-diet-log" type="button">▸ 记录这一餐</button>
+          </div>
+          <div id="diet-log-status" class="status-panel" role="status" aria-live="polite" hidden></div>
+          <div id="diet-log-error" class="error-panel" role="alert" hidden></div>
+        </div>
+        <div class="feature-card">
+          <div class="result-header"><h3>最近饮食记录</h3></div>
+          <div id="diet-log-history"></div>
+        </div>
+      </div>
+
+      <div class="tab-content diet-subpanel" id="panel-diet-stats" role="tabpanel" aria-labelledby="tab-diet-stats">
+        <div class="feature-card">
+          <div class="result-header">
+            <h3>摄入统计</h3>
+            <button class="btn-secondary" id="btn-refresh-diet-stats" type="button">刷新</button>
+          </div>
+          <div id="diet-stats-pills" class="progress-stats"></div>
+          <div id="diet-stats-empty" class="empty-composed" hidden>
+            <div class="ec-mark">—</div>
+            <div class="ec-title">暂无饮食记录</div>
+            <div class="ec-hint">先去「饮食记录」记几餐，或在计划里点「吃了这餐」，这里会生成摄入与目标的对照。</div>
+          </div>
+          <div id="chart-diet-kcal" class="chart-box" hidden></div>
+          <div id="diet-stats-fallback" hidden></div>
+          <div id="diet-chart-note" class="chart-note" hidden></div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -8711,6 +8976,945 @@ function fillFromLastPlan() {
 
 // ── 初始化与 tab 钩子 ──
 let progressLoaded = false;
+
+// ═══════════════ 饮食计划 / 饮食记录 / 摄入统计 ═══════════════
+/* 全 JSON 链路：饮食是单轮约束选择任务，不走 SSE（consumeSse 计数契约
+   禁止第 5 个流式消费）。身体数据沿用左侧档案（getProfile），这里只收
+   饮食专属偏好；数字目标由服务端确定性计算，前端只渲染不重算。
+   新函数统一落在 initTrainingTabs 之前，避免与在途改动抢锚点。 */
+
+let dietRequestController = null;
+let lastDietPlan = null;
+let dietStatsLoaded = false;
+
+function splitDietList(raw) {
+  return String(raw || '').split(/[、,，\s]+/).map(s => s.trim()).filter(Boolean);
+}
+
+function getDietPrefs() {
+  const diseases = [...document.querySelectorAll('#diet-diseases input:checked')].map(i => i.value);
+  const mealCount = document.querySelector('input[name="diet-meal-count"]:checked')?.value || '4';
+  return {
+    allergies: splitDietList(document.getElementById('diet-allergies')?.value),
+    diseases,
+    avoid_foods: splitDietList(document.getElementById('diet-avoid')?.value),
+    notes: (document.getElementById('diet-notes')?.value || '').trim(),
+    meal_count: parseInt(mealCount, 10) === 3 ? 3 : 4,
+  };
+}
+
+async function generateDietPlan() {
+  // 从别的页签点进来时先切到饮食生成区，否则用户对着隐藏面板等半分钟。
+  activateTab('tab-diet');
+  activateTab('tab-diet-generate');
+  const area = document.getElementById('diet-result');
+  // 校验在清空结果之前：越界就当场说清哪一格，别把已有结果清掉再报错。
+  const invalid = validateProfileFields();
+  if (invalid) { showError('diet-error', `无法生成：${invalid}`); return; }
+  const prefs = getDietPrefs();
+  if (prefs.notes.length > 500) { showError('diet-error', '饮食备注请控制在 500 字以内。'); return; }
+  showError('diet-error', '');
+
+  dietRequestController?.abort();
+  const controller = new AbortController();
+  dietRequestController = controller;
+  // 无流式的长请求必须有超时出口：配餐+审查最坏要几十秒，不能让用户无限等。
+  const timeout = setTimeout(() => controller.abort(), 60000);
+  setBusy('btn-generate-diet', true, '正在搭配食物…');
+  showStatus('diet-status', '正在按你的目标计算热量、挑选食物并做安全检查，通常需要半分钟左右。');
+  area?.replaceChildren();
+  const profile = getProfile();
+  try {
+    const payload = {
+      height: profile.height, weight: profile.weight, age: profile.age, sex: profile.sex,
+      goal: profile.goal, days_per_week: profile.days_per_week, injuries: profile.injuries,
+      ...prefs,
+      query: document.getElementById('diet-query')?.value || '',
+      athlete_key: athleteKey,
+    };
+    const resp = await fetch('/api/diet-plans/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(describeHttpError(resp.status, text));
+    }
+    const data = await resp.json();
+    showStatus('diet-status', '');
+    renderDietTerminal(area, data);
+    if (data.delivery_status === 'safe_delivered') {
+      lastDietPlan = data;
+      // 守卫先行：只有安全交付的计划才进历史（被扣下/拒绝的 days 为空）。
+      if (await autoSaveDietPlan(data)) appendDietSaveBar(area);
+    }
+  } catch (e) {
+    showStatus('diet-status', '');
+    if (e.name === 'AbortError') {
+      showError('diet-error', '请求已取消或超过 60 秒未完成。可以直接再试一次。');
+    } else {
+      showError('diet-error', `请求失败：${e.message}`);
+    }
+  } finally {
+    clearTimeout(timeout);
+    setBusy('btn-generate-diet', false);
+    if (dietRequestController === controller) dietRequestController = null;
+  }
+}
+
+/* 终态分流：五种 delivery_status 各有出口。拒绝不是故障——载荷里带着
+   「为什么」和「下一步」，照训练侧同一套口径渲染。 */
+function renderDietTerminal(container, data) {
+  if (!container) return;
+  const status = data?.delivery_status;
+  if (status === 'safe_delivered') { renderDietResult(container, data); return; }
+  if (status === 'emergency_stopped') { renderEmergencyStop(container, data.emergency); return; }
+  if (status === 'diet_crisis_stopped') { renderDietCrisisStop(container, data.crisis); return; }
+  if (status === 'safety_blocked') { renderDietSafetyBlocked(container, data.safety); return; }
+  renderDietGenerationFailed(container, data?.failure, data?.warnings);
+}
+
+/* 进食困扰危机：关怀口径，不是急症口径。没有食物内容、没有说教，
+   只有「这值得被认真帮助」和专业支持的方向。 */
+function renderDietCrisisStop(container, crisis) {
+  if (!container) return;
+  container.replaceChildren();
+  const details = crisis || {};
+  const panel = el('section', 'safety-block-panel', '');
+  panel.setAttribute('aria-label', '已暂停生成饮食计划');
+  panel.appendChild(el('h3', '', details.title || '先照顾自己，比配餐更重要'));
+  panel.appendChild(el('p', 'safety-block-lead', details.message || ''));
+  const signals = Array.isArray(details.matched_signals) ? details.matched_signals : [];
+  if (signals.length) {
+    panel.appendChild(el('div', 'emergency-stop-signals',
+      `系统在你写的内容里读到：${signals.join('、')}`));
+  }
+  const row = el('div', 'safety-block-row', '');
+  row.appendChild(el('strong', '', '下一步：'));
+  appendText(row, details.next_step || '');
+  panel.appendChild(row);
+  panel.appendChild(el('p', 'safety-block-footnote',
+    '这次没有生成餐单不是故障，也不用改一遍表单再试——你提到的困扰值得被认真帮助，专业支持比任何食谱都重要。'));
+  container.appendChild(panel);
+}
+
+function renderDietSafetyBlocked(container, safety) {
+  if (!container) return;
+  container.replaceChildren();
+  const details = safety || {};
+  const panel = el('section', 'safety-block-panel', '');
+  panel.setAttribute('aria-label', '这次没有生成饮食计划');
+  panel.appendChild(el('h3', '', details.title || '这些食物和你目前的情况有冲突'));
+  panel.appendChild(el('p', 'safety-block-lead',
+    details.message || '这份饮食计划没有通过安全检查，所以这次没有生成。'));
+  const conflicts = Array.isArray(details.conflicts) ? details.conflicts : [];
+  if (conflicts.length) {
+    const list = el('ul', 'safety-block-conflicts', '');
+    conflicts.forEach(c => {
+      const food = c?.food || '某种食物';
+      const reason = c?.reason || '存在禁忌';
+      list.appendChild(el('li', '', `「${food}」— ${reason}`));
+    });
+    panel.appendChild(list);
+  } else {
+    // 审查判 danger 但没有具体冲突食物时，把审查指出的问题列出来——
+    // 只给一句「没通过安全检查」，用户无从知道该改什么。
+    const issues = Array.isArray(details.issues) ? details.issues.filter(Boolean) : [];
+    if (issues.length) {
+      const list = el('ul', 'safety-block-conflicts', '');
+      issues.slice(0, 4).forEach(text => list.appendChild(el('li', '', text)));
+      panel.appendChild(list);
+    }
+  }
+  const row = el('div', 'safety-block-row', '');
+  row.appendChild(el('strong', '', '下一步：'));
+  appendText(row, details.next_step || '');
+  panel.appendChild(row);
+  panel.appendChild(el('p', 'safety-block-footnote',
+    '这不是故障，也不用反复重试同一份填写——同样的过敏与健康状况会得到同样的结论。'));
+  container.appendChild(panel);
+}
+
+function renderDietGenerationFailed(container, failure, warnings) {
+  if (!container) return;
+  container.replaceChildren();
+  const details = failure || {};
+  const panel = el('section', 'generation-failed-panel', '');
+  panel.setAttribute('aria-label', '这次没能生成饮食计划');
+  panel.appendChild(el('h3', '', details.title || '这次没能生成出一份合格的饮食计划'));
+  panel.appendChild(el('p', 'generation-failed-lead',
+    details.message || '生成结果没有通过交付前的检查，可能是模型这一次的输出不完整。'));
+  const reasons = Array.isArray(details.reasons) ? details.reasons.filter(Boolean) : [];
+  if (reasons.length) {
+    const list = el('ul', 'generation-failed-reasons', '');
+    reasons.forEach(r => list.appendChild(el('li', '', r)));
+    panel.appendChild(list);
+  }
+  const notes = Array.isArray(warnings) ? warnings.filter(Boolean) : [];
+  if (notes.length) {
+    panel.appendChild(el('div', 'generation-failed-sub', '另外还有这些提示'));
+    const list = el('ul', 'generation-failed-reasons', '');
+    notes.slice(0, 5).forEach(w => list.appendChild(el('li', '', w)));
+    panel.appendChild(list);
+  }
+  const row = el('div', 'generation-failed-row', '');
+  row.appendChild(el('strong', '', '下一步：'));
+  appendText(row, details.next_step || '直接再生成一次即可。');
+  panel.appendChild(row);
+  const retry = el('button', 'btn-secondary', '再生成一次');
+  retry.type = 'button';
+  retry.onclick = generateDietPlan;
+  panel.appendChild(retry);
+  container.appendChild(panel);
+}
+
+function renderDietResult(container, data) {
+  if (!container) return;
+  container.replaceChildren();
+  const plan = data || {};
+  const head = el('div', 'diet-plan-head', '');
+  head.appendChild(el('h3', '', plan.plan_name || '饮食计划'));
+  if (plan.goal) head.appendChild(el('span', 'diet-goal-pill', plan.goal));
+  container.appendChild(head);
+
+  const warnings = Array.isArray(plan.warnings) ? plan.warnings.filter(Boolean) : [];
+  if (warnings.length) {
+    const box = el('div', 'diet-warnings', '');
+    box.appendChild(el('p', 'diet-warnings-title', '执行前请先看这些提示'));
+    const list = el('ul', '', '');
+    warnings.forEach(w => list.appendChild(el('li', '', w)));
+    box.appendChild(list);
+    container.appendChild(box);
+  }
+
+  const t = plan.daily_targets || plan.nutrition || {};
+  if (t.daily_kcal) {
+    const pills = el('div', 'diet-targets', '');
+    const cells = [
+      ['每日热量', `${t.daily_kcal} kcal`],
+      ['蛋白质', `${t.protein_g} g`],
+      ['脂肪', `${t.fat_g} g`],
+      ['碳水', `${t.carbs_g} g`],
+    ];
+    if (t.training_day_kcal) {
+      cells.push(['训练日', `${t.training_day_kcal} kcal`], ['休息日', `${t.rest_day_kcal} kcal`]);
+    }
+    cells.forEach(([label, value]) => {
+      const pill = el('div', 'stat-pill', '');
+      pill.appendChild(el('span', 'dot green'));
+      pill.appendChild(el('strong', 'diet-num', value));
+      pill.appendChild(el('span', null, label));
+      pills.appendChild(pill);
+    });
+    container.appendChild(pills);
+    if (t.basis) container.appendChild(el('p', 'diet-basis', t.basis));
+  }
+
+  (plan.days || []).forEach(day => container.appendChild(buildDietDayCard(day)));
+
+  if (Array.isArray(plan.shopping_list) && plan.shopping_list.length) {
+    const sec = el('div', 'diet-shopping', '');
+    sec.appendChild(el('p', 'diet-section-title', '买菜清单'));
+    const list = el('ul', '', '');
+    plan.shopping_list.forEach(item => list.appendChild(el('li', '', item)));
+    sec.appendChild(list);
+    container.appendChild(sec);
+  }
+  if (plan.notes) {
+    const sec = el('div', '', '');
+    sec.appendChild(el('p', 'diet-section-title', '执行说明'));
+    sec.appendChild(el('p', 'diet-notes-block', plan.notes));
+    container.appendChild(sec);
+  }
+  renderDietExplanation(container, plan.explain);
+}
+
+function buildDietDayCard(day) {
+  const card = el('section', 'diet-day-card', '');
+  const header = el('div', 'diet-day-header', '');
+  header.appendChild(el('h4', '', day.day_type === '训练日' ? '训练日餐单' : '休息日餐单'));
+  const dayKcal = day.total_kcal ?? (day.meals || []).reduce((s, m) => s + (Number(m.kcal) || 0), 0);
+  header.appendChild(el('span', 'diet-day-kcal diet-num', `全天约 ${Math.round(dayKcal)} kcal`));
+  card.appendChild(header);
+  const body = el('div', 'diet-day-body', '');
+  (day.meals || []).forEach(meal => body.appendChild(buildDietMealBlock(meal)));
+  card.appendChild(body);
+  return card;
+}
+
+function buildDietMealBlock(meal) {
+  const block = el('div', 'diet-meal-block', '');
+  const head = el('div', 'diet-meal-head', '');
+  head.appendChild(el('span', 'diet-meal-name', meal.meal || '餐次'));
+  head.appendChild(el('span', 'diet-meal-totals diet-num',
+    `${Math.round(meal.kcal || 0)} kcal · 蛋白 ${meal.protein_g ?? 0} g`));
+  const eat = el('button', 'diet-eat-btn', '吃了这餐');
+  eat.type = 'button';
+  eat.setAttribute('aria-label', `把${meal.meal || '这一餐'}记入今天的饮食记录`);
+  eat.onclick = () => logMealFromPlan(meal, eat);
+  head.appendChild(eat);
+  block.appendChild(head);
+
+  const fh = el('div', 'diet-food-head', '');
+  fh.appendChild(el('span', '', '食物'));
+  fh.appendChild(el('span', 'diet-col-num', '克数'));
+  fh.appendChild(el('span', 'diet-col-num', '热量'));
+  fh.appendChild(el('span', 'diet-col-num diet-col-macros', '蛋白 / 碳水 / 脂肪'));
+  block.appendChild(fh);
+  (meal.foods || []).forEach(f => {
+    const row = el('div', 'diet-food-row', '');
+    row.appendChild(el('span', 'diet-food-name', f.name || ''));
+    row.appendChild(el('span', 'diet-food-grams diet-num', `${f.grams} g`));
+    row.appendChild(el('span', 'diet-food-kcal diet-num', `${Math.round(f.kcal || 0)} kcal`));
+    row.appendChild(el('span', 'diet-food-macros diet-num',
+      `${f.protein_g ?? 0} / ${f.carbs_g ?? 0} / ${f.fat_g ?? 0} g`));
+    block.appendChild(row);
+  });
+  if (meal.note) block.appendChild(el('p', 'diet-basis', meal.note));
+  return block;
+}
+
+/* 闭环关键 UX：按计划吃完一餐，一键记入今天的饮食记录。
+   食物与克数直接来自计划行，营养数字由服务端按食物库重算。 */
+async function logMealFromPlan(meal, button) {
+  const foods = (meal.foods || []).map(f => ({ name: f.name, grams: f.grams }));
+  if (!foods.length || !meal.meal) return;
+  button.disabled = true;
+  const original = button.textContent;
+  button.textContent = '记录中…';
+  try {
+    const payload = {
+      log_date: todayLocalIso(), meal_type: meal.meal, foods, athlete_key: athleteKey,
+    };
+    const resp = await fetch('/api/diet-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error?.message || '记录失败');
+    button.textContent = '已记录 ✓';
+  } catch (e) {
+    button.disabled = false;
+    button.textContent = original;
+    showError('diet-error', `这一餐没记上：${e.message}`);
+  }
+}
+
+function renderDietExplanation(container, explain) {
+  if (!container || !explain) return;
+  const sections = ['goal', 'energy', 'foods', 'safety']
+    .map(key => explain[key])
+    .filter(sec => sec && Array.isArray(sec.lines) && sec.lines.length);
+  if (!sections.length) return;
+  const toggle = el('button', 'explain-toggle', '▸ 这份餐单是怎么来的？');
+  toggle.type = 'button';
+  const panel = el('div', 'explain-panel');
+  panel.hidden = true;
+  sections.forEach(sec => {
+    const box = el('div', 'explain-section', '');
+    box.appendChild(el('h4', null, sec.title || ''));
+    sec.lines.forEach(line => box.appendChild(el('div', 'explain-line', line)));
+    panel.appendChild(box);
+  });
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    toggle.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+    toggle.textContent = panel.hidden ? '▸ 这份餐单是怎么来的？' : '▾ 这份餐单是怎么来的？';
+  });
+  container.appendChild(toggle);
+  container.appendChild(panel);
+}
+
+async function autoSaveDietPlan(plan) {
+  // 守卫先行：只有安全交付的计划才收录。被扣下/拒绝的载荷 days 为空，
+  // 存进去就是一份打不开的空计划（与训练侧 autoSavePlan 同一教训）。
+  if (!plan || plan.delivery_status !== 'safe_delivered') return false;
+  try {
+    const resp = await fetch('/api/diet-plans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan, athlete_key: athleteKey }),
+    });
+    return resp.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+function appendDietSaveBar(container) {
+  if (!container) return;
+  const bar = el('div', 'diet-save-bar', '');
+  appendText(bar, '已存入「我的饮食计划」');
+  const go = el('button', 'account-btn account-btn-quiet', '去看看');
+  go.type = 'button';
+  go.onclick = () => activateTab('tab-diet-saved');
+  bar.appendChild(go);
+  container.appendChild(bar);
+}
+
+const SAVED_DIET_PLANS_LIMIT = 50;
+
+async function loadSavedDietPlans() {
+  const list = document.getElementById('diet-plans-list');
+  const empty = document.getElementById('diet-plans-empty');
+  if (!list || !empty) return;
+  const showEmpty = () => { list.replaceChildren(); list.hidden = true; empty.hidden = false; };
+  try {
+    const resp = await fetch(`/api/diet-plans?athlete_key=${encodeURIComponent(athleteKey)}&limit=${SAVED_DIET_PLANS_LIMIT}`);
+    if (!resp.ok) { showEmpty(); return; }
+    const data = await resp.json();
+    const plans = data.plans || [];
+    list.replaceChildren();
+    if (!plans.length) { showEmpty(); return; }
+    plans.forEach(p => {
+      const row = el('div', 'saved-plan-row', '');
+      const info = el('div', 'saved-plan-info', '');
+      info.appendChild(el('span', 'saved-plan-title', p.title || '饮食计划'));
+      const meta = `${p.goal ? p.goal + ' · ' : ''}保存于 ${(p.created_at || '').slice(0, 10)}`;
+      info.appendChild(el('span', 'saved-plan-meta', meta));
+      row.appendChild(info);
+      const open = el('button', 'account-btn', '查看');
+      open.type = 'button'; open.onclick = () => openSavedDietPlan(p.plan_id);
+      const rename = el('button', 'account-btn account-btn-quiet', '重命名');
+      rename.type = 'button'; rename.onclick = () => startRenameDietPlan(row, info, p);
+      const del = el('button', 'account-btn account-btn-quiet', '删除');
+      del.type = 'button'; del.onclick = () => deleteSavedDietPlan(p.plan_id);
+      row.appendChild(open); row.appendChild(rename); row.appendChild(del);
+      list.appendChild(row);
+    });
+    if (plans.length >= SAVED_DIET_PLANS_LIMIT) {
+      list.appendChild(el('p', 'section-hint', `仅显示最近 ${SAVED_DIET_PLANS_LIMIT} 份饮食计划。`));
+    }
+    list.hidden = false; empty.hidden = true;
+  } catch (e) {
+    showEmpty();
+  }
+}
+
+async function openSavedDietPlan(planId) {
+  try {
+    const resp = await fetch(`/api/diet-plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`);
+    if (!resp.ok) { showDietPlanNotice('饮食计划读取失败'); return; }
+    const plan = await resp.json();
+    const area = document.getElementById('diet-result');
+    if (!area) return;
+    // 先清空再渲染：结果区里可能还留着上一次的计划或空态引导。
+    area.replaceChildren();
+    renderDietResult(area, plan);
+    // 先切到生成区再滚动，否则内容渲染进隐藏面板，用户以为点了没反应。
+    activateTab('tab-diet');
+    activateTab('tab-diet-generate');
+    area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    showDietPlanNotice(`饮食计划读取失败：${e.message}`);
+  }
+}
+
+async function deleteSavedDietPlan(planId) {
+  try {
+    const resp = await fetch(`/api/diet-plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`,
+                             { method: 'DELETE' });
+    if (!resp.ok) { showDietPlanNotice('删除失败'); return; }
+    loadSavedDietPlans();
+  } catch (e) {
+    showDietPlanNotice(`删除失败：${e.message}`);
+  }
+}
+
+/* 就地重命名（镜像训练侧）：标题原地变输入框，回车/失焦保存，Esc 取消。
+   不用原生弹窗——它会打断整页，样式也无法与站点统一。 */
+function startRenameDietPlan(row, info, plan) {
+  if (row.dataset.renaming === '1') return;
+  const titleEl = info.querySelector('.saved-plan-title');
+  if (!titleEl) return;
+  row.dataset.renaming = '1';
+  const input = el('input', 'saved-plan-rename-input', '');
+  input.type = 'text';
+  input.value = plan.title || '饮食计划';
+  input.maxLength = 40;
+  input.setAttribute('aria-label', '饮食计划名称');
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+  let settled = false;
+  const restore = () => {
+    input.replaceWith(titleEl);
+    delete row.dataset.renaming;
+  };
+  const finish = async commit => {
+    if (settled) return;
+    settled = true;
+    const next = (input.value || '').trim();
+    if (!commit || !next || next === plan.title) { restore(); return; }
+    input.disabled = true;
+    const ok = await renameSavedDietPlan(plan.plan_id, next);
+    if (ok) {
+      titleEl.textContent = next;
+      plan.title = next;
+    }
+    restore();
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+async function renameSavedDietPlan(planId, title) {
+  try {
+    const resp = await fetch(`/api/diet-plans/${planId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, athlete_key: athleteKey }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      const detail = data.error || data.detail || {};
+      showDietPlanNotice(detail.message || `重命名失败（${resp.status}）`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    showDietPlanNotice(`重命名失败：${e.message}`);
+    return false;
+  }
+}
+
+function showDietPlanNotice(message) {
+  const head = document.querySelector('#panel-diet-saved .saved-plans-head');
+  if (!head) return;
+  document.querySelectorAll('.diet-plan-notice').forEach(n => n.remove());
+  const notice = el('p', 'saved-plan-notice diet-plan-notice', message);
+  head.after(notice);
+  setTimeout(() => notice.remove(), 4000);
+}
+
+// ── 饮食记录 ──
+function addDietFoodRow(food) {
+  const container = document.getElementById('diet-log-foods');
+  if (!container) return;
+  const row = el('div', 'diet-log-food-row', '');
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.placeholder = '如 米饭（蒸）';
+  name.dataset.key = 'name';
+  name.setAttribute('aria-label', '食物名称');
+  if (food?.name) name.value = food.name;
+  const grams = document.createElement('input');
+  grams.type = 'number';
+  grams.min = '1'; grams.max = '2000'; grams.step = 'any';
+  grams.placeholder = '克数';
+  grams.dataset.key = 'grams';
+  grams.setAttribute('aria-label', '克数');
+  if (food?.grams) grams.value = food.grams;
+  const custom = el('label', 'diet-custom-toggle', '');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.dataset.key = 'custom';
+  custom.prepend(cb);
+  appendText(custom, '手动估算');
+  const customFields = el('div', 'diet-custom-fields', '');
+  customFields.hidden = true;
+  const kcalLabel = el('label', '', '热量 kcal');
+  const kcal = document.createElement('input');
+  kcal.type = 'number'; kcal.min = '0'; kcal.max = '2000'; kcal.step = 'any';
+  kcal.placeholder = '如 450';
+  kcal.dataset.key = 'kcal';
+  kcalLabel.appendChild(kcal);
+  const proteinLabel = el('label', '', '蛋白质 g');
+  const protein = document.createElement('input');
+  protein.type = 'number'; protein.min = '0'; protein.max = '200'; protein.step = 'any';
+  protein.placeholder = '如 15';
+  protein.dataset.key = 'protein_g';
+  proteinLabel.appendChild(protein);
+  customFields.append(kcalLabel, proteinLabel);
+  cb.addEventListener('change', () => { customFields.hidden = !cb.checked; });
+  const remove = el('button', 'log-entry-remove', '×');
+  remove.type = 'button';
+  remove.setAttribute('aria-label', '删除这个食物');
+  remove.addEventListener('click', () => row.remove());
+  row.append(name, grams, custom, remove, customFields);
+  container.appendChild(row);
+}
+
+/* 逐行收值并前置校验（范围与服务端 DietLogStore 一致）：
+   库内食物只收 name+grams，数字服务端重算；库外手动估算必须带热量。 */
+function readDietFoodRows() {
+  const rows = [...document.querySelectorAll('#diet-log-foods .diet-log-food-row')];
+  const foods = [];
+  for (const row of rows) {
+    const get = key => row.querySelector(`[data-key="${key}"]`);
+    const name = (get('name')?.value || '').trim();
+    const gramsRaw = get('grams')?.value;
+    if (!name && !gramsRaw) continue;  // 整行空：跳过
+    if (!name) return { error: '有一行没填食物名称。' };
+    const grams = Number(gramsRaw);
+    if (!Number.isFinite(grams) || grams <= 0 || grams > 2000) {
+      return { error: `「${name}」的克数需在 1~2000 之间。` };
+    }
+    if (get('custom')?.checked) {
+      const kcal = Number(get('kcal')?.value);
+      const protein = Number(get('protein_g')?.value || 0);
+      if (!Number.isFinite(kcal) || kcal < 0 || kcal > 2000) {
+        return { error: `「${name}」手动估算的热量需在 0~2000 kcal 之间。` };
+      }
+      if (!Number.isFinite(protein) || protein < 0 || protein > 200) {
+        return { error: `「${name}」的蛋白质需在 0~200 g 之间。` };
+      }
+      foods.push({ name, grams, kcal, protein_g: protein, source: 'custom' });
+    } else {
+      foods.push({ name, grams });
+    }
+  }
+  if (!foods.length) return { error: '至少填一种食物再记录。' };
+  if (foods.length > 12) return { error: '一餐最多记 12 种食物，可以分开记录。' };
+  return { foods };
+}
+
+async function saveDietLog() {
+  showError('diet-log-error', '');
+  const date = document.getElementById('diet-log-date')?.value;
+  if (!date) { showError('diet-log-error', '请先选日期。'); return; }
+  const meal = document.querySelector('input[name="diet-log-meal-type"]:checked')?.value || '早餐';
+  const { foods, error } = readDietFoodRows();
+  if (error) { showError('diet-log-error', error); return; }
+  setBusy('btn-save-diet-log', true, '记录中…');
+  try {
+    const payload = {
+      log_date: date, meal_type: meal, foods,
+      notes: document.getElementById('diet-log-notes')?.value || '',
+      athlete_key: athleteKey,
+    };
+    const resp = await fetch('/api/diet-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error?.message || '记录失败');
+    showStatus('diet-log-status', '已记录。同一天同一餐再记会覆盖这一条。');
+    document.getElementById('diet-log-foods')?.replaceChildren();
+    addDietFoodRow();
+    const notes = document.getElementById('diet-log-notes');
+    if (notes) notes.value = '';
+    await loadDietLogHistory();
+  } catch (e) {
+    showError('diet-log-error', e.message || '记录失败');
+  } finally {
+    setBusy('btn-save-diet-log', false);
+  }
+}
+
+async function loadDietLogHistory() {
+  const box = document.getElementById('diet-log-history');
+  if (!box) return;
+  try {
+    const resp = await fetch(`/api/diet-logs?athlete_key=${encodeURIComponent(athleteKey)}&days=30`);
+    if (!resp.ok) {
+      box.replaceChildren(composedEmpty('!', '读取失败', '请稍后重试。'));
+      return;
+    }
+    const data = await resp.json();
+    const logs = data.logs || [];
+    box.replaceChildren();
+    if (!logs.length) {
+      box.appendChild(composedEmpty('—', '还没有饮食记录', '记一餐，或在计划里点「吃了这餐」。'));
+      return;
+    }
+    const byDate = new Map();
+    logs.forEach(log => {
+      const d = String(log.log_date || '');
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d).push(log);
+    });
+    [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0])).forEach(([date, meals]) => {
+      const day = el('div', 'diet-history-day', '');
+      day.appendChild(el('div', 'diet-history-date', date));
+      meals.forEach(log => {
+        const row = el('div', 'diet-history-meal', '');
+        row.appendChild(el('span', 'diet-history-meal-name', log.meal_type || '餐次'));
+        const names = (log.foods || []).map(f => `${f.name} ${f.grams}g`).join('、');
+        row.appendChild(el('span', 'diet-history-foods', names));
+        if (Number(log.custom_kcal) > 0) {
+          row.appendChild(el('span', 'diet-custom-badge', '含手动估算'));
+        }
+        row.appendChild(el('span', 'diet-history-kcal diet-num',
+          `${Math.round(log.kcal || 0)} kcal · 蛋白 ${Math.round(log.protein_g || 0)} g`));
+        const del = el('button', 'account-btn account-btn-quiet diet-history-remove', '删除');
+        del.type = 'button';
+        del.onclick = () => deleteDietLogEntry(log.id);
+        row.appendChild(del);
+        day.appendChild(row);
+      });
+      box.appendChild(day);
+    });
+  } catch (e) {
+    box.replaceChildren(composedEmpty('!', '读取失败', e.message || '请稍后重试。'));
+  }
+}
+
+async function deleteDietLogEntry(logId) {
+  try {
+    const resp = await fetch(`/api/diet-logs/${logId}?athlete_key=${encodeURIComponent(athleteKey)}`,
+                             { method: 'DELETE' });
+    if (!resp.ok) { showError('diet-log-error', '删除失败'); return; }
+    await loadDietLogHistory();
+  } catch (e) {
+    showError('diet-log-error', `删除失败：${e.message}`);
+  }
+}
+
+// ── 摄入统计 ──
+async function loadDietStats() {
+  const emptyNode = document.getElementById('diet-stats-empty');
+  const pills = document.getElementById('diet-stats-pills');
+  try {
+    const profile = getProfile();
+    const params = new URLSearchParams({
+      athlete_key: athleteKey, days: '14',
+      weight: String(profile.weight), height: String(profile.height),
+      age: String(profile.age), sex: profile.sex,
+      goal: profile.goal, days_per_week: String(profile.days_per_week),
+    });
+    const resp = await fetch(`/api/diet-stats?${params}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data?.error?.message || '读取失败');
+    const hasData = (data.summary?.days_logged || 0) > 0;
+    if (emptyNode) emptyNode.hidden = hasData;
+    if (pills) pills.hidden = !hasData;
+    if (!hasData) { clearDietChart(); return; }
+    dietStatsLoaded = true;
+    renderDietStatsPills(data.summary || {});
+    await renderDietChart(data);
+  } catch (e) {
+    if (emptyNode) {
+      emptyNode.hidden = false;
+      emptyNode.replaceChildren(
+        el('div', 'ec-mark', '!'),
+        el('div', 'ec-title', '读取失败'),
+        el('div', 'ec-hint', e.message || '请稍后重试。'));
+    }
+  }
+}
+
+function renderDietStatsPills(summary) {
+  const box = document.getElementById('diet-stats-pills');
+  if (!box) return;
+  box.replaceChildren();
+  const pct = v => (v === null || v === undefined ? '—' : `${Math.round(v * 100)}%`);
+  const cells = [
+    ['记录天数', `${summary.days_logged || 0} 天`],
+    ['平均摄入', summary.avg_kcal == null ? '—' : `${summary.avg_kcal} kcal`],
+    ['热量达标率', pct(summary.adherence_rate)],
+    ['蛋白命中率', pct(summary.protein_hit_rate)],
+    ['估算占比', pct(summary.custom_share)],
+  ];
+  cells.forEach(([label, value]) => {
+    const pill = el('div', 'stat-pill', '');
+    pill.appendChild(el('span', 'dot green'));
+    pill.appendChild(el('strong', 'diet-num', value));
+    pill.appendChild(el('span', null, label));
+    box.appendChild(pill);
+  });
+}
+
+function clearDietChart() {
+  const node = document.getElementById('chart-diet-kcal');
+  if (node) {
+    if (window.echarts) {
+      const inst = echarts.getInstanceByDom(node);
+      if (inst) inst.dispose();
+    }
+    node.replaceChildren();
+    node.hidden = true;
+  }
+  const fb = document.getElementById('diet-stats-fallback');
+  if (fb) { fb.replaceChildren(); fb.hidden = true; }
+  const note = document.getElementById('diet-chart-note');
+  if (note) { note.textContent = ''; note.hidden = true; }
+}
+
+async function renderDietChart(data) {
+  const ok = await loadEcharts();
+  if (!ok) { renderDietFallback(data); return; }
+  try {
+    drawDietKcalChart(data);
+    const fb = document.getElementById('diet-stats-fallback');
+    if (fb) { fb.replaceChildren(); fb.hidden = true; }
+    const note = document.getElementById('diet-chart-note');
+    if (note) {
+      const text = dietChartNoteText(data);
+      note.textContent = text;
+      note.hidden = !text;
+    }
+  } catch (e) {
+    renderDietFallback(data);
+  }
+}
+
+function drawDietKcalChart(data) {
+  const chart = initChart('chart-diet-kcal');
+  if (!chart) return;
+  const days = data.days || [];
+  const accentRgb = themeColor('--accent-rgb', '255,107,53');
+  const accent = themeColor('--accent-orange', '#ff6b35');
+  const safe = themeColor('--status-safe', '#0f766e');
+  const partialIdx = days.findIndex(d => d.is_partial && d.has_data);
+  chart.setOption({
+    title: { text: '每日摄入 vs 目标', textStyle: { color: themeColor('--text-primary', '#1d1d1f'), fontSize: 13 } },
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: v => (v === null || v === undefined ? '无记录' : `${Math.round(v)} kcal`),
+    },
+    legend: { data: ['实际摄入', '当日目标'], top: 24, textStyle: { color: themeColor('--text-secondary', '#48484a'), fontSize: 11 } },
+    grid: { left: 50, right: 20, top: 60, bottom: 30 },
+    xAxis: Object.assign({ type: 'category', data: days.map(d => d.date.slice(5)) }, AXIS_STYLE()),
+    yAxis: Object.assign({ type: 'value' }, AXIS_STYLE()),
+    series: [
+      {
+        name: '实际摄入', type: 'line', smooth: true,
+        // 没记录的天传 null 且不连：连过去会把「几天没记」画成平缓变化。
+        data: days.map(d => (d.has_data ? d.kcal : null)),
+        connectNulls: false,
+        itemStyle: { color: accent },
+        symbol: (v, p) => (days[p.dataIndex]?.is_partial ? 'emptyCircle' : 'circle'),
+        symbolSize: (v, p) => (days[p.dataIndex]?.is_partial ? 9 : 6),
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: `rgba(${accentRgb},0.24)` },
+            { offset: 1, color: `rgba(${accentRgb},0)` },
+          ]),
+        },
+        markLine: partialIdx < 0 ? undefined : {
+          silent: true, symbol: 'none',
+          lineStyle: { type: 'dashed', color: themeColor('--border', '#e3e3e8'), width: 1.5 },
+          label: { formatter: '今天未结束', position: 'end', rotate: 0, color: themeColor('--text-muted', '#6e6e73'), fontSize: 10 },
+          data: [{ xAxis: partialIdx }],
+        },
+      },
+      {
+        name: '当日目标', type: 'line', step: 'middle',
+        data: days.map(d => d.target_kcal ?? null),
+        connectNulls: true,
+        lineStyle: { type: 'dashed', color: safe, width: 1.5 },
+        itemStyle: { color: safe },
+        symbol: 'none',
+      },
+    ],
+  });
+}
+
+function dietChartNoteText(data) {
+  const parts = [];
+  const days = data.days || [];
+  const missing = days.filter(d => !d.has_data).length;
+  if (missing) parts.push(`其中 ${missing} 天没有饮食记录，折线在这些位置是断开的`);
+  if (days.some(d => d.is_partial && d.has_data)) {
+    parts.push('今天还没过完，摄入仍在累计，不能与前面的整天直接比较');
+  }
+  if (data.summary && data.summary.classified === false) {
+    parts.push('没有训练记录可对照，日类型未区分，目标按每日均值显示');
+  }
+  const share = data.summary?.custom_share;
+  if (share != null && share > 0.3) {
+    parts.push(`手动估算的热量占 ${Math.round(share * 100)}%，这部分数字是估的，对照结果仅供参考`);
+  }
+  return parts.join('；');
+}
+
+function renderDietFallback(data) {
+  clearDietChart();
+  const box = document.getElementById('diet-stats-fallback');
+  if (!box) return;
+  box.replaceChildren();
+  box.hidden = false;
+  const note = document.getElementById('diet-chart-note');
+  if (note) {
+    note.textContent = '图表暂时加载不出来，已改用表格显示。';
+    note.hidden = false;
+  }
+  const days = (data.days || []).filter(d => d.has_data);
+  if (!days.length) return;
+  const table = el('table', 'fallback-table');
+  const head = document.createElement('tr');
+  ['日期', '日类型', '摄入 kcal', '目标 kcal', '蛋白 g', '热量达标'].forEach(h => head.appendChild(el('th', null, h)));
+  table.appendChild(head);
+  days.forEach(d => {
+    const tr = document.createElement('tr');
+    const label = d.is_partial ? `${d.date}（未结束）` : d.date;
+    const verdict = d.kcal_within_band === null ? '—' : (d.kcal_within_band ? '达标' : '偏离');
+    [label, d.day_type, String(d.kcal ?? '—'), String(d.target_kcal ?? '—'),
+     String(d.protein_g ?? '—'), verdict].forEach(v => tr.appendChild(el('td', null, v)));
+    table.appendChild(tr);
+  });
+  box.appendChild(table);
+}
+
+function lazyLoadDietSubtab(tabId) {
+  if (tabId === 'tab-diet-saved') loadSavedDietPlans();
+  else if (tabId === 'tab-diet-log') loadDietLogHistory();
+  else if (tabId === 'tab-diet-stats') loadDietStats();
+}
+
+function initDietTab() {
+  const dateInput = document.getElementById('diet-log-date');
+  if (dateInput && !dateInput.value) dateInput.value = todayLocalIso();
+  if (!document.querySelector('#diet-log-foods .diet-log-food-row')) addDietFoodRow();
+
+  const bind = (id, fn) => {
+    const node = document.getElementById(id);
+    if (node) node.addEventListener('click', fn);
+  };
+  bind('btn-generate-diet', generateDietPlan);
+  bind('btn-add-diet-food', () => addDietFoodRow());
+  bind('btn-save-diet-log', saveDietLog);
+  bind('btn-refresh-diet-stats', loadDietStats);
+
+  // 二级页签：点击与键盘导航（与顶层同一套约定，scoped 到自己的 tablist）。
+  const subList = document.querySelector('.diet-subtabs');
+  subList?.addEventListener('click', event => {
+    const tab = event.target.closest('[role="tab"]');
+    if (tab) activateTab(tab.id);
+  });
+  subList?.addEventListener('keydown', event => {
+    const tabs = [...subList.querySelectorAll('[role="tab"]')];
+    const current = tabs.indexOf(document.activeElement);
+    if (current < 0) return;
+    let next = current;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    else if (event.key === 'Enter' || event.key === ' ') { activateTab(tabs[current].id); event.preventDefault(); return; }
+    else return;
+    event.preventDefault();
+    activateTab(tabs[next].id, { focus: true });
+  });
+
+  // 按需加载：进饮食页签时拉当前子区的数据；切子区时拉对应子区。
+  // 图表只在可见时渲染（隐藏容器尺寸为 0，ECharts 画不出来）。
+  document.addEventListener('click', event => {
+    const btn = event.target.closest('#tab-diet, #tab-diet-saved, #tab-diet-log, #tab-diet-stats');
+    if (!btn) return;
+    if (btn.id === 'tab-diet') {
+      const active = subList?.querySelector('[role="tab"][aria-selected="true"]');
+      lazyLoadDietSubtab(active?.id);
+    } else {
+      lazyLoadDietSubtab(btn.id);
+    }
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initDietTab);
+} else {
+  initDietTab();
+}
 
 function initTrainingTabs() {
   const dateInput = document.getElementById('log-date');

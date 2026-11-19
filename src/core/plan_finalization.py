@@ -967,3 +967,9 @@ def persist_long_term_profile(long_term, user_key, profile: dict) -> None:
     habits = profile.get("habits") or []
     if habits:
         long_term.save_preference(user_key, "habits", habits)
+    # 饮食偏好（过敏/疾病/忌口）仅非空写入——与 habits 同理由：它是可独立更新的
+    # 安全关键记忆，若每轮用空值覆盖，用户填过的过敏史会在一次随手生成后被清掉。
+    # 调用方（diet_service）写入的是与存量取并集后的有效偏好，不是请求原值。
+    diet_preferences = profile.get("diet_preferences") or {}
+    if diet_preferences:
+        long_term.save_preference(user_key, "diet_preferences", diet_preferences)
