@@ -4507,17 +4507,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
             </div>
           </div>
           <div class="field diet-disease-field">
-            <span class="diet-field-label" id="diet-diseases-label">健康状况（可多选）</span>
-            <div class="diet-chip-group" role="group" aria-labelledby="diet-diseases-label" id="diet-diseases">
-              <label class="diet-chip"><input type="checkbox" value="糖尿病"><span>糖尿病</span></label>
-              <label class="diet-chip"><input type="checkbox" value="痛风"><span>痛风</span></label>
-              <label class="diet-chip"><input type="checkbox" value="高血压"><span>高血压</span></label>
-              <label class="diet-chip"><input type="checkbox" value="肾病"><span>肾病</span></label>
-              <label class="diet-chip"><input type="checkbox" value="乳糖不耐"><span>乳糖不耐</span></label>
-              <label class="diet-chip"><input type="checkbox" value="乳糜泻"><span>乳糜泻</span></label>
-              <label class="diet-chip"><input type="checkbox" value="孕期"><span>孕期</span></label>
-              <label class="diet-chip"><input type="checkbox" value="哺乳期"><span>哺乳期</span></label>
-            </div>
+            <label for="diet-health">健康状况</label>
+            <input type="text" id="diet-health" maxlength="300" placeholder="如 糖尿病、痛风、孕期、乳糖不耐，或任何身体限制（AI 会识别并判断）">
           </div>
           <div class="field diet-meal-field">
             <span class="diet-field-label" id="diet-meal-count-label">餐次安排</span>
@@ -4528,17 +4519,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
           </div>
           <div class="query-field">
             <div class="query-field-head">
-              <label class="query-field-label" for="diet-notes">饮食备注</label>
-              <span class="query-field-hint">选填 · 如「不吃辣」「早上赶时间」</span>
+              <label class="query-field-label" for="diet-notes">备注说明</label>
+              <span class="query-field-hint">选填 · 口味偏好、做饭条件、具体要求，写得越具体餐单越贴合</span>
             </div>
-            <textarea class="query-input diet-notes-input" id="diet-notes" maxlength="500" placeholder="口味偏好、做饭条件、饮食习惯等"></textarea>
-          </div>
-          <div class="query-field">
-            <div class="query-field-head">
-              <label class="query-field-label" for="diet-query">补充说明</label>
-              <span class="query-field-hint">选填 · 写得越具体，餐单越贴合</span>
-            </div>
-            <textarea class="query-input" id="diet-query" maxlength="2000" placeholder="如：帮我配一周的饭，预算有限，尽量用常见食材"></textarea>
+            <textarea class="query-input diet-notes-input" id="diet-notes" maxlength="2000" placeholder="如：不吃辣、早上赶时间；帮我配一周的饭，预算有限，尽量用常见食材"></textarea>
           </div>
           <div class="log-actions">
             <button class="btn-generate" id="btn-generate-diet" type="button">▸ 生成饮食计划</button>
@@ -8992,11 +8976,10 @@ function splitDietList(raw) {
 }
 
 function getDietPrefs() {
-  const diseases = [...document.querySelectorAll('#diet-diseases input:checked')].map(i => i.value);
   const mealCount = document.querySelector('input[name="diet-meal-count"]:checked')?.value || '4';
   return {
     allergies: splitDietList(document.getElementById('diet-allergies')?.value),
-    diseases,
+    health: (document.getElementById('diet-health')?.value || '').trim(),
     avoid_foods: splitDietList(document.getElementById('diet-avoid')?.value),
     notes: (document.getElementById('diet-notes')?.value || '').trim(),
     meal_count: parseInt(mealCount, 10) === 3 ? 3 : 4,
@@ -9012,7 +8995,7 @@ async function generateDietPlan() {
   const invalid = validateProfileFields();
   if (invalid) { showError('diet-error', `无法生成：${invalid}`); return; }
   const prefs = getDietPrefs();
-  if (prefs.notes.length > 500) { showError('diet-error', '饮食备注请控制在 500 字以内。'); return; }
+  if (prefs.notes.length > 2000) { showError('diet-error', '备注说明请控制在 2000 字以内。'); return; }
   showError('diet-error', '');
 
   dietRequestController?.abort();
@@ -9029,7 +9012,6 @@ async function generateDietPlan() {
       height: profile.height, weight: profile.weight, age: profile.age, sex: profile.sex,
       goal: profile.goal, days_per_week: profile.days_per_week, injuries: profile.injuries,
       ...prefs,
-      query: document.getElementById('diet-query')?.value || '',
       athlete_key: athleteKey,
     };
     const resp = await fetch('/api/diet-plans/generate', {

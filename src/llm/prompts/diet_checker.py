@@ -13,7 +13,7 @@ DIET_CHECKER_SYSTEM = """你是临床营养视角的饮食计划审查员。审�
 {"is_safe": true/false, "issues": [{"issue": "问题描述", "severity": "danger|warning|info"}], "confidence": 0.0~1.0, "requires_human_review": true/false}
 
 审查维度：
-1. 过敏/疾病/忌口：计划中是否仍含禁忌食物（含同类变体）。命中即 danger 且 is_safe=false。
+1. 过敏/疾病/忌口：计划中是否仍含禁忌食物（含同类变体）；用户自述健康状况提到的疾病/限制（即使不在已识别清单）是否被规避。命中即 danger 且 is_safe=false。
 2. 热量合理性：每日热量是否极端（低于 1200 kcal 或低于基础代谢的减脂缺口）；极端即 danger。
 3. 目标一致：goal 是否与用户档案目标一致；不一致即 danger。
 4. 餐次结构：蛋白是否大致均分各餐、蔬菜是否充足、训练日碳水是否高于休息日。不足只给 warning。
@@ -30,8 +30,10 @@ def build_diet_checker_messages(plan: dict, profile: dict, prefs: dict) -> list[
         f"【用户档案】目标:{profile.get('goal')}｜体重:{profile.get('weight')}kg｜"
         f"年龄:{profile.get('age') or '未填'}｜每周训练:{profile.get('days_per_week')}天\n"
         f"【过敏】{'、'.join(prefs.get('allergies') or []) or '无'}\n"
-        f"【健康状况】{'、'.join(prefs.get('diseases') or []) or '无'}\n"
+        f"【健康状况（用户自述原文）】{prefs.get('health') or '无'}\n"
+        f"【已识别疾病约束】{'、'.join(prefs.get('diseases') or []) or '无'}\n"
         f"【忌口】{'、'.join(prefs.get('avoid_foods') or []) or '无'}\n"
+        f"【用户备注】{prefs.get('notes') or '无'}\n"
         f"【待审查计划】\n{json.dumps(plan, ensure_ascii=False)}"
     )
     return [{"role": "system", "content": DIET_CHECKER_SYSTEM},

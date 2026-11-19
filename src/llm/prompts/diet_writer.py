@@ -30,6 +30,7 @@ DIET_WRITER_SYSTEM = """你是健身营养配餐员。任务：从给定的食�
 8. 不推荐任何药物、减肥药、泻药或补剂剂量；蛋白粉仅作为清单内普通食物可选。
 9. 克数按清单条目的生熟状态计（熟重就是熟重），常见份量参考 default_serving_g。
 10. goal 必须严格等于用户档案目标（增肌 或 减脂），不得自行更改。
+11. 【健康状况】是用户自述原文：其中提到的任何疾病或身体限制，即使不在「已识别疾病约束」里，也必须主动判断并规避相应风险食物（如脂肪肝少油、胃病少刺激、痛风少高嘌呤）；拿不准时保守处理。
 
 输出 JSON 结构：
 {
@@ -92,8 +93,10 @@ def build_diet_writer_messages(
     sections = [
         f"【禁忌清单（绝对不得出现）】{('、'.join(forbidden)) if forbidden else '无'}",
         f"【过敏原标签】{'、'.join(prefs.get('allergen_tags') or []) or '无'}",
-        f"【健康状况】{'、'.join(prefs.get('diseases') or []) or '无'}",
+        f"【健康状况（用户自述原文，请主动判断饮食禁忌）】{prefs.get('health') or '无'}",
+        f"【已识别疾病约束（服务端确定性规则已强制生效）】{'、'.join(prefs.get('diseases') or []) or '无'}",
         f"【忌口】{'、'.join(prefs.get('avoid_foods') or []) or '无'}",
+        f"【用户备注与要求（尽量满足，与硬约束冲突时以硬约束为准）】{prefs.get('notes') or '无'}",
         "【两日型热量与餐次目标】\n" + _format_targets(day_targets, meal_slots),
         "【食物清单（name 必须逐字取自此处）】\n" + _format_catalog(catalog),
         f"【用户档案】目标:{profile.get('goal')}｜体重:{profile.get('weight')}kg｜"

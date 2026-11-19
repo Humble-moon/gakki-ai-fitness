@@ -48,7 +48,7 @@ class TestGlobalGuards:
         start = HTML.index("const PROFILE_FIELD_RULES = [")
         end = HTML.index("];", start)
         rules = HTML[start:end]
-        for diet_id in ("diet-allergies", "diet-avoid", "diet-notes", "diet-query"):
+        for diet_id in ("diet-allergies", "diet-avoid", "diet-health", "diet-notes"):
             assert diet_id not in rules
 
 
@@ -75,14 +75,40 @@ class TestDietTabStructure:
         assert 'class="btn-generate" id="btn-generate-diet"' in HTML
 
     def test_form_fields_exist(self):
-        for element_id in ("diet-allergies", "diet-avoid", "diet-diseases",
-                           "diet-notes", "diet-query", "diet-log-date",
+        for element_id in ("diet-allergies", "diet-avoid", "diet-health",
+                           "diet-notes", "diet-log-date",
                            "diet-log-foods", "diet-log-history",
                            "diet-stats-pills", "diet-stats-empty",
                            "chart-diet-kcal", "diet-stats-fallback"):
             assert f'id="{element_id}"' in HTML, f"缺少 #{element_id}"
         assert 'name="diet-meal-count"' in HTML
         assert 'name="diet-log-meal-type"' in HTML
+
+
+class TestHealthTextInputAndSingleNote:
+    """健康状况＝手工自由文本（AI 判断）；备注与补充说明合并为一个字段。"""
+
+    def test_health_is_free_text_input_not_chips(self):
+        assert 'id="diet-health"' in HTML
+        idx = HTML.index('id="diet-health"')
+        assert 'maxlength="300"' in HTML[idx:idx + 120]
+        assert 'id="diet-diseases"' not in HTML  # 疾病多选 chips 已移除
+        assert 'value="糖尿病"' not in HTML
+
+    def test_only_one_note_textarea_remains(self):
+        assert 'id="diet-query"' not in HTML
+        idx = HTML.index('id="diet-notes"')
+        assert 'maxlength="2000"' in HTML[idx:idx + 80]
+
+    def test_prefs_send_health_not_diseases(self):
+        fn = _fn_body("getDietPrefs")
+        assert "health:" in fn
+        assert "diseases" not in fn
+
+    def test_generate_payload_has_no_query_field(self):
+        fn = _fn_body("generateDietPlan")
+        assert "diet-query" not in fn
+        assert "query:" not in fn
 
 
 class TestDietBlockHygiene:

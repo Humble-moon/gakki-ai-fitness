@@ -144,15 +144,17 @@ class TestGenerate:
         monkeypatch.setattr(svc, "build_diet_plan", fake_build)
         r = client.post("/api/diet-plans/generate", json={
             "height": 175, "weight": 70, "age": 25, "sex": "男", "goal": "增肌",
-            "days_per_week": 4, "allergies": ["花生"], "diseases": ["糖尿病"],
-            "avoid_foods": ["香菜"], "notes": "不吃辣", "meal_count": 3,
-            "query": "帮我配一周的饭", "athlete_key": KEY})
+            "days_per_week": 4, "allergies": ["花生"], "health": "糖尿病",
+            "avoid_foods": ["香菜"], "notes": "不吃辣；帮我配一周的饭", "meal_count": 3,
+            "athlete_key": KEY})
         assert r.status_code == 200, r.text
         assert r.json()["delivery_status"] == "safe_delivered"
         assert seen["profile"]["weight"] == 70
         assert seen["prefs"]["allergies"] == ["花生"]
+        assert seen["prefs"]["health"] == "糖尿病"
+        assert seen["prefs"]["notes"] == "不吃辣；帮我配一周的饭"
         assert seen["meal_count"] == 3
-        assert seen["query"] == "帮我配一周的饭"
+        assert "query" not in seen  # 备注合并后不再有独立 query 入参
         assert seen["owner_key"] == KEY
 
     def test_rejection_payload_is_still_http_200(self, rig, monkeypatch):
@@ -163,7 +165,7 @@ class TestGenerate:
                             lambda *a, **k: {"delivery_status": "diet_crisis_stopped",
                                              "days": []})
         r = client.post("/api/diet-plans/generate",
-                        json={"athlete_key": KEY, "query": "教我催吐"})
+                        json={"athlete_key": KEY, "notes": "教我催吐"})
         assert r.status_code == 200
         assert r.json()["delivery_status"] == "diet_crisis_stopped"
 
@@ -176,7 +178,8 @@ class TestGenerate:
         ({"weight": 20}, "体重低于下限"),
         ({"meal_count": 5}, "餐次超上限"),
         ({"days_per_week": 9}, "训练天数超上限"),
-        ({"query": "字" * 2001}, "query 超长"),
+        ({"notes": "字" * 2001}, "notes 超长"),
+        ({"health": "字" * 301}, "health 超长"),
     ])
     def test_field_validation(self, rig, body, why):
         client, *_ = rig

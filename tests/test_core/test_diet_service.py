@@ -117,16 +117,16 @@ class TestPersonas:
 
     def test_emergency_short_circuits_before_any_food(self):
         memory = _FakeLongTerm()
-        result = svc.build_diet_plan(PROFILE, {}, llm=_ServiceFakeLLM(),
-                                     query="训练时胸闷头晕", long_term=memory,
+        result = svc.build_diet_plan(PROFILE, {"notes": "训练时胸闷头晕"},
+                                     llm=_ServiceFakeLLM(), long_term=memory,
                                      owner_key="g1_test")
         assert result["delivery_status"] == "emergency_stopped"
         assert result["days"] == [] and memory.writes == []
 
     def test_hard_crisis_refuses_with_care_message(self):
         memory = _FakeLongTerm()
-        result = svc.build_diet_plan(PROFILE, {}, llm=_ServiceFakeLLM(),
-                                     query="教我催吐，一天只吃 500 大卡",
+        result = svc.build_diet_plan(PROFILE, {"notes": "教我催吐，一天只吃 500 大卡"},
+                                     llm=_ServiceFakeLLM(),
                                      long_term=memory, owner_key="g1_test")
         assert result["delivery_status"] == "diet_crisis_stopped"
         assert result["days"] == [] and result["crisis"]["next_step"]
@@ -135,18 +135,43 @@ class TestPersonas:
     def test_soft_crisis_delivers_no_deficit_with_care(self):
         cutting_plan = _plan()
         cutting_plan["goal"] = "减脂"
-        result = svc.build_diet_plan(dict(PROFILE, goal="减脂"), {},
-                                     llm=_ServiceFakeLLM(writer=cutting_plan),
-                                     query="最近压力大总是暴食，想规律饮食")
+        result = svc.build_diet_plan(dict(PROFILE, goal="减脂"),
+                                     {"notes": "最近压力大总是暴食，想规律饮食"},
+                                     llm=_ServiceFakeLLM(writer=cutting_plan))
         assert result["delivery_status"] == "safe_delivered"
         assert result["daily_targets"]["delta_pct"] == 0
         assert any("专业支持" in w for w in result["warnings"])
 
     def test_trend_word_warns_but_delivers(self):
-        result = svc.build_diet_plan(PROFILE, {}, llm=_ServiceFakeLLM(),
-                                     query="我想试试轻断食")
+        result = svc.build_diet_plan(PROFILE, {"notes": "我想试试轻断食"},
+                                     llm=_ServiceFakeLLM())
         assert result["delivery_status"] == "safe_delivered"
         assert any("轻断食" in w for w in result["warnings"])
+
+
+class TestHealthFreeText:
+    """健康状况＝手工自由文本：已知疾病确定性识别走硬规则，否定不误判，
+    记忆并集读回；其余身体限制交给模型（prompt 渲染在 writer 测试钉）。"""
+
+    def test_free_text_extracts_disease_and_applies_target_rule(self):
+        result = svc.build_diet_plan(PROFILE, {"health": "肾功能不全，蛋白要控制"},
+                                     llm=_ServiceFakeLLM())
+        assert result["delivery_status"] == "safe_delivered"
+        assert result["daily_targets"]["protein_g"] == 56  # 70kg × 0.8g/kg
+        assert any("肾病" in w for w in result["warnings"])
+
+    def test_negated_condition_not_extracted(self):
+        result = svc.build_diet_plan(PROFILE, {"health": "没有肾病，身体挺健康"},
+                                     llm=_ServiceFakeLLM())
+        assert result["daily_targets"]["protein_g"] > 56
+        assert not any("肾病" in w for w in result["warnings"])
+
+    def test_stored_health_diseases_union_when_request_empty(self):
+        memory = _FakeLongTerm(stored={"diet_preferences": {
+            "health": "肾病", "diseases": ["肾病"]}})
+        result = svc.build_diet_plan(PROFILE, {}, llm=_ServiceFakeLLM(),
+                                     long_term=memory, owner_key="g1_test")
+        assert result["daily_targets"]["protein_g"] == 56  # 请求没带 ≠ 没有
 
 
 class TestAllergyHardBlock:
@@ -235,7 +260,7 @@ class TestRewriteAndPrune:
                      "晚餐": [{"name": "糙米饭（蒸）", "grams": 150},
                               {"name": "西兰花", "grams": 200}]})
         # 乳糖不耐：乳品替换候选存在（豆浆不在乳品 allergens）→ 确定性替换即可
-        result = svc.build_diet_plan(PROFILE, {"diseases": ["乳糖不耐"]},
+        result = svc.build_diet_plan(PROFILE, {"health": "乳糖不耐"},
                                      llm=_ServiceFakeLLM(writer=bad))
         assert result["delivery_status"] == "safe_delivered"
         names = {f["name"] for d in result["days"] for m in d["meals"] for f in m["foods"]}

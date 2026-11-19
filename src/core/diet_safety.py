@@ -161,20 +161,36 @@ def resolve_allergens(raw_items) -> list[str]:
     return tags
 
 
+#: 自由文本健康自述的分句符。共享否定 helper 的窗口遇分句标点即判非否定，
+#: 整句匹配会把「有痛风，没有高血压」里的高血压误识别——先分句再逐句判断。
+_DISEASE_CLAUSE_SPLIT = re.compile(r"[，。、；;！!？?\n\r]+")
+
+
 def resolve_diseases(raw_items) -> list[str]:
-    """用户健康状况输入 → 规范疾病名列表（去重保序）。"""
+    """用户健康状况输入（自由文本或标签）→ 规范疾病名列表（去重保序）。
+
+    健康状况已改为手工自由文本，同一段里可能混着肯定与否定
+    （「有痛风，没有高血压」）。先按分句符切开，再逐句走共享否定判断——
+    否定落在本句内才判得准；「没有糖尿病」不该被识别成糖尿病。
+    封闭词表外的身体限制（如脂肪肝）不在此识别，交给配餐模型判断。
+    """
     names: list[str] = []
     for item in raw_items or []:
         text = normalize_question(str(item or ""))
         if not text:
             continue
-        if text in DISEASE_TARGET_RULES or text in DISEASE_FOOD_RULES:
-            if text not in names:
-                names.append(text)
-            continue
-        for keyword, canonical in DISEASE_SYNONYMS.items():
-            if keyword in text and canonical not in names:
-                names.append(canonical)
+        for clause in _DISEASE_CLAUSE_SPLIT.split(text):
+            clause = clause.strip()
+            if not clause:
+                continue
+            if clause in DISEASE_TARGET_RULES or clause in DISEASE_FOOD_RULES:
+                if clause not in names:
+                    names.append(clause)
+                continue
+            for keyword, _idx in _affirmed_positions(clause, DISEASE_SYNONYMS.keys()):
+                canonical = DISEASE_SYNONYMS[keyword]
+                if canonical not in names:
+                    names.append(canonical)
     return names
 
 

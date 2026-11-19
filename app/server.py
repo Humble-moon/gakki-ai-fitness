@@ -1971,11 +1971,10 @@ class DietGenerateRequest(BaseModel):
     days_per_week: int = Field(4, ge=1, le=7)
     injuries: list[str] = []
     allergies: list[str] = []
-    diseases: list[str] = []
+    health: str = Field("", max_length=300)
     avoid_foods: list[str] = []
-    notes: str = Field("", max_length=500)
+    notes: str = Field("", max_length=2000)
     meal_count: int = Field(4, ge=3, le=4)
-    query: str = Field("", max_length=2000)
     athlete_key: Optional[str] = None
 
 
@@ -1987,13 +1986,13 @@ async def generate_diet_plan(req: DietGenerateRequest,
     profile = {"height": req.height, "weight": req.weight, "age": req.age,
                "sex": req.sex, "goal": req.goal, "days_per_week": req.days_per_week,
                "injuries": req.injuries}
-    prefs = {"allergies": req.allergies, "diseases": req.diseases,
+    prefs = {"allergies": req.allergies, "health": req.health,
              "avoid_foods": req.avoid_foods, "notes": req.notes}
     from src.core.diet_service import build_diet_plan
     payload = await run_in_threadpool(
         build_diet_plan, profile, prefs, llm=orch.writer.llm,
         knowledge=orch.knowledge, long_term=orch.long_term, owner_key=owner,
-        query=req.query, meal_count=req.meal_count)
+        meal_count=req.meal_count)
     return payload
 
 

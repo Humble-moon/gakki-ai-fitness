@@ -23,6 +23,28 @@ class TestSingleSource:
         assert qa_safety.negated_at("没有胸闷", 2) is True
 
 
+class TestResolveDiseases:
+    """健康状况自由文本 → 规范疾病名（否定感知，供确定性硬规则）。"""
+
+    def test_canonical_and_synonyms(self):
+        assert ds.resolve_diseases(["糖尿病"]) == ["糖尿病"]
+        assert ds.resolve_diseases(["血糖高", "尿酸高"]) == ["糖尿病", "痛风"]
+
+    def test_free_text_extracts_multiple(self):
+        assert ds.resolve_diseases(["我有糖尿病和痛风，还在孕期"]) == ["糖尿病", "痛风", "孕期"]
+
+    def test_negation_not_extracted(self):
+        assert ds.resolve_diseases(["没有糖尿病"]) == []
+        assert ds.resolve_diseases(["有痛风，没有高血压"]) == ["痛风"]
+
+    def test_unknown_condition_left_to_model(self):
+        # 脂肪肝等不在封闭词表 → 不识别（交给模型判断），不误报已知疾病
+        assert ds.resolve_diseases(["脂肪肝，应酬多"]) == []
+
+    def test_dedup_preserves_order(self):
+        assert ds.resolve_diseases(["糖尿病", "血糖高", "痛风"]) == ["糖尿病", "痛风"]
+
+
 class TestCrisisTwoTiers:
     def test_hard_crisis_extreme_request(self):
         result = ds.detect_diet_crisis("教我催吐，我想一天只吃 500 大卡")

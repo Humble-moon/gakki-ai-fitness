@@ -54,16 +54,22 @@ _SOFT_CRISIS_WARNING = (
 
 def build_diet_plan(profile: dict, diet_prefs: dict, *, llm, knowledge=None,
                     long_term=None, owner_key: str | None = None,
-                    query: str = "", meal_count: int = 4) -> dict:
-    """生成一份饮食计划终态载荷（safe_delivered / 四种拒绝态之一）。"""
+                    meal_count: int = 4) -> dict:
+    """生成一份饮食计划终态载荷（safe_delivered / 四种拒绝态之一）。
+
+    健康状况（diet_prefs["health"]）是用户手工自由文本：服务端先确定性识别
+    已知疾病走硬阻断安全网，原文同时交给配餐/审查模型判断其余身体限制。
+    备注（diet_prefs["notes"]）是合并后的单一自由文本，既进模型上下文也入记忆。
+    """
     profile = dict(profile or {})
     diet_prefs = dict(diet_prefs or {})
     meal_count = 3 if int(meal_count or 4) == 3 else 4
 
     # 1) 信号预检：急症优先于危机；两者载荷都不含任何食物内容。
+    #    备注与自述健康都可能是危机/急症信号的载体，一并扫描。
     signals = diet_safety.scan_diet_signals(
-        query=query, injuries=profile.get("injuries"),
-        extra_text=diet_prefs.get("notes", ""),
+        query=diet_prefs.get("notes", ""), injuries=profile.get("injuries"),
+        extra_text=diet_prefs.get("health", ""),
     )
     if signals["emergency"]:
         return diet_emergency_stop_payload(signals["emergency"])
@@ -232,9 +238,13 @@ def build_diet_plan(profile: dict, diet_prefs: dict, *, llm, knowledge=None,
 # ----------------------------------------------------------------------
 
 def _union_prefs(profile: dict, diet_prefs: dict, long_term, owner_key) -> dict:
+    health = diet_prefs.get("health", "") or ""
     effective = {
         "allergies": list(diet_prefs.get("allergies") or []),
-        "diseases": list(diet_prefs.get("diseases") or []),
+        "health": health,
+        # 已知疾病从自述文本确定性识别（否定感知），供硬阻断规则使用；
+        # 文本里其余身体限制交给模型判断（health 原文进 prompt）。
+        "diseases": diet_safety.resolve_diseases([health]) if health else [],
         "avoid_foods": list(diet_prefs.get("avoid_foods") or []),
         "notes": diet_prefs.get("notes", ""),
     }
@@ -254,6 +264,8 @@ def _union_prefs(profile: dict, diet_prefs: dict, long_term, owner_key) -> dict:
         effective[key] = merged
     if not effective["notes"]:
         effective["notes"] = stored.get("notes", "")
+    if not effective["health"]:
+        effective["health"] = stored.get("health", "")
     return effective
 
 

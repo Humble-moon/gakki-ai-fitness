@@ -78,6 +78,23 @@ class TestSelectFoods:
         system_msg = llm.calls[0]["messages"][0]["content"]
         assert "禁止输出热量" in system_msg
 
+    def test_prompt_carries_health_self_report_and_notes(self):
+        """健康自述原文与合并备注都进 prompt：已知疾病走规则，其余由模型判断。"""
+        llm = _FakeLLM()
+        dw.select_foods(
+            llm, profile={"goal": "增肌", "weight": 80, "days_per_week": 4},
+            day_targets=_targets(), meal_slots=_slots(),
+            catalog=list(food_catalog.load_foods()),
+            prefs={"health": "脂肪肝，平时应酬多", "diseases": ["糖尿病"],
+                   "notes": "不吃辣，预算有限", "avoid_foods": []},
+        )
+        user_msg = llm.calls[0]["messages"][1]["content"]
+        assert "脂肪肝，平时应酬多" in user_msg  # 自述原文（未知限制交给模型）
+        assert "健康状况（用户自述原文" in user_msg
+        assert "糖尿病" in user_msg  # 已识别疾病约束
+        assert "不吃辣，预算有限" in user_msg  # 合并后的单一备注
+        assert "主动判断" in llm.calls[0]["messages"][0]["content"]
+
     @pytest.mark.parametrize("payload", [
         {"raw": "散文不是计划"},
         {"_degraded": True, "plan_name": "x", "goal": "增肌", "days": []},

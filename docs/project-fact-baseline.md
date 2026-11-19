@@ -131,9 +131,10 @@ python scripts/verify_project_facts.py --json
 | 确定性克数校准（真实 E2E 暴露模型选量蛋白达标但热量短三成后补）：蛋白先调、热量后补；按类别/密度设单食物合理上限（纯油 15g/坚果 30g/蛋白粉 60g/熟主食 400g/水果 250g 等），缺口在多种碳水间分摊；现有食物到上限仍不足时从禁忌已滤除的食物库补主食；校准后仍低于目标一成以上如实披露缺口 | `src/agents/diet_writer.py` `calibrate_portions`、`src/core/diet_service.py`、`tests/test_agents/test_diet_calibration.py` | 已实现+已测试+真实 E2E 复核 |
 | 饮食安全分流：过敏/疾病硬阻断永不降级 warning；确定性替换优先 → LLM 重写 ≤2 轮 → 摘除兜底 → 拒绝；危机两档（硬拒绝 diet_crisis_stopped / 软无缺口+关怀照常交付）；急症复用 qa_safety 同一词表与话术 | `src/core/diet_safety.py`、`src/core/diet_finalization.py`、`tests/test_core/test_diet_safety.py`、`tests/test_core/test_diet_finalization.py` | 已实现+已测试 |
 | 饮食偏好记忆并集读回 + 仅非空写入（防过敏史被空值覆盖）；写单点 persist_long_term_profile | `src/core/diet_service.py`、`src/core/plan_finalization.py`、`tests/test_core/test_diet_service.py` | 已实现+已测试 |
+| 健康状况＝手工自由文本（取代多选 chips）：封闭词表确定性识别已知疾病（分句+否定感知，「有痛风，没有高血压」只识别痛风）走硬阻断安全网；自述原文同时进配餐/审查 prompt 供模型判断词表外限制（脂肪肝等）；备注与补充说明合并为单一「备注说明」（≤2000字）进模型上下文+记忆 | `src/core/diet_safety.py` `resolve_diseases`、`src/core/diet_service.py`、`src/llm/prompts/diet_writer.py`、`src/llm/prompts/diet_checker.py`、`app/static/index.html`、`tests/test_core/test_diet_safety.py`、`tests/test_diet_frontend_contract.py` | 已实现+已测试 |
 | diet_plans / diet_logs 两表（餐为原子单位，UNIQUE(owner,date,meal) upsert 覆盖；custom 手动估算单食物 ≤2000kcal/单餐 ≤3000kcal 钳制）；alembic 迁移已在真库跑过 | `src/models/db_models.py`、`alembic/versions/f7a8b9c0d1e2_add_diet_tables.py`、`src/storage/diet_*_store.py`、`tests/test_storage/test_diet_stores*.py` | 已实现+已测试（含真库 integration） |
 | 独立 JSON 端点（generate/CRUD/logs/stats），不进 LangGraph、不新增 SSE；摄入统计日类型按实际训练日志日期判定；导出/删除/游客认领覆盖两新表 | `app/server.py`、`app/auth_api.py`、`src/core/diet_analytics.py`、`tests/test_diet_api.py`、`tests/test_data_rights.py` | 已实现+已测试 |
-| 前端第 7 页签 + 二级页签（生成/列表/记录/统计）；五种终态各有出口；「吃了这餐」一键记录；ECharts 三层降级；consumeSse 计数仍 4 | `app/static/index.html`、`tests/test_diet_frontend_contract.py`（36 条） | 已实现+已测试 |
+| 前端第 7 页签 + 二级页签（生成/列表/记录/统计）；五种终态各有出口；「吃了这餐」一键记录；ECharts 三层降级；consumeSse 计数仍 4 | `app/static/index.html`、`tests/test_diet_frontend_contract.py`（41 条） | 已实现+已测试 |
 
 **口径说明**：餐次热量比例（早 28%/午 37%/晚 30%/加 5%；3 餐 30/40/30）是设计常数，可解释面板如实标注，不伪称知识出处；蛋白按日总量均分，知识文档「每餐 30-40g」只作大体重参考带。饮食计划未上线真实用户验证，不声称业务成效；LLM 全挂时走 generation_failed，不做模板餐单降级（留待后续）。
 
