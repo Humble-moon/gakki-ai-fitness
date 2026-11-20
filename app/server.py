@@ -33,6 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from src.core.orchestrator import Orchestrator
@@ -167,6 +168,9 @@ app.add_middleware(
 # 请求关联 ID 最后注册 → 最外层：连被限流或 CORS 拒绝的响应
 # 也能带上 X-Request-ID，便于把客户端报错和日志对上。
 app.add_middleware(RequestIdMiddleware)
+# 传输压缩最后注册 → 最外层：单文件 index.html 约 424KB，裸传在 3G 下首屏
+# 必然超 3s；gzip 后约 121KB 才能达标。只压缩响应体，不改任何数据/接口/状态。
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # 账号相关路由（注册/登录/登出/会话查询）
 app.include_router(auth_router)

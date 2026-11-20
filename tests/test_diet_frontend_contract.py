@@ -266,3 +266,103 @@ class TestDietLogAndStats:
         block = _diet_block()
         assert "DOMContentLoaded" in block
         assert "initDietTab();" in block
+
+
+class TestDietLogRedesign:
+    """记录页重做：今日汇总置顶／单条可折叠／新增走底部抽屉不跳转。"""
+
+    def test_today_summary_precedes_history(self):
+        panel = HTML[HTML.index('id="panel-diet-log"'):HTML.index('id="panel-diet-stats"')]
+        assert 'id="diet-today-kcal"' in panel
+        assert 'id="btn-open-diet-drawer"' in panel
+        assert panel.index('diet-today-kcal') < panel.index('diet-log-history')
+
+    def test_records_collapsible_via_details(self):
+        fn = _fn_body("loadDietLogHistory")
+        assert "el('details', 'diet-rec'" in fn
+        assert "el('summary'" in fn
+        assert "rec.open = true" in fn  # 今日默认展开
+
+    def test_new_record_is_bottom_drawer_not_navigation(self):
+        assert 'id="diet-drawer" role="dialog" aria-modal="true"' in HTML
+        assert 'class="diet-drawer-backdrop"' in HTML
+        fn = _fn_body("openDietDrawer")
+        assert "classList.add('is-open')" in fn
+        assert "location" not in fn and "window.open" not in fn
+        drawer = HTML[HTML.index('id="diet-drawer"'):HTML.index('id="panel-diet-stats"')]
+        for kept_id in ("diet-log-date", "diet-log-foods", "btn-save-diet-log", "diet-log-notes"):
+            assert f'id="{kept_id}"' in drawer, "抽屉须保留原表单 id"
+
+    def test_save_closes_drawer_and_refreshes_summary(self):
+        fn = _fn_body("saveDietLog")
+        assert "closeDietDrawer()" in fn
+        assert "loadDietLogHistory()" in fn
+        assert "renderDietTodaySummary" in _fn_body("loadDietLogHistory")
+
+    def test_drawer_closes_on_escape_and_backdrop(self):
+        fn = _fn_body("initDietTab")
+        assert "Escape" in fn
+        assert "diet-drawer-backdrop" in fn
+
+
+class TestVisualUpgradeStep3:
+    """步骤三＋记录页三处修正：宏量全量／关闭按钮收敛／食物行输入统一美术。"""
+
+    def test_today_summary_shows_all_four_macros(self):
+        fn = _fn_body("renderDietTodaySummary")
+        for key in ("kcal", "protein_g", "fat_g", "carbs_g"):
+            assert key in fn, f"今日汇总缺少 {key}"
+        panel = HTML[HTML.index('id="panel-diet-log"'):HTML.index('id="panel-diet-stats"')]
+        assert 'id="diet-today-macros"' in panel
+        assert panel.index('diet-today-macros') < panel.index('diet-log-history')
+
+    def test_macro_tiles_built_without_innerhtml(self):
+        fn = _fn_body("dietMacroTile")
+        assert "innerHTML" not in fn
+        assert "diet-today-macro-val" in fn and "diet-today-macro-label" in fn
+
+    def test_drawer_close_is_compact_icon_not_stretched_account_btn(self):
+        idx = HTML.index('id="btn-close-diet-drawer"')
+        tag = HTML[HTML.rindex('<button', 0, idx):idx]
+        assert 'diet-drawer-close' in tag
+        assert 'account-btn' not in tag  # flex:1 会把它拉成半行宽大框
+        block = HTML[HTML.index('.diet-drawer-close {'):HTML.index('.diet-drawer-close:hover')]
+        assert 'flex: 0 0 auto' in block
+        assert 'background: transparent' in block and 'border: none' in block
+
+    def test_food_row_inputs_use_recessed_project_style(self):
+        start = HTML.index('.diet-log-food-row input[type="text"],\n'
+                           '.diet-log-food-row input[type="number"],\n'
+                           '.diet-custom-fields input {')
+        css = HTML[start:HTML.index('.diet-drawer-close {', start)]
+        assert 'background: var(--bg-deep)' in css
+        assert 'border-radius: var(--radius-sm)' in css
+        assert ':focus' in css and 'box-shadow: 0 0 0 3px var(--forge-amber-dim)' in css
+
+    def test_decorative_empty_state_pulse_removed(self):
+        assert ('.empty-state .icon-ring::before,\n'
+                '.empty-state .icon-ring::after { animation: none; }') in HTML
+
+    def test_mobile_food_row_remove_stays_on_first_row(self):
+        assert '.diet-log-food-row .log-entry-remove { grid-column: 3; grid-row: 1; }' in HTML
+
+    def test_webfont_deferred_until_after_load(self):
+        # 解析期不得发现字体 stylesheet：css2 ~121KB 会与 HTML 抢 3G 带宽
+        assert 'rel="stylesheet" media="print"' not in HTML
+        assert "window.addEventListener('load', function () {" in HTML
+        assert "l.href = 'https://fonts.googleapis.com/css2" in HTML
+        assert '<noscript><link href="https://fonts.googleapis.com/css2' in HTML
+
+    def test_food_row_remove_is_bare_icon_not_boxed(self):
+        block = HTML[HTML.index('.diet-log-food-row .log-entry-remove {'):
+                     HTML.index('.diet-log-food-row .log-entry-remove:hover')]
+        assert 'border: none' in block and 'background: transparent' in block
+
+    def test_status_and_error_panels_use_hint_typography(self):
+        # 原先无规则→浏览器默认 16px 黑字，与全页提示字号脱节
+        block = HTML[HTML.index('.status-panel, .error-panel {'):
+                     HTML.index('.status-panel { color')]
+        assert 'font-size: 12.5px' in block
+        assert 'font-family: var(--font-body)' in block
+        assert '.status-panel { color: var(--status-safe); }' in HTML
+        assert '.error-panel { color: var(--danger); }' in HTML

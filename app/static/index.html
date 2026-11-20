@@ -5,16 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IRON MIND · AI 健身私教</title>
 <link rel="icon" href="data:,">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 不做 fonts preconnect：字体已延后到 load 后拉，首屏期预连接只会抢
+     3G 的连接与带宽；等字体真正要拉时再建连代价可接受。 -->
 <!--
-  字体用「media=print + onload 切换」的方式异步加载。
-  直接写 rel="stylesheet" 会阻塞首屏渲染：实测在 fonts.googleapis.com
-  不可达的网络里（国内常见），浏览器要等它超时，加载从 32ms 变成 3265ms。
-  异步化之后首屏立刻用系统字体渲染，字体到位再替换——字体栈本身有
-  sans-serif/monospace 兜底，加载失败只是视觉降级，不影响功能。
+  字体延后到 load 之后再拉。早年用 media=print+onload 解决「阻塞渲染」，
+  但 Slow-3G 实测发现另一层问题：css2（Noto Sans SC 约 121KB）虽不阻塞
+  渲染，却会在首屏期间与 HTML 抢带宽，把 DCL 从 ~2.5s 拖到 ~4.9s。
+  改为 load 后注入 link：HTML 独占带宽先完成首屏，字体到位再替换；
+  字体栈有 sans-serif/monospace 兜底，加载失败只是视觉降级不影响功能。
 -->
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;">
+<script>
+  window.addEventListener('load', function () {
+    var l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap';
+    document.head.appendChild(l);
+  });
+</script>
 <noscript><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet"></noscript>
 <script>
 /* 首帧状态判定：本机有放行标记（游客或上次登录）就直接显示应用。
@@ -3844,6 +3851,220 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .diet-log-food-row { grid-template-columns: minmax(0, 1fr) 80px 32px; }
   .diet-custom-toggle { grid-column: 1 / -1; }
 }
+
+/* ═══════════════ 移动端适配（≤768px，375 基准）═══════════════
+   只动布局与交互，不碰数据/接口/状态。核心问题：堆叠侧栏 + 换行页签 +
+   完整工作台标题把整个首屏吃满，功能内容全在折叠线外。这里把壳压缩成
+   「紧凑档案条 + 两行页签 + 单行标题」，让饮食/训练/首页的内容进首屏。
+   断点取 768（含），并补齐 767 旧规则在 768 处不生效的档案折叠逻辑。 */
+@media (max-width: 768px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static; height: auto; overflow-y: visible;
+    padding: 12px 14px 10px; gap: 10px;
+    border-right: none; border-bottom: 1px solid var(--steel);
+  }
+  .logo-block { margin-bottom: 0; }
+  .logo { font-size: 21px; }
+  .logo-sub { display: none; }                 /* 品牌副标题移动端冗余 */
+  .profile-panel { padding: 0; gap: 8px; }
+  /* 768 处旧 767 规则不生效，档案折叠/摘要需在此补齐，否则摘要消失 */
+  .profile-summary {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 8px 12px; font-size: 12.5px;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: var(--radius-md); color: var(--text-primary);
+  }
+  .profile-toggle { min-height: 40px; padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+  .profile-editor { display: none; }
+  .profile-editor.is-open { display: flex; }
+  #btn-generate { min-height: 44px; padding: 10px 12px; font-size: 15px; }
+  .account-block { margin-top: 0; }
+  .account-card { padding: 6px 8px; gap: 8px; }
+  .account-avatar { width: 30px; height: 30px; }
+  .account-hint { display: none; }             /* 账号行只留名字，省一行 */
+  .main { padding: 0; min-width: 0; }
+  .workspace { padding: 14px 12px 36px; }
+  .workspace-header {
+    flex-direction: row; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 10px;
+  }
+  .workspace-header p { display: none; }       /* eyebrow+描述移动端冗余 */
+  .workspace-header h1 { font-size: 21px; }
+  .session-badge { display: none; }
+  /* 页签 4 列两行：7 入口全可见、无孤儿行，比 3 列三行省约 50px 首屏高度 */
+  .feature-tabs {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px; overflow: visible; margin-bottom: 12px;
+  }
+  .feature-tabs .tab-btn { min-height: 44px; padding: 6px 2px; font-size: 11.5px; letter-spacing: 0; gap: 4px; }
+  .feature-tabs .tab-icon { width: 14px; height: 14px; }
+}
+
+/* 375 基准微调：食物行/记录行再收一档，保证克数与热量列不挤爆 */
+@media (max-width: 375px) {
+  .workspace { padding: 12px 10px 32px; }
+  .feature-tabs .tab-btn { font-size: 11px; gap: 3px; }
+  .diet-food-head, .diet-food-row { grid-template-columns: minmax(0, 1.3fr) 52px 62px; gap: 6px; font-size: 12px; }
+  .diet-log-food-row { grid-template-columns: minmax(0, 1fr) 64px 30px; }
+  .stat-pill { padding: 4px 10px; font-size: 10px; }
+}
+
+/* ═══════════════ 饮食记录重做 ═══════════════
+   今日汇总置顶（大数字焦点）／单条记录可折叠／新增走底部抽屉。
+   配色全部沿用现有变量（--accent-orange / --bg-* / --steel），不换主题。 */
+.diet-today-main { display: flex; align-items: baseline; gap: 6px; margin: 2px 0 10px; }
+.diet-today-kcal {
+  font-size: 40px; font-weight: 700; line-height: 1;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.diet-today-unit { font-size: 13px; color: var(--text-secondary); }
+.diet-today-card .log-actions { margin-top: 12px; }
+
+/* 单条记录＝details/summary：原生可折叠、键盘可达，无需额外 JS */
+.diet-rec {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--bg-elevated); margin-bottom: 8px; overflow: hidden;
+}
+.diet-rec > summary {
+  list-style: none; cursor: pointer; min-height: 44px;
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+}
+.diet-rec > summary::-webkit-details-marker { display: none; }
+.diet-rec > summary::before {
+  content: '▸'; color: var(--text-secondary); font-size: 12px;
+  transition: transform .15s ease;
+}
+.diet-rec[open] > summary::before { transform: rotate(90deg); }
+.diet-rec-name { font-weight: 600; flex: 0 0 auto; }
+.diet-rec-kcal { margin-left: auto; color: var(--text-muted); flex: 0 0 auto; }
+.diet-rec-body {
+  padding: 0 12px 12px; display: flex; flex-direction: column; gap: 6px;
+  border-top: 1px dashed var(--border); padding-top: 10px;
+}
+.diet-rec-foods { color: var(--text-secondary); overflow-wrap: anywhere; font-size: 13px; }
+.diet-rec-notes { color: var(--text-muted); font-size: 12px; }
+.diet-rec-remove { align-self: flex-end; }
+
+/* 底部抽屉：同页浮层不跳转；transform 过渡＝本页仅有的动效之一 */
+.diet-drawer-backdrop {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(15, 23, 42, .38); opacity: 0; transition: opacity .2s ease;
+}
+.diet-drawer-backdrop.is-open { opacity: 1; }
+.diet-drawer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
+  max-height: 85vh; overflow-y: auto;
+  background: var(--bg-panel); border-top: 1px solid var(--steel);
+  border-radius: 16px 16px 0 0;
+  padding: 8px 14px calc(14px + env(safe-area-inset-bottom));
+  transform: translateY(100%); transition: transform .22s ease;
+  box-shadow: 0 -8px 30px rgba(15, 23, 42, .12);
+}
+.diet-drawer.is-open { transform: translateY(0); }
+.diet-drawer-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--steel-light); margin: 4px auto 10px; }
+.diet-drawer .log-composer { border: none; box-shadow: none; background: transparent; padding: 0; }
+.diet-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+@media (min-width: 769px) {
+  .diet-drawer { left: 50%; right: auto; width: min(560px, 100%); transform: translate(-50%, 100%); }
+  .diet-drawer.is-open { transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .diet-drawer, .diet-drawer-backdrop, .diet-rec > summary::before { transition: none; }
+}
+
+/* ═══════════════ 全局视觉升级（步骤三）═══════════════
+   不引新栈：单文件 vanilla + 契约测试钉死结构 + 3G 首屏 ≤3s，引 React/
+   Framer Motion 会同时破坏这三者。动效只做减法与信息性反馈；素材全为
+   内联 SVG／文本字形，无位图。本块统一控件美术、数字对齐与汇总层级。 */
+
+/* 食物行／手动估算输入：原先是浏览器默认白底描边，与项目凹陷输入
+   （.field input 的 --bg-deep）并排时像两个产品。统一到同一套令牌。 */
+.diet-log-food-row input[type="text"],
+.diet-log-food-row input[type="number"],
+.diet-custom-fields input {
+  background: var(--bg-deep);
+  border: 1px solid var(--steel-light);
+  color: var(--chalk);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  transition: border-color .2s var(--ease-out), box-shadow .2s var(--ease-out);
+}
+.diet-log-food-row input[type="text"]:focus,
+.diet-log-food-row input[type="number"]:focus,
+.diet-custom-fields input:focus {
+  outline: none;
+  border-color: var(--accent-ink);
+  box-shadow: 0 0 0 3px var(--forge-amber-dim);
+}
+.diet-log-food-row input::placeholder,
+.diet-custom-fields input::placeholder { color: var(--chalk-faint); }
+
+/* 抽屉关闭：原先复用 .account-btn（flex:1）被拉成半行宽的描边大框。
+   改为透明方形图标按钮——视觉只是一个 ✕，44px 命中区保留可达性。 */
+.diet-drawer-close {
+  flex: 0 0 auto; width: 44px; height: 44px; margin: -8px -10px -8px 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: var(--radius-sm);
+  color: var(--text-muted); font-size: 16px; line-height: 1; cursor: pointer;
+  transition: color .15s var(--ease-out), background .15s var(--ease-out);
+}
+.diet-drawer-close:hover { color: var(--text-primary); background: var(--bg-deep); }
+
+/* 今日汇总宏量：热量大数字之下并列蛋白/碳水/脂肪三块凹陷小卡，
+   数字 tabular 对齐；餐数/估算仍走 stat-pill，不与宏量混排。 */
+.diet-today-macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px; }
+.diet-today-macro {
+  background: var(--bg-deep); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.diet-today-macro-val { font-family: var(--font-mono); font-size: 16px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.diet-today-macro-unit { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.diet-today-macro-label { font-size: 11px; color: var(--text-muted); }
+.diet-rec-kcal, .diet-history-kcal { font-variant-numeric: tabular-nums; }
+
+/* 空态图标环：移除无限脉冲（纯装饰），保留静态双环作视觉锚。
+   信息性脉冲（流式 dot／进度 step／busy btn）保留——它们传达状态而非装饰。 */
+.empty-state .icon-ring::before,
+.empty-state .icon-ring::after { animation: none; }
+
+/* 记录页食物行删除：与抽屉关闭同族的裸图标按钮。描边方框＋小×显得笨重，
+   且和输入框描边重复一层框；hover 才给危险色反馈。训练日志删除键保持原样。 */
+.diet-log-food-row .log-entry-remove {
+  background: transparent; border: none;
+  color: var(--text-muted); border-radius: var(--radius-sm);
+  transition: color .15s var(--ease-out), background .15s var(--ease-out);
+}
+.diet-log-food-row .log-entry-remove:hover { color: var(--danger); background: rgba(var(--danger-rgb), 0.08); }
+.diet-log-food-row .log-entry-remove:active { transform: scale(.94); }
+
+/* 状态/错误行：.status-panel/.error-panel 此前没有任何规则，落到浏览器
+   默认 16px 近黑字，与全页 12–13px 的提示字号/语义色脱节（实测 16px
+   rgb(29,29,31)）。统一到提示字号＋语义色，成功绿/错误红一眼可分。 */
+.status-panel, .error-panel {
+  font-family: var(--font-body);
+  font-size: 12.5px; line-height: 1.5;
+  margin: 8px 0 0;
+}
+.status-panel { color: var(--status-safe); }
+.error-panel { color: var(--danger); }
+
+/* 移动端食物行：× 回到首行第三列。auto-placement 下跨行的「手动估算」
+   会把 × 甩到第三行落单，浪费一整行高度且不像一组控件。 */
+@media (max-width: 768px) {
+  .diet-log-food-row input[data-key="name"] { grid-column: 1; grid-row: 1; }
+  .diet-log-food-row input[data-key="grams"] { grid-column: 2; grid-row: 1; }
+  .diet-log-food-row .log-entry-remove { grid-column: 3; grid-row: 1; }
+  .diet-custom-toggle { grid-column: 1 / -1; grid-row: 2; }
+  .diet-custom-fields { grid-column: 1 / -1; grid-row: 3; }
+}
+@media (max-width: 375px) {
+  .diet-log-food-row .log-entry-remove { width: 30px; height: 30px; font-size: 13px; }
+}
 </style>
 </head>
 <body>
@@ -4552,44 +4773,70 @@ input[type="date"]::-webkit-calendar-picker-indicator {
       </div>
 
       <div class="tab-content diet-subpanel" id="panel-diet-log" role="tabpanel" aria-labelledby="tab-diet-log">
-        <div class="feature-card log-composer">
+        <!-- 今日汇总置顶：大数字作视觉焦点，记一餐入口常驻 -->
+        <div class="feature-card diet-today-card">
           <div class="result-header">
-            <h3>记录这一餐</h3>
-            <p class="section-hint">同一天同一餐重复记录会覆盖；外卖食堂查不到的食物可以手动估算</p>
+            <h3>今日汇总</h3>
+            <p class="section-hint" id="diet-today-date"></p>
           </div>
-          <div class="row log-meta-row">
-            <div class="field">
-              <label for="diet-log-date">日期</label>
-              <input type="date" id="diet-log-date">
-            </div>
-            <div class="field diet-meal-type-field">
-              <span class="diet-field-label" id="diet-log-meal-label">餐次</span>
-              <div class="diet-chip-group" role="radiogroup" aria-labelledby="diet-log-meal-label" id="diet-log-meal">
-                <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="早餐" checked><span>早餐</span></label>
-                <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="午餐"><span>午餐</span></label>
-                <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="晚餐"><span>晚餐</span></label>
-                <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="加餐"><span>加餐</span></label>
-              </div>
-            </div>
+          <div class="diet-today-main">
+            <span class="diet-today-kcal diet-num" id="diet-today-kcal">0</span>
+            <span class="diet-today-unit">kcal</span>
           </div>
-          <div class="log-entries-head">
-            <span>食物明细</span>
-            <button class="btn-secondary" id="btn-add-diet-food" type="button">＋ 添加食物</button>
-          </div>
-          <div id="diet-log-foods"></div>
-          <div class="field">
-            <label for="diet-log-notes">备注</label>
-            <input type="text" id="diet-log-notes" maxlength="512" placeholder="如：食堂打的，油偏多">
-          </div>
+          <div class="diet-today-macros" id="diet-today-macros"></div>
+          <div class="progress-stats" id="diet-today-pills"></div>
           <div class="log-actions">
-            <button class="btn-generate" id="btn-save-diet-log" type="button">▸ 记录这一餐</button>
+            <button class="btn-generate" id="btn-open-diet-drawer" type="button">＋ 记一餐</button>
           </div>
-          <div id="diet-log-status" class="status-panel" role="status" aria-live="polite" hidden></div>
-          <div id="diet-log-error" class="error-panel" role="alert" hidden></div>
         </div>
         <div class="feature-card">
-          <div class="result-header"><h3>最近饮食记录</h3></div>
+          <div class="result-header">
+            <h3>最近饮食记录</h3>
+            <p class="section-hint">点一条展开食物明细</p>
+          </div>
           <div id="diet-log-history"></div>
+        </div>
+
+        <!-- 新增记录走底部抽屉：同页浮层，不整页跳转；表单 id 全部保留 -->
+        <div class="diet-drawer-backdrop" id="diet-drawer-backdrop" hidden></div>
+        <div class="diet-drawer" id="diet-drawer" role="dialog" aria-modal="true" aria-labelledby="diet-drawer-title" hidden>
+          <div class="diet-drawer-handle" aria-hidden="true"></div>
+          <div class="feature-card log-composer">
+            <div class="result-header diet-drawer-head">
+              <h3 id="diet-drawer-title">记录这一餐</h3>
+              <button class="diet-drawer-close" id="btn-close-diet-drawer" type="button" aria-label="关闭记录抽屉">✕</button>
+            </div>
+            <p class="section-hint">同一天同一餐重复记录会覆盖；外卖食堂查不到的食物可以手动估算</p>
+            <div class="row log-meta-row">
+              <div class="field">
+                <label for="diet-log-date">日期</label>
+                <input type="date" id="diet-log-date">
+              </div>
+              <div class="field diet-meal-type-field">
+                <span class="diet-field-label" id="diet-log-meal-label">餐次</span>
+                <div class="diet-chip-group" role="radiogroup" aria-labelledby="diet-log-meal-label" id="diet-log-meal">
+                  <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="早餐" checked><span>早餐</span></label>
+                  <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="午餐"><span>午餐</span></label>
+                  <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="晚餐"><span>晚餐</span></label>
+                  <label class="diet-chip"><input type="radio" name="diet-log-meal-type" value="加餐"><span>加餐</span></label>
+                </div>
+              </div>
+            </div>
+            <div class="log-entries-head">
+              <span>食物明细</span>
+              <button class="btn-secondary" id="btn-add-diet-food" type="button">＋ 添加食物</button>
+            </div>
+            <div id="diet-log-foods"></div>
+            <div class="field">
+              <label for="diet-log-notes">备注</label>
+              <input type="text" id="diet-log-notes" maxlength="512" placeholder="如：食堂打的，油偏多">
+            </div>
+            <div class="log-actions">
+              <button class="btn-generate" id="btn-save-diet-log" type="button">▸ 记录这一餐</button>
+            </div>
+            <div id="diet-log-status" class="status-panel" role="status" aria-live="polite" hidden></div>
+            <div id="diet-log-error" class="error-panel" role="alert" hidden></div>
+          </div>
         </div>
       </div>
 
@@ -9585,6 +9832,7 @@ async function saveDietLog() {
     const notes = document.getElementById('diet-log-notes');
     if (notes) notes.value = '';
     await loadDietLogHistory();
+    closeDietDrawer();
   } catch (e) {
     showError('diet-log-error', e.message || '记录失败');
   } finally {
@@ -9603,6 +9851,7 @@ async function loadDietLogHistory() {
     }
     const data = await resp.json();
     const logs = data.logs || [];
+    renderDietTodaySummary(logs);
     box.replaceChildren();
     if (!logs.length) {
       box.appendChild(composedEmpty('—', '还没有饮食记录', '记一餐，或在计划里点「吃了这餐」。'));
@@ -9614,30 +9863,100 @@ async function loadDietLogHistory() {
       if (!byDate.has(d)) byDate.set(d, []);
       byDate.get(d).push(log);
     });
+    const today = todayLocalIso();
     [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0])).forEach(([date, meals]) => {
       const day = el('div', 'diet-history-day', '');
       day.appendChild(el('div', 'diet-history-date', date));
       meals.forEach(log => {
-        const row = el('div', 'diet-history-meal', '');
-        row.appendChild(el('span', 'diet-history-meal-name', log.meal_type || '餐次'));
+        // 单条记录可折叠：summary 只留餐次+热量焦点，明细收进 body；今日默认展开
+        const rec = el('details', 'diet-rec', '');
+        if (date === today) rec.open = true;
+        const head = el('summary', 'diet-rec-head', '');
+        head.appendChild(el('span', 'diet-rec-name', log.meal_type || '餐次'));
+        if (Number(log.custom_kcal) > 0) head.appendChild(el('span', 'diet-custom-badge', '含手动估算'));
+        head.appendChild(el('span', 'diet-rec-kcal diet-num', `${Math.round(log.kcal || 0)} kcal`));
+        rec.appendChild(head);
+        const body = el('div', 'diet-rec-body', '');
         const names = (log.foods || []).map(f => `${f.name} ${f.grams}g`).join('、');
-        row.appendChild(el('span', 'diet-history-foods', names));
-        if (Number(log.custom_kcal) > 0) {
-          row.appendChild(el('span', 'diet-custom-badge', '含手动估算'));
-        }
-        row.appendChild(el('span', 'diet-history-kcal diet-num',
-          `${Math.round(log.kcal || 0)} kcal · 蛋白 ${Math.round(log.protein_g || 0)} g`));
-        const del = el('button', 'account-btn account-btn-quiet diet-history-remove', '删除');
+        body.appendChild(el('div', 'diet-rec-foods', names || '无食物明细'));
+        body.appendChild(el('div', 'diet-rec-notes diet-num',
+          `蛋白 ${Math.round(log.protein_g || 0)} g` + (log.notes ? ` · ${log.notes}` : '')));
+        const del = el('button', 'account-btn account-btn-quiet diet-rec-remove', '删除');
         del.type = 'button';
         del.onclick = () => deleteDietLogEntry(log.id);
-        row.appendChild(del);
-        day.appendChild(row);
+        body.appendChild(del);
+        rec.appendChild(body);
+        day.appendChild(rec);
       });
       box.appendChild(day);
     });
   } catch (e) {
     box.replaceChildren(composedEmpty('!', '读取失败', e.message || '请稍后重试。'));
   }
+}
+
+// 今日汇总：只聚合服务端已重算的每餐数字（宏量逐食物累加），前端不做营养计算。
+function renderDietTodaySummary(logs) {
+  const today = todayLocalIso();
+  const todays = (logs || []).filter(l => String(l.log_date || '') === today);
+  const kcal = todays.reduce((s, l) => s + (Number(l.kcal) || 0), 0);
+  const protein = todays.reduce((s, l) => s + (Number(l.protein_g) || 0), 0);
+  const sumFood = (key) => todays.reduce(
+    (s, l) => s + (l.foods || []).reduce((a, f) => a + (Number(f[key]) || 0), 0), 0);
+  const fat = sumFood('fat_g');
+  const carbs = sumFood('carbs_g');
+  const kcalNode = document.getElementById('diet-today-kcal');
+  if (kcalNode) kcalNode.textContent = String(Math.round(kcal));
+  const dateNode = document.getElementById('diet-today-date');
+  if (dateNode) dateNode.textContent = today;
+  const macros = document.getElementById('diet-today-macros');
+  if (macros) {
+    macros.replaceChildren();
+    macros.appendChild(dietMacroTile('蛋白质', protein));
+    macros.appendChild(dietMacroTile('碳水', carbs));
+    macros.appendChild(dietMacroTile('脂肪', fat));
+  }
+  const pills = document.getElementById('diet-today-pills');
+  if (!pills) return;
+  pills.replaceChildren();
+  pills.appendChild(el('span', 'stat-pill', `已记 ${todays.length} 餐`));
+  const custom = todays.filter(l => Number(l.custom_kcal) > 0).length;
+  if (custom) pills.appendChild(el('span', 'stat-pill', `含估算 ${custom} 餐`));
+}
+function dietMacroTile(label, grams) {
+  const tile = el('div', 'diet-today-macro', '');
+  const val = el('div', 'diet-today-macro-val diet-num', String(Math.round(grams)));
+  val.appendChild(el('span', 'diet-today-macro-unit', ' g'));
+  tile.appendChild(val);
+  tile.appendChild(el('div', 'diet-today-macro-label', label));
+  return tile;
+}
+
+// 底部抽屉：同页浮层不整页跳转；开合管理焦点与背景滚动。
+let dietDrawerLastFocus = null;
+function openDietDrawer() {
+  const drawer = document.getElementById('diet-drawer');
+  const backdrop = document.getElementById('diet-drawer-backdrop');
+  if (!drawer || !backdrop) return;
+  dietDrawerLastFocus = document.activeElement;
+  drawer.hidden = false;
+  backdrop.hidden = false;
+  requestAnimationFrame(() => {
+    drawer.classList.add('is-open');
+    backdrop.classList.add('is-open');
+  });
+  document.body.style.overflow = 'hidden';
+  document.getElementById('diet-log-date')?.focus();
+}
+function closeDietDrawer() {
+  const drawer = document.getElementById('diet-drawer');
+  const backdrop = document.getElementById('diet-drawer-backdrop');
+  if (!drawer || !backdrop) return;
+  drawer.classList.remove('is-open');
+  backdrop.classList.remove('is-open');
+  document.body.style.overflow = '';
+  window.setTimeout(() => { drawer.hidden = true; backdrop.hidden = true; }, 220);
+  if (dietDrawerLastFocus && dietDrawerLastFocus.focus) dietDrawerLastFocus.focus();
 }
 
 async function deleteDietLogEntry(logId) {
@@ -9856,6 +10175,12 @@ function initDietTab() {
   bind('btn-add-diet-food', () => addDietFoodRow());
   bind('btn-save-diet-log', saveDietLog);
   bind('btn-refresh-diet-stats', loadDietStats);
+  bind('btn-open-diet-drawer', openDietDrawer);
+  bind('btn-close-diet-drawer', closeDietDrawer);
+  document.getElementById('diet-drawer-backdrop')?.addEventListener('click', closeDietDrawer);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !document.getElementById('diet-drawer')?.hidden) closeDietDrawer();
+  });
 
   // 二级页签：点击与键盘导航（与顶层同一套约定，scoped 到自己的 tablist）。
   const subList = document.querySelector('.diet-subtabs');
