@@ -353,10 +353,13 @@ class TestVisualUpgradeStep3:
         assert "l.href = 'https://fonts.googleapis.com/css2" in HTML
         assert '<noscript><link href="https://fonts.googleapis.com/css2' in HTML
 
-    def test_food_row_remove_is_bare_icon_not_boxed(self):
-        block = HTML[HTML.index('.diet-log-food-row .log-entry-remove {'):
-                     HTML.index('.diet-log-food-row .log-entry-remove:hover')]
+    def test_log_remove_is_bare_icon_across_logs(self):
+        # 裸图标样式上提到基础规则：训练日志与饮食食物行同族，不再单独覆盖
+        block = HTML[HTML.index('.log-entry-remove {'):
+                     HTML.index('.log-entry-remove:hover')]
         assert 'border: none' in block and 'background: transparent' in block
+        assert '.diet-log-food-row .log-entry-remove {\n  background: transparent' not in HTML
+        assert "el('button', 'log-entry-remove', '×')" in HTML
 
     def test_status_and_error_panels_use_hint_typography(self):
         # 原先无规则→浏览器默认 16px 黑字，与全页提示字号脱节

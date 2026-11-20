@@ -3075,7 +3075,7 @@ body {
 
 .log-entry-remove {
   background: transparent;
-  border: 1px solid var(--border);
+  border: none;
   color: var(--text-muted);
   border-radius: var(--radius-sm);
   width: 34px;
@@ -3083,9 +3083,9 @@ body {
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
-  transition: color .2s var(--ease-out), border-color .2s var(--ease-out), transform .12s var(--ease-out);
+  transition: color .15s var(--ease-out), background .15s var(--ease-out), transform .12s var(--ease-out);
 }
-.log-entry-remove:hover { color: var(--danger); border-color: var(--danger); }
+.log-entry-remove:hover { color: var(--danger); background: rgba(var(--danger-rgb), 0.08); }
 .log-entry-remove:active { transform: scale(.94); }
 
 .log-actions {
@@ -4032,15 +4032,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .empty-state .icon-ring::before,
 .empty-state .icon-ring::after { animation: none; }
 
-/* 记录页食物行删除：与抽屉关闭同族的裸图标按钮。描边方框＋小×显得笨重，
-   且和输入框描边重复一层框；hover 才给危险色反馈。训练日志删除键保持原样。 */
-.diet-log-food-row .log-entry-remove {
-  background: transparent; border: none;
-  color: var(--text-muted); border-radius: var(--radius-sm);
-  transition: color .15s var(--ease-out), background .15s var(--ease-out);
-}
-.diet-log-food-row .log-entry-remove:hover { color: var(--danger); background: rgba(var(--danger-rgb), 0.08); }
-.diet-log-food-row .log-entry-remove:active { transform: scale(.94); }
+/* 记录页食物行删除键的裸图标样式已上提到基础 .log-entry-remove（训练日志同族），
+   这里只保留移动端网格定位与尺寸收敛。 */
 
 /* 状态/错误行：.status-panel/.error-panel 此前没有任何规则，落到浏览器
    默认 16px 近黑字，与全页 12–13px 的提示字号/语义色脱节（实测 16px
