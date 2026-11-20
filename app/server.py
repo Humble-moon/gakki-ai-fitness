@@ -36,7 +36,7 @@ from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, Res
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.gzip import GZipMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
 from src.core.orchestrator import Orchestrator
 from src.core.goal_contract import GoalConsistencyError
@@ -361,6 +361,18 @@ class TrainingLogRequest(BaseModel):
     # 当日训练重点，如 "胸+三头"
     plan_id: str = Field("", max_length=64)
     # 该次训练依据的计划 ID
+
+    @field_validator("plan_id", mode="before")
+    @classmethod
+    def _coerce_plan_id(cls, value):
+        """计划 ID 在库里是整数，前端曾直接把数字塞进来 → 422「保存失败」。
+
+        字符串字段收到整数时按十进制文本接收（12 → "12"），而不是让用户
+        练完一整场却在最后一步保存失败。None 仍走默认空串。
+        """
+        if isinstance(value, int) and not isinstance(value, bool):
+            return str(value)
+        return value
     session_rpe: Optional[float] = Field(None, ge=0, le=10, allow_inf_nan=False)
     # 整节课主观疲劳度 1~10
     duration_min: int = Field(0, ge=0, le=1440)

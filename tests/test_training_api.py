@@ -114,6 +114,23 @@ async def test_create_log_returns_id(client, store):
 
 
 @pytest.mark.anyio
+async def test_create_log_accepts_integer_plan_id(client, store):
+    """计划 ID 在库里是整数：前端发数字也应按文本接收，而不是 422。
+
+    真实事故：训练面板把数字 plan_id 直接提交 → string_type 422，
+    用户练完一整场却在最后一步「保存失败」。前端已转字符串，
+    接口层再兜一道，旧客户端/手工请求也不会踩同一个坑。
+    """
+    resp = await client.post("/api/training-logs", json={
+        "athlete_key": "k1",
+        "plan_id": 12,
+        "entries": [{"exercise_name": "卧推", "sets": 3, "reps": 10, "weight": 60.0}],
+    })
+    assert resp.status_code == 200
+    assert store.saved_calls[0]["plan_id"] == "12"
+
+
+@pytest.mark.anyio
 async def test_create_log_requires_athlete_key(client):
     resp = await client.post("/api/training-logs", json={"entries": []})
     assert resp.status_code == 400

@@ -2795,6 +2795,69 @@ body {
 }
 .welcome-banner-close:hover { color: var(--text-primary); }
 .welcome-banner-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* 续练横幅：与 welcome-banner 同构，但用橙色＝行动召唤（欢迎条是绿色＝回执）。
+   小字号按钮用 --accent-ink（深橙）配白字，对比度 ~5.2:1 过 AA；
+   主按钮那档亮橙只允许 19px 大字，这里不复用。 */
+.resume-banner {
+  display: flex; align-items: center; gap: 11px;
+  margin: 0 0 18px;
+  padding: 12px 15px;
+  background: rgba(var(--accent-rgb), .07);
+  border: 1px solid rgba(var(--accent-rgb), .28);
+  border-radius: var(--radius-md);
+  animation: tabEnter .28s var(--ease-out);
+}
+.resume-banner[hidden] { display: none; }
+.resume-banner-icon {
+  flex: 0 0 auto;
+  width: 19px; height: 19px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-ink); color: #fff;
+  border-radius: 50%; font-size: 10px;
+}
+.resume-banner-body { flex: 1; min-width: 0; }
+.resume-banner-title {
+  display: block;
+  color: var(--text-primary); font-size: 13.5px; font-weight: 600;
+  margin-bottom: 3px;
+}
+.resume-banner-text {
+  margin: 0;
+  color: var(--text-secondary); font-size: 12.5px; line-height: 1.65;
+}
+.resume-banner-go {
+  flex: 0 0 auto;
+  min-height: 36px; padding: 8px 16px;
+  background: var(--accent-ink); border: none;
+  border-radius: var(--radius-sm);
+  color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background .2s var(--ease-out), transform .1s var(--ease-out);
+}
+.resume-banner-go:hover { background: #9a3412; }
+.resume-banner-go:active { transform: scale(.98); }
+.resume-banner-go:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.resume-banner-close {
+  flex: 0 0 auto;
+  background: none; border: none; padding: 0 2px;
+  color: var(--text-muted); font-size: 17px; line-height: 1;
+  cursor: pointer; border-radius: 4px;
+}
+.resume-banner-close:hover { color: var(--danger); }
+.resume-banner-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.plan-start-btn.is-resume {
+  border-color: var(--accent-ink);
+  background: var(--forge-amber-dim);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+@media (max-width: 768px) {
+  .resume-banner { flex-wrap: wrap; }
+  .resume-banner-body { flex: 1 1 calc(100% - 66px); }
+  .resume-banner-close { order: 2; }
+  .resume-banner-go { order: 3; flex: 1 1 100%; }
+}
 .workspace, .sidebar { transition: none; }
 
 /* 已保存的计划 */
@@ -4494,6 +4557,20 @@ input[type="date"]::-webkit-calendar-picker-indicator {
       </div>
       <button class="welcome-banner-close" type="button" id="welcome-banner-close"
               aria-label="关闭提示">×</button>
+    </div>
+
+    <!-- 未完成训练的续练横幅：进度在本机草稿里，任何页签都看得见。
+         用户切去别的应用再回来，页面可能已被浏览器回收——训练面板没了，
+         但这条横幅把「继续练」的入口带回第一屏，不用翻计划找。 -->
+    <div class="resume-banner" id="workout-resume-banner" role="status" hidden>
+      <span class="resume-banner-icon" aria-hidden="true">▸</span>
+      <div class="resume-banner-body">
+        <strong class="resume-banner-title" id="workout-resume-title">有一场未完成的训练</strong>
+        <p class="resume-banner-text" id="workout-resume-text"></p>
+      </div>
+      <button class="resume-banner-go" type="button" id="workout-resume-go">继续训练</button>
+      <button class="resume-banner-close" type="button" id="workout-resume-discard"
+              aria-label="丢弃这次训练进度">×</button>
     </div>
 
     <div class="tabs feature-tabs" role="tablist" aria-label="教练功能">
@@ -6978,11 +7055,24 @@ function renderPlanDays(container, days, options) {
     // 提供一个"照着练"的按钮等于绕过安全门。
     if (opts.allowStart) {
       const actions = el('div', 'plan-day-actions');
-      const start = el('button', 'plan-start-btn', '▸ 开始训练');
+      // 这一天有未完成的草稿：按钮直接变「继续训练」，进度写在提示里。
+      const draft = readWorkoutDraft();
+      const resumable = draft
+        && String(draft.planMeta?.planId ?? '') === String(opts.planId ?? '')
+        && (draft.day?.day ?? null) === (day?.day ?? null);
+      const start = el('button', 'plan-start-btn',
+        resumable ? '▸ 继续训练' : '▸ 开始训练');
       start.type = 'button';
-      start.addEventListener('click', () => openWorkout(day, {
-        planId: opts.planId || null,
-      }));
+      if (resumable) {
+        const progress = workoutDraftProgress(draft);
+        start.classList.add('is-resume');
+        start.title = `已完成 ${progress.doneSets}/${progress.totalSets} 组`;
+        start.addEventListener('click', () => openWorkout(draft.day, draft.planMeta, draft));
+      } else {
+        start.addEventListener('click', () => openWorkout(day, {
+          planId: opts.planId || null,
+        }));
+      }
       actions.appendChild(start);
       card.appendChild(actions);
     }
@@ -7789,6 +7879,168 @@ async function saveTrainingLog() {
 // 不是改数据模型。
 let workoutState = null;
 
+/* ── 训练进度快照：切走应用、刷新、误关都不该丢一场训练 ──
+   训练面板原先纯内存：切去回个消息，浏览器可能已回收页面，练过的组全没了。
+   现在进度写进本机草稿：
+   - 输入防抖落盘、完成一组立即落盘；pagehide 与切后台强制落盘；
+   - 工作台顶部「继续训练」横幅（任何页签可见）＋原计划日卡按钮变「继续训练」；
+   - 计时按墙钟：离开 ≤2 小时继续计（组间休息、切应用都算训练时长），
+     >2 小时视为中断，计时冻结在离开前的值——不该把睡觉算成训练。
+   草稿绑定当前身份（athleteKey），换账号不会看到别人的进度。 */
+const WORKOUT_DRAFT_KEY = 'ironmind_workout_draft';
+const WORKOUT_DRAFT_VERSION = 1;
+const WORKOUT_DRAFT_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+const WORKOUT_AWAY_PAUSE_MS = 2 * 60 * 60 * 1000;
+let workoutDraftTimer = null;
+
+function readWorkoutDraft() {
+  try {
+    const raw = localStorage.getItem(WORKOUT_DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    if (!draft || draft.v !== WORKOUT_DRAFT_VERSION) return null;
+    if (!athleteKey || draft.athleteKey !== athleteKey) return null;
+    if (!draft.day || !Array.isArray(draft.entries) || !draft.entries.length) return null;
+    if (Date.now() - (draft.savedAt || 0) > WORKOUT_DRAFT_MAX_AGE_MS) {
+      localStorage.removeItem(WORKOUT_DRAFT_KEY);
+      return null;
+    }
+    return draft;
+  } catch (e) {
+    return null;
+  }
+}
+
+function workoutDraftProgress(draft) {
+  const entries = Array.isArray(draft?.entries) ? draft.entries : [];
+  let doneSets = 0;
+  let totalSets = 0;
+  let doneExercises = 0;
+  entries.forEach(entry => {
+    const rows = Array.isArray(entry?.rows) ? entry.rows : [];
+    totalSets += rows.length;
+    const done = rows.filter(row => row && row.done).length;
+    doneSets += done;
+    if (done > 0) doneExercises += 1;
+  });
+  return { doneSets, totalSets, doneExercises, totalExercises: entries.length };
+}
+
+function persistWorkoutDraft() {
+  if (!workoutState || !athleteKey) return;
+  const state = workoutState;
+  const progress = workoutDraftProgress(state);
+  const hasInput = state.entries.some(entry => entry.rows.some(
+    row => row.done || String(row.weight ?? '').trim() !== ''));
+  // 一组没练、一个数没填的空壳不留草稿，免得横幅常驻骚扰。
+  if (!progress.doneSets && !hasInput) return;
+  const draft = {
+    v: WORKOUT_DRAFT_VERSION,
+    athleteKey,
+    savedAt: Date.now(),
+    startedAt: state.startedAt,
+    elapsedMs: Date.now() - state.startedAt,
+    planMeta: state.planMeta || {},
+    day: state.day,
+    entries: state.entries.map(entry => ({
+      name: entry.name,
+      targetSets: entry.targetSets,
+      targetReps: entry.targetReps,
+      restSeconds: entry.restSeconds,
+      done: entry.done || 0,
+      rows: entry.rows.map(row => ({
+        weight: row.weight, reps: row.reps, done: !!row.done,
+      })),
+    })),
+  };
+  try { localStorage.setItem(WORKOUT_DRAFT_KEY, JSON.stringify(draft)); } catch (e) {}
+  refreshWorkoutResumeBanner();
+}
+
+function scheduleWorkoutDraftSave() {
+  if (workoutDraftTimer) clearTimeout(workoutDraftTimer);
+  workoutDraftTimer = setTimeout(() => {
+    workoutDraftTimer = null;
+    persistWorkoutDraft();
+  }, 400);
+}
+
+function clearWorkoutDraft() {
+  if (workoutDraftTimer) { clearTimeout(workoutDraftTimer); workoutDraftTimer = null; }
+  try { localStorage.removeItem(WORKOUT_DRAFT_KEY); } catch (e) {}
+  refreshWorkoutResumeBanner();
+}
+
+function refreshWorkoutResumeBanner() {
+  const banner = document.getElementById('workout-resume-banner');
+  if (!banner) return;
+  // 面板开着时横幅不出现在底层：续练入口只在「训练不在屏幕上」时有意义。
+  const draft = workoutState ? null : readWorkoutDraft();
+  if (!draft) { banner.hidden = true; return; }
+  const progress = workoutDraftProgress(draft);
+  const title = document.getElementById('workout-resume-title');
+  const text = document.getElementById('workout-resume-text');
+  if (title) {
+    title.textContent = `DAY ${draft.day?.day || 1} · ${draft.day?.focus || '训练'}还没练完`;
+  }
+  if (text) {
+    text.textContent = `已完成 ${progress.doneSets}/${progress.totalSets} 组。`
+      + '进度保存在本机，切换应用或刷新都不会丢。';
+  }
+  banner.hidden = false;
+}
+
+function resumeWorkoutFromDraft() {
+  const draft = readWorkoutDraft();
+  if (!draft) { refreshWorkoutResumeBanner(); return; }
+  openWorkout(draft.day, draft.planMeta, draft);
+}
+
+function discardWorkoutDraft() {
+  if (!window.confirm('丢弃这次训练进度？已完成的组将无法恢复。')) return;
+  clearWorkoutDraft();
+}
+
+/* 保存失败的可见原因：业务错误用服务端文案；422 校验错误对用户没有可读性
+   （字段名/类型是内部细节），统一成可行动的提示，不再出现「保存失败：保存失败」。 */
+function workoutSaveErrorMessage(data) {
+  if (data && data.error && data.error.message) return data.error.message;
+  if (data && Array.isArray(data.detail) && data.detail.length) {
+    return '提交内容未通过校验，请刷新页面后重试。';
+  }
+  return '暂时没能保存，请稍后重试。';
+}
+
+function tickWorkoutClock() {
+  if (!workoutState) return;
+  workoutState.clock.textContent = formatWorkoutClock(
+    Math.floor((Date.now() - workoutState.startedAt) / 1000));
+}
+
+function tickWorkoutRest() {
+  if (!workoutState || !workoutState.restEndAt) return;
+  const remaining = Math.max(0, Math.ceil((workoutState.restEndAt - Date.now()) / 1000));
+  workoutState.restCount.textContent = String(remaining);
+  if (remaining <= 0) stopWorkoutRest();
+}
+
+// 切后台的瞬间强制落盘（防抖定时器可能还没跑）；回前台立即补算两个钟，
+// 不等下一次心跳——后台节流让定时器少走很多跳，墙钟差值才是真的。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    if (workoutDraftTimer) { clearTimeout(workoutDraftTimer); workoutDraftTimer = null; }
+    persistWorkoutDraft();
+  } else if (workoutState) {
+    tickWorkoutClock();
+    tickWorkoutRest();
+  }
+});
+window.addEventListener('pagehide', () => persistWorkoutDraft());
+// 另一个页签续练/丢弃/保存了草稿，本页横幅跟着刷新。
+window.addEventListener('storage', event => {
+  if (event.key === WORKOUT_DRAFT_KEY) refreshWorkoutResumeBanner();
+});
+
 function workoutRestSeconds(rest) {
   const match = String(rest || '').match(/(\d+)/);
   return match ? Math.max(15, parseInt(match[1], 10)) : 60;
@@ -7827,6 +8079,7 @@ function buildWorkoutSetRow(entry, index, setIndex, card) {
     // touched 标记让异步返回的"上次数据"不覆盖用户已经改过的值。
     weightInput.dataset.touched = '1';
     row.weight = weightInput.value;
+    scheduleWorkoutDraftSave();
   });
 
   const repsInput = document.createElement('input');
@@ -7840,6 +8093,7 @@ function buildWorkoutSetRow(entry, index, setIndex, card) {
   repsInput.addEventListener('input', () => {
     repsInput.dataset.touched = '1';
     row.reps = repsInput.value;
+    scheduleWorkoutDraftSave();
   });
 
   const check = el('button', 'set-check', '✓');
@@ -7907,6 +8161,8 @@ function toggleWorkoutSet(index, setIndex, card) {
     workoutState.cards[index + 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   updateWorkoutProgress();
+  // 完成一组是最有价值的进度节点：立即落盘，不等防抖。
+  persistWorkoutDraft();
 }
 
 function updateWorkoutProgress() {
@@ -7922,22 +8178,17 @@ function startWorkoutRest(seconds) {
   clearInterval(workoutState.restTimer);
   workoutState.restEndAt = Date.now() + seconds * 1000;
   workoutState.restBar.classList.remove('is-idle');
-  const tick = () => {
-    if (!workoutState) return;
-    const remaining = Math.max(0, Math.ceil((workoutState.restEndAt - Date.now()) / 1000));
-    workoutState.restCount.textContent = String(remaining);
-    if (remaining <= 0) stopWorkoutRest();
-  };
-  tick();
+  tickWorkoutRest();
   // 250ms 一跳：页面切到后台时定时器会被节流，按结束时间戳算剩余秒数
-  // 就不会因为少跑几次而越走越慢。
-  workoutState.restTimer = setInterval(tick, 250);
+  // 就不会因为少跑几次而越走越慢；回前台时 visibilitychange 还会立即补算。
+  workoutState.restTimer = setInterval(tickWorkoutRest, 250);
 }
 
 function stopWorkoutRest() {
   if (!workoutState) return;
   clearInterval(workoutState.restTimer);
   workoutState.restTimer = null;
+  workoutState.restEndAt = 0;
   workoutState.restBar.classList.add('is-idle');
 }
 
@@ -7950,11 +8201,9 @@ function onWorkoutKeydown(event) {
 
 function closeWorkout(force) {
   if (!workoutState) return;
-  const completedSets = workoutState.entries.reduce(
-    (sum, entry) => sum + (entry.done || 0), 0);
-  if (!force && completedSets > 0) {
-    if (!window.confirm('这次训练还没保存，确定退出？')) return;
-  }
+  // 关闭＝暂停：进度已写进本机草稿，横幅与计划卡随时能续，
+  // 不再弹「确定退出」——误关不再是事故，确认框反而打断训练节奏。
+  if (!force) persistWorkoutDraft();
   clearInterval(workoutState.elapsedTimer);
   clearInterval(workoutState.restTimer);
   document.removeEventListener('keydown', onWorkoutKeydown);
@@ -7963,13 +8212,26 @@ function closeWorkout(force) {
   document.body.style.overflow = '';
   workoutState = null;
   if (previous && typeof previous.focus === 'function') previous.focus();
+  if (!force) refreshWorkoutResumeBanner();
 }
 
-function openWorkout(day, planMeta) {
+function openWorkout(day, planMeta, resume) {
   if (!day || !Array.isArray(day.exercises) || !day.exercises.length) return;
+  if (!resume) {
+    const existing = readWorkoutDraft();
+    if (existing) {
+      const sameSession = (existing.day?.day ?? null) === (day?.day ?? null)
+        && String(existing.planMeta?.planId ?? '') === String(planMeta?.planId ?? '');
+      // 同一场训练：任何入口都直接续练，不该让用户在「开始」里丢掉进度。
+      if (sameSession) { openWorkout(existing.day, existing.planMeta, existing); return; }
+      if (!window.confirm(`还有一场未完成的训练（DAY ${existing.day?.day || 1}）。`
+        + '开始新训练会覆盖那份进度，继续？')) return;
+      clearWorkoutDraft();
+    }
+  }
   if (workoutState) closeWorkout(true);
 
-  const entries = day.exercises.map(exercise => {
+  let entries = day.exercises.map(exercise => {
     const targetSets = Math.max(1, parseInt(exercise?.sets, 10) || 3);
     const defaultReps = String(workoutRepsTarget(exercise?.reps));
     return {
@@ -7987,6 +8249,36 @@ function openWorkout(day, planMeta) {
       done: 0,
     };
   });
+
+  // 草稿续练：结构与当前计划日一致（动作数量＋顺序）才接受，
+  // 否则从头开始——计划可能已重新生成，错位的快照不能硬套。
+  let startedAt = Date.now();
+  const resumable = resume && Array.isArray(resume.entries)
+    && resume.entries.length === entries.length
+    && resume.entries.every((saved, index) => saved?.name === entries[index].name);
+  if (resumable) {
+    entries = entries.map((base, index) => {
+      const savedRows = Array.isArray(resume.entries[index].rows)
+        ? resume.entries[index].rows : [];
+      const rows = base.rows.map((row, rowIndex) => {
+        const item = savedRows[rowIndex];
+        if (!item) return row;
+        return {
+          weight: String(item.weight ?? ''),
+          reps: String(item.reps ?? row.reps),
+          done: !!item.done,
+        };
+      });
+      return { ...base, rows, done: rows.filter(row => row.done).length };
+    });
+    const away = Date.now() - (resume.savedAt || Date.now());
+    const elapsedMs = Math.max(0, resume.elapsedMs || 0);
+    // 短离开按墙钟继续计（切应用的时间也是训练的一部分）；
+    // 长离开冻结在离开前的值，恢复后从那里接着走。
+    startedAt = away <= WORKOUT_AWAY_PAUSE_MS
+      ? (resume.startedAt || Date.now() - elapsedMs)
+      : Date.now() - elapsedMs;
+  }
 
   const overlay = el('div', 'workout-overlay');
   overlay.setAttribute('role', 'dialog');
@@ -8029,6 +8321,30 @@ function openWorkout(day, planMeta) {
     body.appendChild(card);
     return card;
   });
+  if (resumable) {
+    // 输入框的值已随 entries 预填；这里补完成态的视觉与语义，
+    // 并给恢复值打 touched——「上次数据」回填不该盖掉草稿里的进度。
+    entries.forEach((entry, index) => {
+      const card = cards[index];
+      if (!card) return;
+      entry.rows.forEach((row, setIndex) => {
+        const node = card.querySelector(`.workout-set-row[data-set="${setIndex}"]`);
+        if (!node) return;
+        node.querySelectorAll('input').forEach(input => {
+          if (input.value !== '') input.dataset.touched = '1';
+        });
+        if (row.done) {
+          node.classList.add('is-done');
+          const check = node.querySelector('.set-check');
+          if (check) check.setAttribute('aria-pressed', 'true');
+        }
+      });
+      const state = card.querySelector('.workout-ex-state');
+      if (state) state.textContent = `${entry.done}/${entry.targetSets}`;
+      card.classList.toggle('is-done', entry.done >= entry.targetSets);
+      card.classList.toggle('is-active', entry.done > 0 && entry.done < entry.targetSets);
+    });
+  }
   shell.appendChild(body);
 
   const footer = el('div', 'workout-footer');
@@ -8080,20 +8396,21 @@ function openWorkout(day, planMeta) {
     restCount,
     hint,
     finish,
-    startedAt: Date.now(),
+    startedAt,
     previousFocus: document.activeElement,
     elapsedTimer: null,
     restTimer: null,
     restEndAt: 0,
   };
-  workoutState.elapsedTimer = setInterval(() => {
-    if (!workoutState) return;
-    clock.textContent = formatWorkoutClock(
-      Math.floor((Date.now() - workoutState.startedAt) / 1000));
-  }, 1000);
+  workoutState.elapsedTimer = setInterval(tickWorkoutClock, 1000);
 
   document.addEventListener('keydown', onWorkoutKeydown);
   closeBtn.focus();
+  if (resumable) {
+    workoutState.hint.textContent = '已恢复上次进度，接着练。';
+    updateWorkoutProgress();
+  }
+  refreshWorkoutResumeBanner();
   // 面板先出来，历史数据随后回填：不为了预填把打开动作卡在网络上。
   hydrateWorkoutLastData();
 }
@@ -8234,8 +8551,9 @@ async function finishWorkout() {
   workoutState.hint.textContent = '';
   workoutState.finish.disabled = true;
   workoutState.finish.textContent = '保存中...';
-  const durationMin = Math.max(
-    1, Math.round((Date.now() - workoutState.startedAt) / 60000));
+  // 上限 1440 与接口约束一致：面板在后台挂了一整天也不该提交出非法时长。
+  const durationMin = Math.min(1440, Math.max(
+    1, Math.round((Date.now() - workoutState.startedAt) / 60000)));
   const payload = {
     athlete_key: athleteKey,
     log_date: todayLocalIso(),
@@ -8244,7 +8562,9 @@ async function finishWorkout() {
     duration_min: durationMin,
     entries: completed,
   };
-  if (planMeta.planId) payload.plan_id = planMeta.planId;
+  // plan_id 在库里是整数、接口字段是字符串：必须转成文本再提交，
+  // 否则 422（string_type）——用户练完一整场却在最后一步「保存失败」。
+  if (planMeta.planId) payload.plan_id = String(planMeta.planId);
   if (day.day) payload.day_index = day.day;
 
   try {
@@ -8253,14 +8573,18 @@ async function finishWorkout() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error((data.error && data.error.message) || '保存失败');
+    let data = null;
+    try { data = await resp.json(); } catch (parseError) { data = null; }
+    if (!resp.ok) throw new Error(workoutSaveErrorMessage(data));
+    clearWorkoutDraft();
     closeWorkout(true);
     switchTab('log');
-    showStatus('log-status', `已保存 ${data.entries_saved} 个动作，用时 ${durationMin} 分钟。`);
+    showStatus('log-status', `已保存 ${data?.entries_saved ?? completed.length} 个动作，用时 ${durationMin} 分钟。`);
     loadLogHistory();
   } catch (e) {
     if (workoutState) {
+      // 保存失败进度也不丢：草稿落盘，可以重试，也可以之后从横幅续练。
+      persistWorkoutDraft();
       workoutState.hint.textContent = `保存失败：${e.message}`;
       workoutState.finish.disabled = false;
       workoutState.finish.textContent = '▸ 完成训练';
@@ -10492,6 +10816,10 @@ function initTrainingTabs() {
   document.getElementById('gate-submit')?.addEventListener('click', () => gateAuth(gateMode));
   document.getElementById('welcome-banner-close')
     ?.addEventListener('click', hideWelcomeBanner);
+  document.getElementById('workout-resume-go')
+    ?.addEventListener('click', resumeWorkoutFromDraft);
+  document.getElementById('workout-resume-discard')
+    ?.addEventListener('click', discardWorkoutDraft);
   // 页签之间支持左右方向键切换（role="tablist" 的常规键盘约定）
   const tablist = document.querySelector('.login-tabs');
   tablist?.addEventListener('keydown', event => {
@@ -10536,6 +10864,8 @@ function initTrainingTabs() {
     loadSavedPlans();
     // 档案也按身份读回来：刷新后不该退回硬编码默认值，伤病尤其不能丢。
     loadSavedProfile();
+    // 身份就绪后再看有没有未完成的训练：草稿绑定 athleteKey，早读会误判。
+    refreshWorkoutResumeBanner();
     // 身份解析完再迁：迁移要按当前身份写进「我的计划」，早了会落到错的
     // owner_key 上（游客 key 与登录后的 u:{id} 不是一回事）。
     migrateLocalHistory().then(loadSavedPlans);
