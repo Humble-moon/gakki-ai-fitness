@@ -369,3 +369,45 @@ class TestVisualUpgradeStep3:
         assert 'font-family: var(--font-body)' in block
         assert '.status-panel { color: var(--status-safe); }' in HTML
         assert '.error-panel { color: var(--danger); }' in HTML
+
+
+class TestMotionSignature:
+    """质感签名大胆版：身份启用＋信息编排＋装饰层降级；两条硬线不放宽。"""
+
+    def test_no_heavy_libs_and_no_external_scripts(self):
+        low = HTML.lower()
+        # 钉真实加载标记，不钉单词：注释里「不引 Framer Motion」的说明不算引入
+        assert 'three.min.js' not in low and 'webgl' not in low
+        assert 'framer-motion' not in low and 'gsap.min.js' not in low
+        assert '<script src=' not in HTML  # 单文件零外部脚本，3G 硬线
+
+    def test_identity_filters_actually_used(self):
+        # 此前 #grain/#metallic-shine 定义但 0 引用（死代码身份资产）
+        assert 'filter: url(#grain)' in HTML
+        assert 'filter: url(#metallic-shine)' in HTML
+
+    def test_decor_layers_degrade_on_mobile(self):
+        assert '.ambient { animation: none;' in HTML
+        assert '.spotlight, .grain-layer { display: none; }' in HTML
+        assert '.brand-marquee-track { animation: none; }' in HTML
+
+    def test_brand_sweep_is_one_shot(self):
+        assert 'animation: forge-sweep 1.8s var(--ease-out) .25s 1 forwards;' in HTML
+
+    def test_countup_and_donut_and_skeleton_exist(self):
+        assert 'function countUp(' in HTML
+        assert 'function dietDonut(' in HTML
+        assert 'function dietSkeleton(' in HTML
+        assert 'id="diet-today-donut"' in HTML
+        assert 'countUp(kcalNode' in _fn_body('renderDietTodaySummary')
+
+    def test_generation_beam_and_empty_ring(self):
+        assert '.progress-bar:has(.progress-step.active)::after' in HTML
+        assert 'function emptyRing(' in HTML
+        assert '.ec-ring circle' in HTML
+        assert 'markNode.appendChild(emptyRing());' in _fn_body('composedEmpty')
+
+    def test_moving_border_only_on_focus_cards(self):
+        assert '.focus-card::before' in HTML
+        assert '@keyframes mb-spin' in HTML
+        assert '.diet-result .diet-day-card:first-of-type::before' in HTML

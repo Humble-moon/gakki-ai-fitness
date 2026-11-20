@@ -4058,9 +4058,142 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 @media (max-width: 375px) {
   .diet-log-food-row .log-entry-remove { width: 30px; height: 30px; font-size: 13px; }
 }
+
+/* ═══════════════ 质感签名（大胆版）═══════════════
+   用户裁决放宽「纯装饰/每页≤3」；两条硬线保留：不引重型库、3G 首屏≤3s。
+   装饰层（环境光/聚光/颗粒/marquee）仅桌面＋非 reduced-motion 跑动画，
+   移动端静态降级；动画全走 transform/background-position 等低成本通道，
+   不阻塞首屏解析。身份启用既有 #grain / #metallic-shine（此前 0 引用的死代码）。 */
+@property --mb-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+.app-shell { position: relative; z-index: 1; }
+
+/* 环境光：预晕 radial-gradient（不用 blur 滤镜），transform 漂移＝compositor-only */
+.ambient {
+  position: fixed; inset: -25%; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(38% 30% at 18% 22%, rgba(var(--accent-rgb), .10), transparent 70%),
+    radial-gradient(30% 26% at 82% 70%, rgba(var(--safe-rgb), .07), transparent 70%);
+  animation: ambient-drift 52s ease-in-out infinite alternate;
+}
+@keyframes ambient-drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to   { transform: translate3d(2%, 2%, 0) scale(1.06); }
+}
+/* 指针聚光：桌面-only，pointermove 经 rAF 节流写两个变量 */
+.spotlight {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 30%),
+              rgba(var(--accent-rgb), .06), transparent 65%);
+}
+/* 胶片颗粒：启用既有 #grain 滤镜的静态纹理层，multiply 极淡罩在内容上 */
+.grain-layer {
+  position: fixed; inset: 0; z-index: 3; pointer-events: none;
+  background: #808080; filter: url(#grain);
+  mix-blend-mode: multiply; opacity: .05;
+}
+
+/* S1 锻铁标识：金属渐变字＋一次性热光扫过（唯一品牌装饰例外，用户许可） */
+.login-brand .logo {
+  position: relative;
+  background-image:
+    linear-gradient(100deg, #3f3f46 0%, #71717a 18%, #d4d4d8 32%, #52525b 46%, #a1a1aa 62%, #3f3f46 80%),
+    linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .9) 50%, transparent 58%);
+  background-size: 100% 100%, 250% 100%;
+  background-position: 0 0, 130% 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  filter: url(#metallic-shine);
+  animation: forge-sweep 1.8s var(--ease-out) .25s 1 forwards;
+}
+.login-brand .logo-accent {
+  background: linear-gradient(100deg, #ea580c, #f59e0b 55%, #ea580c);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+@keyframes forge-sweep { to { background-position: 0 0, -70% 0; } }
+
+/* 品牌 marquee：登录左栏底部字带，transform 循环＝compositor-only */
+.brand-marquee { overflow: hidden; margin: 18px 0 10px; border-top: 1px solid var(--steel); border-bottom: 1px solid var(--steel); padding: 8px 0; }
+.brand-marquee-track { display: flex; width: max-content; animation: marquee 30s linear infinite; }
+.brand-marquee-track span { font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em; color: var(--text-muted); white-space: nowrap; padding-right: 32px; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+
+/* S4 焦点卡聚光描边：conic 光带沿边框跑，只挂当前焦点卡（焦点信息） */
+.focus-card, .diet-result .diet-day-card:first-of-type, .plan-result-grid .plan-day-column:first-child { position: relative; }
+.focus-card::before, .diet-result .diet-day-card:first-of-type::before, .plan-result-grid .plan-day-column:first-child::before {
+  content: ''; position: absolute; inset: -1px; pointer-events: none;
+  border-radius: calc(var(--radius-md) + 1px); padding: 1.5px;
+  background: conic-gradient(from var(--mb-angle),
+    transparent 0 68%, rgba(var(--accent-rgb), .9) 82%, rgba(245, 158, 11, .9) 88%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: mb-spin 5s linear infinite;
+}
+@keyframes mb-spin { to { --mb-angle: 360deg; } }
+
+/* S5 错峰入场：orientation，delay 走 nth-child（训练日列另有 JS inline delay） */
+.stagger > *, .diet-result > *, .diet-day-body > * { animation: rise-in .45s var(--ease-out) both; }
+.stagger > *:nth-child(2), .diet-result > *:nth-child(2), .diet-day-body > *:nth-child(2) { animation-delay: .06s; }
+.stagger > *:nth-child(3), .diet-result > *:nth-child(3), .diet-day-body > *:nth-child(3) { animation-delay: .12s; }
+.stagger > *:nth-child(4), .diet-result > *:nth-child(4), .diet-day-body > *:nth-child(4) { animation-delay: .18s; }
+.stagger > *:nth-child(5), .diet-result > *:nth-child(5), .diet-day-body > *:nth-child(5) { animation-delay: .24s; }
+.stagger > *:nth-child(6), .diet-result > *:nth-child(6), .diet-day-body > *:nth-child(6) { animation-delay: .30s; }
+.plan-result-grid > .plan-day-column { animation: rise-in .45s var(--ease-out) both; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px); } }
+
+/* S6 生成中：skeleton shimmer＋进度条追踪光带（状态信息） */
+.skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--bg-deep) 25%, var(--bg-card-hover) 45%, var(--bg-deep) 65%);
+  background-size: 200% 100%;
+  animation: shimmer 1.1s linear infinite;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+.diet-skeleton { display: grid; gap: 12px; }
+.diet-skeleton-row { height: 84px; }
+.progress-bar { position: relative; overflow: hidden; }
+.progress-bar:has(.progress-step.active)::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 34%; left: -35%;
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), .35), transparent);
+  animation: beam 1.4s ease-in-out infinite;
+}
+@keyframes beam { to { left: 100%; } }
+
+/* S7 空态 line-draw：圆环 stroke 生长，引导视线落到行动提示 */
+.empty-composed { position: relative; }
+.ec-ring { position: absolute; left: 50%; top: 50%; width: 72px; height: 72px; transform: translate(-50%, -50%); }
+.ec-ring circle { stroke: var(--steel-light); stroke-width: 1.5; stroke-dasharray: 214; stroke-dashoffset: 214; animation: ec-draw .9s var(--ease-out) .1s forwards; }
+@keyframes ec-draw { to { stroke-dashoffset: 0; } }
+.empty-composed .ec-mark { position: relative; min-height: 72px; display: flex; align-items: center; justify-content: center; }
+
+/* S3 宏量供能比 donut：蛋白/碳水/脂肪三段 stroke，信息性进度环 */
+.diet-today-donut { margin-left: auto; width: 64px; height: 64px; flex: 0 0 auto; }
+.diet-today-donut svg { width: 64px; height: 64px; display: block; }
+.diet-today-donut circle { fill: none; stroke-width: 8; transition: stroke-dasharray .6s var(--ease-out); }
+.diet-today-donut .dn-p { stroke: var(--accent-orange); }
+.diet-today-donut .dn-c { stroke: var(--status-safe); }
+.diet-today-donut .dn-f { stroke: var(--warn); }
+.diet-today-donut .dn-bg { stroke: var(--border); }
+
+/* 移动端静态降级：装饰层不跑动画，颗粒/聚光关闭，避免低端机 paint 抖动 */
+@media (max-width: 768px) {
+  .ambient { animation: none; inset: 0; background: radial-gradient(60% 40% at 50% 0%, rgba(var(--accent-rgb), .06), transparent 70%); }
+  .spotlight, .grain-layer { display: none; }
+  .brand-marquee-track { animation: none; }
+  .login-brand .logo { animation: none; background-position: 0 0, 130% 0; }
+}
 </style>
 </head>
 <body>
+
+<!-- 质感签名装饰层：环境光／指针聚光／胶片颗粒。仅桌面＋非 reduced-motion
+     启用动画；移动端静态降级。全部 pointer-events:none 且不阻塞首屏。 -->
+<div class="ambient" aria-hidden="true"></div>
+<div class="spotlight" aria-hidden="true"></div>
+<div class="grain-layer" aria-hidden="true"></div>
 
 <!-- SVG Filters: Film Grain + Metallic Texture -->
 <svg style="position:fixed;width:0;height:0;pointer-events:none;" aria-hidden="true">
@@ -4102,6 +4235,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         <li class="login-feature">记录实际完成的重量与次数</li>
         <li class="login-feature">看出进步与停滞，并据此调整下一次</li>
       </ul>
+    </div>
+    <div class="brand-marquee" aria-hidden="true">
+      <div class="brand-marquee-track">
+        <span>IRON MIND · 锻铁意志 · FORGE YOUR MIND · 能执行的计划 · </span>
+        <span>IRON MIND · 锻铁意志 · FORGE YOUR MIND · 能执行的计划 · </span>
+      </div>
     </div>
     <div class="login-brand-foot">Personal Training System</div>
   </div>
@@ -4767,7 +4906,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
       <div class="tab-content diet-subpanel" id="panel-diet-log" role="tabpanel" aria-labelledby="tab-diet-log">
         <!-- 今日汇总置顶：大数字作视觉焦点，记一餐入口常驻 -->
-        <div class="feature-card diet-today-card">
+        <div class="feature-card diet-today-card focus-card">
           <div class="result-header">
             <h3>今日汇总</h3>
             <p class="section-hint" id="diet-today-date"></p>
@@ -4775,8 +4914,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
           <div class="diet-today-main">
             <span class="diet-today-kcal diet-num" id="diet-today-kcal">0</span>
             <span class="diet-today-unit">kcal</span>
+            <div class="diet-today-donut" id="diet-today-donut" aria-hidden="true"></div>
           </div>
-          <div class="diet-today-macros" id="diet-today-macros"></div>
+          <div class="diet-today-macros stagger" id="diet-today-macros"></div>
           <div class="progress-stats" id="diet-today-pills"></div>
           <div class="log-actions">
             <button class="btn-generate" id="btn-open-diet-drawer" type="button">＋ 记一餐</button>
@@ -7476,12 +7616,64 @@ function todayLocalIso() {
 }
 
 // 空状态给下一步动作，而不是丢一句「还没有记录」让用户停在那里
+// 数字 odometer：rAF ease-out 滚到服务端终值；reduced-motion 直接落终值。
+function countUp(node, to, dur = 650) {
+  if (!node) return;
+  const from = Number(String(node.textContent).replace(/[^\d.-]/g, '')) || 0;
+  const target = Number(to) || 0;
+  if (node._cuRaf) cancelAnimationFrame(node._cuRaf);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    node.textContent = String(Math.round(target));
+    return;
+  }
+  const t0 = performance.now();
+  const tick = (t) => {
+    const k = Math.min(1, (t - t0) / dur);
+    const e = 1 - Math.pow(1 - k, 3);
+    node.textContent = String(Math.round(from + (target - from) * e));
+    if (k < 1) node._cuRaf = requestAnimationFrame(tick);
+  };
+  node._cuRaf = requestAnimationFrame(tick);
+}
+
+// 指针聚光：仅桌面＋非 reduced-motion；rAF 节流写变量，不每帧重排。
+function initAmbientPointer() {
+  if (!matchMedia('(min-width: 769px)').matches) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  let pend = false;
+  window.addEventListener('pointermove', (e) => {
+    if (pend) return;
+    pend = true;
+    requestAnimationFrame(() => {
+      document.documentElement.style.setProperty('--mx', e.clientX + 'px');
+      document.documentElement.style.setProperty('--my', e.clientY + 'px');
+      pend = false;
+    });
+  }, { passive: true });
+}
+initAmbientPointer();
+
 function composedEmpty(mark, title, hint) {
   const box = el('div', 'empty-composed');
-  box.appendChild(el('div', 'ec-mark', mark));
+  const markNode = el('div', 'ec-mark', mark);
+  markNode.appendChild(emptyRing());
+  box.appendChild(markNode);
   box.appendChild(el('div', 'ec-title', title));
   box.appendChild(el('div', 'ec-hint', hint));
   return box;
+}
+// 空态圆环 line-draw：纯 DOM/SVG 构建，不用 innerHTML。
+function emptyRing() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 72 72');
+  svg.setAttribute('class', 'ec-ring');
+  svg.setAttribute('aria-hidden', 'true');
+  const c = document.createElementNS(NS, 'circle');
+  c.setAttribute('cx', '36'); c.setAttribute('cy', '36'); c.setAttribute('r', '34');
+  c.setAttribute('fill', 'none');
+  svg.appendChild(c);
+  return svg;
 }
 
 function themeColor(name, fallback) {
@@ -9246,6 +9438,7 @@ async function generateDietPlan() {
   setBusy('btn-generate-diet', true, '正在搭配食物…');
   showStatus('diet-status', '正在按你的目标计算热量、挑选食物并做安全检查，通常需要半分钟左右。');
   area?.replaceChildren();
+  area?.appendChild(dietSkeleton());
   const profile = getProfile();
   try {
     const payload = {
@@ -9899,7 +10092,7 @@ function renderDietTodaySummary(logs) {
   const fat = sumFood('fat_g');
   const carbs = sumFood('carbs_g');
   const kcalNode = document.getElementById('diet-today-kcal');
-  if (kcalNode) kcalNode.textContent = String(Math.round(kcal));
+  if (kcalNode) countUp(kcalNode, Math.round(kcal));
   const dateNode = document.getElementById('diet-today-date');
   if (dateNode) dateNode.textContent = today;
   const macros = document.getElementById('diet-today-macros');
@@ -9908,6 +10101,12 @@ function renderDietTodaySummary(logs) {
     macros.appendChild(dietMacroTile('蛋白质', protein));
     macros.appendChild(dietMacroTile('碳水', carbs));
     macros.appendChild(dietMacroTile('脂肪', fat));
+  }
+  const donut = document.getElementById('diet-today-donut');
+  if (donut) {
+    donut.replaceChildren();
+    const ring = dietDonut(protein, carbs, fat);
+    if (ring) donut.appendChild(ring);
   }
   const pills = document.getElementById('diet-today-pills');
   if (!pills) return;
@@ -9923,6 +10122,52 @@ function dietMacroTile(label, grams) {
   tile.appendChild(val);
   tile.appendChild(el('div', 'diet-today-macro-label', label));
   return tile;
+}
+// 宏量供能比 donut：4/4/9 Atwater 系数把克数换成供能占比（信息性进度环）。
+// 纯 SVG DOM 构建；dasharray 从 0 过渡到终值形成生长动画。
+function dietDonut(protein, carbs, fat) {
+  const ep = (Number(protein) || 0) * 4;
+  const ec = (Number(carbs) || 0) * 4;
+  const ef = (Number(fat) || 0) * 9;
+  const total = ep + ec + ef;
+  if (total <= 0) return null;
+  const NS = 'http://www.w3.org/2000/svg';
+  const C = 2 * Math.PI * 26;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 64 64');
+  const g = document.createElementNS(NS, 'g');
+  g.setAttribute('transform', 'rotate(-90 32 32)');
+  const bg = document.createElementNS(NS, 'circle');
+  bg.setAttribute('cx', '32'); bg.setAttribute('cy', '32'); bg.setAttribute('r', '26');
+  bg.setAttribute('class', 'dn-bg');
+  bg.setAttribute('stroke-dasharray', `${C} 0`);
+  g.appendChild(bg);
+  const segs = [['dn-p', ep], ['dn-c', ec], ['dn-f', ef]];
+  let cum = 0;
+  const finals = [];
+  segs.forEach(([cls, energy]) => {
+    const seg = C * (energy / total);
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', '32'); c.setAttribute('cy', '32'); c.setAttribute('r', '26');
+    c.setAttribute('class', cls);
+    c.setAttribute('stroke-dashoffset', String(-cum));
+    c.setAttribute('stroke-dasharray', `0 ${C}`);
+    g.appendChild(c);
+    finals.push([c, seg]);
+    cum += seg;
+  });
+  svg.appendChild(g);
+  requestAnimationFrame(() => finals.forEach(([c, seg]) => {
+    c.setAttribute('stroke-dasharray', `${seg} ${C - seg}`);
+  }));
+  return svg;
+}
+// 生成中的 skeleton 占位：长请求期间给出「正在成形」的可见状态。
+function dietSkeleton() {
+  const box = el('div', 'diet-skeleton', '');
+  box.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 3; i++) box.appendChild(el('div', 'skeleton diet-skeleton-row', ''));
+  return box;
 }
 
 // 底部抽屉：同页浮层不整页跳转；开合管理焦点与背景滚动。

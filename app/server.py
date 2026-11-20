@@ -21,6 +21,8 @@ API 端点总览：
 """
 import json
 import logging
+import hashlib
+import re
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -28,9 +30,9 @@ from pathlib import Path
 # 将项目根目录加入 Python 模块搜索路径，确保 src.* 导入正常
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import Depends, FastAPI, UploadFile, File, Form
+from fastapi import Depends, FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.gzip import GZipMiddleware
@@ -1597,8 +1599,38 @@ async def delete_memory_preference(pref_key: str, athlete_key: str = "",
             "note": "已删除。下次生成计划时不再包含这条记忆。"}
 
 
+_INDEX_CACHE: dict = {"mtime": None, "html": None, "etag": None}
+
+
+def _stripped_index() -> tuple[str, str]:
+    """传输层剥注释：HTML 注释（script 段外）＋CSS 注释（style 段内）。
+
+    单文件 index.html 的中文注释是首屏字节的大头之一；Slow-3G 下每 +1KB gzip
+    ≈ +20ms。源文件保留注释（契约测试读源文件），只在响应时剥离，语义零变化：
+    script 段整体保护（避免误伤 JS 字符串里的 ``<!--`` / ``/*``），style 段只剥
+    CSS 注释。按 mtime 缓存，避免每请求跑正则。
+    """
+    path = Path(__file__).parent / "static" / "index.html"
+    mtime = path.stat().st_mtime_ns
+    if _INDEX_CACHE["mtime"] != mtime:
+        raw = path.read_text(encoding="utf-8")
+        parts = re.split(r"(<script\b[\s\S]*?</script>|<style\b[\s\S]*?</style>)", raw)
+        out = []
+        for seg in parts:
+            if seg.startswith("<script"):
+                out.append(seg)
+            elif seg.startswith("<style"):
+                out.append(re.sub(r"/\*[\s\S]*?\*/", "", seg))
+            else:
+                out.append(re.sub(r"<!--[\s\S]*?-->", "", seg))
+        html = "".join(out)
+        etag = '"' + hashlib.sha256(html.encode("utf-8")).hexdigest()[:16] + '"'
+        _INDEX_CACHE.update(mtime=mtime, html=html, etag=etag)
+    return _INDEX_CACHE["html"], _INDEX_CACHE["etag"]
+
+
 @app.get("/")
-async def index():
+async def index(request: Request):
     """
     GET / - 前端 SPA 入口页
 
@@ -1607,13 +1639,17 @@ async def index():
     功能：返回静态前端页面（app/static/index.html），支持完整的 SPA 路由模式。
 
     说明：前端为单页应用（SPA），所有页面路由由前端 JavaScript 处理，
-          后端只需返回 index.html 即可。
+          后端只需返回 index.html 即可。响应为剥注释后的传输版（见
+          _stripped_index），带 ETag 支持 304 校验。
     """
     # no-cache 不是"不缓存"，而是"每次都要先校验"：内容没变时仍走 304，
     # 变了就拿到新版。不加它时浏览器会对 HTML 做启发式缓存，于是**改了前端
     # 刷新却看不到新版本**——实测中被绊过一次，演示前改一版然后刷新风险很大。
-    return FileResponse(str(Path(__file__).parent / "static" / "index.html"),
-                        headers={"Cache-Control": "no-cache"})
+    html, etag = _stripped_index()
+    headers = {"Cache-Control": "no-cache", "ETag": etag}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return HTMLResponse(html, headers=headers)
 
 
 # ============================================================
