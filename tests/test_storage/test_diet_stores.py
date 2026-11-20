@@ -129,14 +129,16 @@ class TestDietPlanStoreSQL:
 class TestDietLogClean:
     def test_catalog_food_recomputed_not_trusted(self):
         store = _log_store()
-        cleaned = store._clean_foods([{"name": "米饭（蒸）", "grams": 150, "kcal": 99999}])
+        cleaned, reason = store._clean_foods([{"name": "米饭（蒸）", "grams": 150, "kcal": 99999}])
+        assert reason is None
         assert cleaned[0]["kcal"] == 174 and cleaned[0]["source"] == "catalog"
 
     def test_custom_food_clamped_and_labelled(self):
         store = _log_store()
-        cleaned = store._clean_foods([{"name": "外卖炒饭", "grams": 300,
-                                       "kcal": 99999, "protein_g": 20,
-                                       "source": "custom"}])
+        cleaned, reason = store._clean_foods([{"name": "外卖炒饭", "grams": 300,
+                                               "kcal": 99999, "protein_g": 20,
+                                               "source": "custom"}])
+        assert reason is None
         assert cleaned[0]["kcal"] == dls.MAX_CUSTOM_FOOD_KCAL
         assert cleaned[0]["source"] == "custom"
 
@@ -144,11 +146,16 @@ class TestDietLogClean:
         store = _log_store()
         foods = [{"name": "外卖大餐", "grams": 500, "kcal": 2000, "source": "custom"},
                  {"name": "外卖加餐", "grams": 500, "kcal": 2000, "source": "custom"}]
-        assert store._clean_foods(foods) is None
+        cleaned, reason = store._clean_foods(foods)
+        assert cleaned is None
+        assert reason["code"] == "MEAL_KCAL_CAP" and reason["total"] == 4000
 
-    def test_unknown_catalog_food_rejected(self):
+    def test_unknown_catalog_food_rejected_with_row_and_name(self):
         store = _log_store()
-        assert store._clean_foods([{"name": "炸鸡架", "grams": 100}]) is None
+        cleaned, reason = store._clean_foods([
+            {"name": "米饭（蒸）", "grams": 100}, {"name": "炸鸡架", "grams": 100}])
+        assert cleaned is None
+        assert reason == {"code": "UNKNOWN_FOOD", "index": 1, "name": "炸鸡架"}
 
     @pytest.mark.parametrize("foods", [
         [], [{"name": "米饭（蒸）", "grams": 0}],
@@ -158,7 +165,14 @@ class TestDietLogClean:
         "not a list",
     ])
     def test_invalid_entries_rejected(self, foods):
-        assert _log_store()._clean_foods(foods) is None
+        cleaned, reason = _log_store()._clean_foods(foods)
+        assert cleaned is None and reason is not None
+
+    def test_explain_rejection_is_pure(self):
+        store = _log_store()
+        reason = store.explain_rejection([{"name": "炸鸡架", "grams": 100}])
+        assert reason["code"] == "UNKNOWN_FOOD"
+        assert store.explain_rejection([{"name": "炸鸡架", "grams": 100}]) == reason
 
 
 class TestDietLogStoreSQL:

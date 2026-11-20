@@ -73,6 +73,7 @@ class _FakeDietLogStore:
         self.upserts: list[dict] = []
         self.logs: list[dict] = []
         self.reject = False
+        self.reason = None
 
     def ensure_table(self):
         pass
@@ -84,6 +85,9 @@ class _FakeDietLogStore:
                              "meal_type": meal_type, "foods": foods,
                              "plan_id": plan_id, "notes": notes})
         return len(self.upserts)
+
+    def explain_rejection(self, foods):
+        return self.reason
 
     def get_logs(self, owner, since=None, limit=200):
         return [log for log in self.logs
@@ -297,6 +301,31 @@ class TestDietLogs:
         assert r.status_code == 400
         assert r.json()["error"]["code"] == "INVALID_DIET_LOG"
 
+    def test_rejection_message_names_row_and_fix(self, rig):
+        client, _, logs, _ = rig
+        logs.reject = True
+        logs.reason = {"code": "UNKNOWN_FOOD", "index": 1, "name": "炸鸡架"}
+        r = client.post("/api/diet-logs", json={
+            "log_date": TODAY.isoformat(), "meal_type": "午餐",
+            "foods": [{"name": "米饭（蒸）", "grams": 100},
+                      {"name": "炸鸡架", "grams": 100}], "athlete_key": KEY})
+        assert r.status_code == 400
+        err = r.json()["error"]
+        assert err["code"] == "UNKNOWN_FOOD" and err["food_index"] == 1
+        assert "第 2 行" in err["message"] and "炸鸡架" in err["message"]
+        assert "手动估算" in err["message"]
+
+    def test_meal_cap_rejection_reports_total(self, rig):
+        client, _, logs, _ = rig
+        logs.reject = True
+        logs.reason = {"code": "MEAL_KCAL_CAP", "total": 4000}
+        r = client.post("/api/diet-logs", json={
+            "log_date": TODAY.isoformat(), "meal_type": "晚餐",
+            "foods": [{"name": "米饭（蒸）", "grams": 100}], "athlete_key": KEY})
+        err = r.json()["error"]
+        assert err["code"] == "MEAL_KCAL_CAP"
+        assert "4000" in err["message"] and "3000" in err["message"]
+
     @pytest.mark.parametrize("body,why", [
         ({"log_date": "2026/11/19"}, "日期格式"),
         ({"meal_type": "夜宵"}, "餐次不在枚举"),
@@ -318,6 +347,31 @@ class TestDietLogs:
         assert len(listed) == 1
         assert client.delete(f"/api/diet-logs/1?athlete_key={KEY}").status_code == 200
         assert client.delete(f"/api/diet-logs/1?athlete_key={KEY}").status_code == 404
+
+    def test_on_date_filters_exact_day_for_overwrite_guard(self, rig):
+        client, _, logs, _ = rig
+        yesterday = (TODAY - timedelta(days=1)).isoformat()
+        logs.logs = [
+            {"log_id": 1, "log_date": TODAY.isoformat(), "meal_type": "午餐",
+             "kcal": 850, "protein_g": 40, "custom_kcal": 0, "foods": []},
+            {"log_id": 2, "log_date": yesterday, "meal_type": "午餐",
+             "kcal": 700, "protein_g": 35, "custom_kcal": 0, "foods": []},
+        ]
+        got = client.get(f"/api/diet-logs?athlete_key={KEY}&on_date={TODAY.isoformat()}").json()["logs"]
+        assert [entry["log_id"] for entry in got] == [1]
+        bad = client.get(f"/api/diet-logs?athlete_key={KEY}&on_date=2026/11/20")
+        assert bad.status_code == 400
+        assert bad.json()["error"]["code"] == "INVALID_DATE"
+
+    def test_diet_foods_catalog_for_autocomplete(self, rig):
+        client, *_ = rig
+        r = client.get(f"/api/diet-foods?athlete_key={KEY}")
+        assert r.status_code == 200
+        foods = r.json()["foods"]
+        assert len(foods) >= 100
+        entry = next(f for f in foods if f["name"] == "米饭（蒸）")
+        assert isinstance(entry["aliases"], list)
+        assert "category" in entry and "default_serving_g" in entry
 
     def test_storage_unavailable_is_503(self, rig):
         client, _, logs, _ = rig

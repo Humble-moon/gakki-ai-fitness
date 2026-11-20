@@ -161,7 +161,8 @@ class TestResumeEntryPoints:
 
     def test_discard_requires_confirm(self):
         body = _fn_body("discardWorkoutDraft")
-        assert "window.confirm" in body
+        assert "showConfirmDialog" in body
+        assert "window.confirm" not in body
         assert "clearWorkoutDraft();" in body
 
 
@@ -211,3 +212,78 @@ class TestWorkoutBlockHygiene:
         assert ".resume-banner[hidden] { display: none; }" in HTML
         assert ".plan-start-btn.is-resume" in HTML
         assert ".resume-banner-go:hover" in HTML
+
+
+class TestRestEndAlert:
+    """休息到点必须被注意到：原先倒计时归零只是静默回到空闲文案。"""
+
+    def test_natural_end_announces_skip_does_not(self):
+        tick = _fn_body("tickWorkoutRest")
+        assert "stopWorkoutRest(true)" in tick
+        # 后台不烧掉提醒窗口，回前台补算时再宣布
+        assert "document.visibilityState === 'visible'" in tick
+        build = _fn_body("openWorkout")
+        assert "skip.addEventListener('click', () => stopWorkoutRest(false))" in build
+        stop = _fn_body("stopWorkoutRest")
+        assert "announceRestEnd()" in stop
+        assert "休息结束 ✓ 开始下一组" in stop
+
+    def test_three_modes_cycle_and_persist(self):
+        block = _workout_block()
+        assert "const REST_ALERT_KEY = 'ironmind_rest_alert_mode';" in block
+        assert "full: '声音＋振动', silent: '仅振动', off: '仅画面'" in block
+        build = _fn_body("openWorkout")
+        assert "提醒：" in build and "syncAlertBtn" in build
+        assert "localStorage.setItem(REST_ALERT_KEY, next)" in build
+
+    def test_audio_unlocked_on_user_gesture_only(self):
+        toggle = _fn_body("toggleWorkoutSet")
+        assert "unlockRestAudio();" in toggle
+        beep = _fn_body("playRestEndBeep")
+        assert "createOscillator" in beep
+        # 出声失败不抛断训练
+        assert "catch" in beep
+
+    def test_visual_channel_always_on_and_reduced_motion_safe(self):
+        assert ".workout-rest.is-ended {" in HTML
+        assert "@keyframes rest-end-pulse" in HTML
+        stop = _fn_body("stopWorkoutRest")
+        assert "classList.add('is-ended')" in stop
+        # 文案通道不依赖动画：3 秒后回到记住时长的空闲文案
+        assert "restIdleText()" in stop
+        idle = _fn_body("restIdleText")
+        assert "lastRestSeconds" in idle
+
+    def test_wake_lock_acquired_released_and_reacquired(self):
+        build = _fn_body("openWorkout")
+        assert "acquireWorkoutWakeLock();" in build
+        close = _fn_body("closeWorkout")
+        assert "releaseWorkoutWakeLock();" in close
+        block = _workout_block()
+        vis = block[block.index("document.addEventListener('visibilitychange'"):]
+        vis = vis[:vis.index("});")]
+        assert "acquireWorkoutWakeLock();" in vis
+        acq = _fn_body("acquireWorkoutWakeLock")
+        assert "'wakeLock' in navigator" in acq
+        assert "if (!workoutState)" in acq  # 请求期间面板被关→释放，不留锁
+
+
+class TestMobileReachability:
+    """44px 命中区下限要真的生效；白字橙底主按钮必须落在 WCAG 大字档。"""
+
+    def test_floor_has_specificity_not_where(self):
+        assert "button:not([data-compact]), [role=\"tab\"], #file-upload-area { min-height: 44px; }" in HTML
+        assert ":where(button, [role=\"tab\"], #file-upload-area) { min-height: 44px; }" not in HTML
+
+    def test_named_overrides_raised_to_44(self):
+        assert ".profile-toggle { min-height: 44px;" in HTML
+        assert ".resume-banner-go { order: 3; flex: 1 1 100%; min-height: 44px; }" in HTML
+        assert ".resume-banner-close { order: 2; width: 44px; height: 44px; }" in HTML
+        assert ".set-check { width: 44px; height: 44px; }" in HTML
+        assert ".diet-chip { min-height: 44px; }" in HTML
+        assert ".diet-log-food-row .log-entry-remove { width: 44px; height: 44px; font-size: 15px; }" in HTML
+
+    def test_orange_white_ctas_in_large_text_tier(self):
+        login = HTML[HTML.index(".login-btn {"):HTML.index(".login-btn:active")]
+        assert "font-size: 19px; font-weight: 700;" in login
+        assert "#btn-generate { min-height: 48px; padding: 10px 12px; font-size: 19px; }" in HTML

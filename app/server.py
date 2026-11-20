@@ -2159,23 +2159,70 @@ def create_diet_log(req: DietLogRequest,
     log_id = store.upsert_meal(owner, req.log_date, req.meal_type, req.foods,
                                plan_id=req.plan_id, notes=req.notes)
     if log_id is None:
+        reason = store.explain_rejection(req.foods) or {}
+        code = reason.get("code") or "INVALID_DIET_LOG"
+        index = reason.get("index")
+        name = reason.get("name") or ""
+        pos = f"第 {index + 1} 行" if isinstance(index, int) else ""
+        if code == "UNKNOWN_FOOD":
+            message = (f"{pos}「{name}」不在食物库里。外卖食堂的菜勾上「手动估算」"
+                       "自己填热量就能记；也可以换个库里的名字，输入时会有提示。")
+        elif code == "GRAMS_RANGE":
+            message = f"{pos}「{name}」的克数需在 1~2000 之间。"
+        elif code == "CUSTOM_RANGE":
+            message = (f"{pos}「{name}」手动估算的数字超出合理范围："
+                       "热量与蛋白质不能为负，单食物热量不超过 2000 kcal。")
+        elif code == "MEAL_KCAL_CAP":
+            message = (f"这一餐合计约 {reason.get('total', 0)} kcal，超过单餐 3000 kcal 上限；"
+                       "请减少份量或分开记录。")
+        else:
+            message = "这一餐没记上：食物明细不完整或超出合理范围，请检查后重试。"
         return JSONResponse(status_code=400, content={
-            "error": {"code": "INVALID_DIET_LOG",
-                      "message": "这一餐没记上：食物不在食物库且未标手动估算，或克数/热量超出合理范围。"}})
+            "error": {"code": code, "message": message, "food_index": index}})
     return {"log_id": log_id, "saved": True}
+
+
+@app.get("/api/diet-foods")
+def list_diet_foods(principal: Principal = Depends(get_current_principal),
+                    athlete_key: str = ""):
+    """食物库清单（名字＋别名＋类别＋常见份量），供记录输入自动补全。
+
+    内容是静态公共目录（与动作图示同类），不含个人数据、不按归属过滤；
+    身份依赖仍按业务路由契约声明，保持失败关闭的一致性。
+    """
+    from src.rag import food_catalog
+    return {"foods": [
+        {"name": f["name"], "aliases": f.get("aliases") or [],
+         "category": f.get("category") or "",
+         "default_serving_g": f.get("default_serving_g")}
+        for f in food_catalog.load_foods()
+    ]}
 
 
 @app.get("/api/diet-logs")
 def list_diet_logs(principal: Principal = Depends(get_current_principal),
-                   athlete_key: str = "", days: int = 30):
+                   athlete_key: str = "", days: int = 30, on_date: str = ""):
     store = _get_diet_log_store()
     store.ensure_table()
     if not store.enabled:
         return _diet_storage_unavailable()
     owner = require_owner_key(principal, athlete_key or None)
     from datetime import date, timedelta
-    since = date.today() - timedelta(days=max(1, min(int(days), 365)) - 1)
-    return {"logs": store.get_logs(owner, since=since)}
+    if on_date:
+        # 精确取某一天：前端覆盖确认条用它查「这一餐是否已有记录」，
+        # 不受 days 窗口与条数上限影响。
+        try:
+            day = date.fromisoformat(on_date)
+        except ValueError:
+            return JSONResponse(status_code=400, content={
+                "error": {"code": "INVALID_DATE",
+                          "message": "日期格式应为 YYYY-MM-DD。"}})
+        logs = [entry for entry in store.get_logs(owner, since=day)
+                if entry.get("log_date") == on_date]
+    else:
+        since = date.today() - timedelta(days=max(1, min(int(days), 365)) - 1)
+        logs = store.get_logs(owner, since=since)
+    return {"logs": logs}
 
 
 @app.delete("/api/diet-logs/{log_id}")

@@ -105,9 +105,10 @@
      只达到大字门槛 3.0。所以 .btn-generate 的字号定在 19px 粗体，正式落进
      WCAG 的「大字」档（≥18.66px 粗体），3.56 才算合规——字号是这个组合
      能否成立的一部分，不要单独调小它。
-     小字元素不在大字档：.tag.active 只有 11px、.login-btn-primary 15px，
-     它们的 3.56 低于 4.5。要让它们也达标，只能把底色压到 #d54409（白字
-     4.51），而那个亮度接近此前被否掉的暗橙——取舍是保住亮橙观感。 */
+     小字元素不在大字档：.tag.active 只有 11px，它的 3.56 低于 4.5。
+     要让它们也达标，只能把底色压到 #d54409（白字 4.51），而那个亮度接近
+     此前被否掉的暗橙——取舍是保住亮橙观感。.login-btn 与移动端 #btn-generate
+     已随体验修复批次提到 19px 粗体，落进大字档后 3.56 合规。 */
   --on-accent: #ffffff;
   --forge-amber-dim: rgba(var(--accent-rgb),0.14);
   --forge-amber-glow: rgba(var(--accent-rgb),0.22);
@@ -699,7 +700,7 @@ body {
   overflow: hidden;
 }
 /* 标题让位、计数不折断。不加这两条时，长标题会把右上角的动作计数
-   挤成两行（"6" / "EX"），看起来像坏了。 */
+   挤成两行（"6" / "个动作"），看起来像坏了。 */
 .plan-day-title { flex: 1 1 auto; min-width: 0; }
 .plan-day-count { flex: 0 0 auto; white-space: nowrap; padding-left: 12px;
   font-size: 12px; letter-spacing: .06em; color: var(--text-muted); }
@@ -721,7 +722,7 @@ body {
   border-bottom: 1px solid var(--steel-light);
   color: var(--chalk-faint);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.2px;
   text-transform: uppercase;
@@ -788,10 +789,12 @@ body {
   gap: 8px;
   min-height: 42px;
   padding: 10px 16px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--steel-light);
+  /* 实心深橙＋白字（5.18:1，小字也过 AA）：开始训练是日卡的主行动，
+     原先描边浅底看着像次要按钮，行动感不够。 */
+  background: var(--accent-ink);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  color: var(--accent-ink);
+  color: #fff;
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.5px;
@@ -800,8 +803,7 @@ body {
   transition: all 0.2s var(--ease-out);
 }
 .plan-start-btn:hover {
-  border-color: var(--accent-ink);
-  background: var(--forge-amber-dim);
+  background: var(--accent-ink-strong);
 }
 .plan-start-btn:active { transform: scale(0.985); }
 .plan-start-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
@@ -901,10 +903,14 @@ body {
 .workout-progress-bar > i {
   display: block;
   height: 100%;
-  width: 0;
+  width: 100%;
   background: var(--accent-strong);
   border-radius: inherit;
-  transition: width 0.25s var(--ease-out);
+  /* scaleX 而不是 width：width 每帧触发布局，transform 只走合成器。
+     进度条在训练中频繁更新，不该让它拖着整页重排。 */
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.25s var(--ease-out);
 }
 
 .workout-body {
@@ -1061,6 +1067,20 @@ body {
 .workout-rest.is-idle {
   border-color: var(--steel);
   background: transparent;
+}
+/* 休息结束：脉冲两下＋文案换成「休息结束」。reduced-motion 下动画被全局
+   兜底关掉，但文案与描边变化仍在——提醒不依赖动画也成立。 */
+.workout-rest.is-ended {
+  border-color: var(--accent-strong);
+  background: var(--forge-amber-glow);
+  animation: rest-end-pulse 0.9s var(--ease-out) 2;
+}
+.workout-rest.is-ended .workout-rest-idle {
+  color: var(--accent-ink); font-weight: 700; font-size: 13px;
+}
+@keyframes rest-end-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); }
+  50% { box-shadow: 0 0 0 5px rgba(var(--accent-rgb), 0.22); }
 }
 .workout-rest-idle {
   font-size: 12px;
@@ -1700,7 +1720,7 @@ body {
   50%      { transform: scale(1.08); opacity: 0.6; }
 }
 
-.empty-state h3 {
+.empty-state h2 {
   font-family: var(--font-heading);
   font-size: 18px;
   letter-spacing: 0.4px;
@@ -1760,7 +1780,7 @@ body {
 }
 
 .feature-card .fc-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--chalk-dim);
   line-height: 1.5;
 }
@@ -1791,7 +1811,7 @@ body {
 }
 
 .example-queries .eq-label {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--chalk-faint);
@@ -2671,7 +2691,7 @@ body {
   height: 44px; width: 100%;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: var(--radius-sm);
-  font-family: var(--font-heading); font-size: 15px; font-weight: 700; letter-spacing: .4px;
+  font-family: var(--font-heading); font-size: 19px; font-weight: 700; letter-spacing: .4px;
   cursor: pointer;
   transition: background .18s var(--ease-out), border-color .18s var(--ease-out),
               color .18s var(--ease-out), transform .1s var(--ease-out);
@@ -2854,9 +2874,10 @@ body {
 }
 @media (max-width: 768px) {
   .resume-banner { flex-wrap: wrap; }
-  .resume-banner-body { flex: 1 1 calc(100% - 66px); }
-  .resume-banner-close { order: 2; }
-  .resume-banner-go { order: 3; flex: 1 1 100%; }
+  /* × 长到 44px 命中区后，首行固定占位＝图标19＋间距11＋间距11＋×44＝85 */
+  .resume-banner-body { flex: 1 1 calc(100% - 85px); }
+  .resume-banner-close { order: 2; width: 44px; height: 44px; }
+  .resume-banner-go { order: 3; flex: 1 1 100%; min-height: 44px; }
 }
 .workspace, .sidebar { transition: none; }
 
@@ -3006,7 +3027,17 @@ body {
 
 /* Task 7 responsive acceptance: preserve information density without horizontal overflow. */
 @media (max-width: 1100px) {
-  :where(button, [role="tab"], #file-upload-area) { min-height: 44px; }
+  /* 原 :where() 零特异性，任何类规则都能压过它——44px 命中区下限形同虚设
+     （实测「编辑资料」40px、续练按钮 36px、休息条按钮 30px）。提到 (0,1,1)：
+     压得过单类的 min-height，真需要紧凑的控件用 data-compact 显式退出。 */
+  button:not([data-compact]), [role="tab"], #file-upload-area { min-height: 44px; }
+  /* 休息条按钮长到 44px 后，计时态与空闲态高度要一致，否则开始休息时
+     footer 跳一下——训练中这种跳动比多占几 px 更难受。 */
+  .workout-rest { min-height: 60px; }
+  .workout-rest-actions { flex-wrap: wrap; }
+  .workout-set-row { grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr) 44px; }
+  .workout-set-row input { min-height: 44px; }
+  .set-check { width: 44px; height: 44px; }
 }
 
 @media (max-width: 767px) {
@@ -3829,6 +3860,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: var(--accent-ink); font-weight: 600;
 }
 .diet-chip:has(input:focus-visible) { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+/* 最近吃过 chips：高频复记一键带出名字与上次克数 */
+.diet-recent-foods { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+.diet-recent-label { font-size: 12px; color: var(--text-muted); margin-right: 2px; }
+.diet-recent-chip {
+  padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-elevated);
+  color: var(--text-secondary); font-size: 12.5px; font-family: var(--font-body);
+  transition: border-color .15s var(--ease-out), color .15s var(--ease-out);
+}
+.diet-recent-chip:hover { border-color: var(--accent-orange); color: var(--accent-ink); }
+@media (max-width: 768px) { .diet-recent-chip { min-height: 44px; } }
 .diet-notes-input { min-height: 64px; }
 .diet-result { margin-top: 20px; display: grid; gap: 16px; }
 .diet-plan-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -3911,7 +3953,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .diet-food-head, .diet-food-row { grid-template-columns: minmax(0, 1.4fr) 60px 70px; }
   .diet-food-macros, .diet-food-head .diet-col-macros { display: none; }
   .diet-shopping ul { columns: 1; }
-  .diet-log-food-row { grid-template-columns: minmax(0, 1fr) 80px 32px; }
+  .diet-log-food-row { grid-template-columns: minmax(0, 1fr) 80px 44px; }
   .diet-custom-toggle { grid-column: 1 / -1; }
 }
 
@@ -3938,10 +3980,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     background: var(--bg-elevated); border: 1px solid var(--border);
     border-radius: var(--radius-md); color: var(--text-primary);
   }
-  .profile-toggle { min-height: 40px; padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+  .profile-toggle { min-height: 44px; padding: 6px 12px; font-size: 12px; white-space: nowrap; }
   .profile-editor { display: none; }
   .profile-editor.is-open { display: flex; }
-  #btn-generate { min-height: 44px; padding: 10px 12px; font-size: 15px; }
+  /* 19px 粗体＝WCAG 大字档：白字压亮橙 3.56 只有在这一档才合规（见令牌注释） */
+  #btn-generate { min-height: 48px; padding: 10px 12px; font-size: 19px; }
   .account-block { margin-top: 0; }
   .account-card { padding: 6px 8px; gap: 8px; }
   .account-avatar { width: 30px; height: 30px; }
@@ -3969,7 +4012,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .workspace { padding: 12px 10px 32px; }
   .feature-tabs .tab-btn { font-size: 11px; gap: 3px; }
   .diet-food-head, .diet-food-row { grid-template-columns: minmax(0, 1.3fr) 52px 62px; gap: 6px; font-size: 12px; }
-  .diet-log-food-row { grid-template-columns: minmax(0, 1fr) 64px 30px; }
+  .diet-log-food-row { grid-template-columns: minmax(0, 1fr) 64px 44px; }
   .stat-pill { padding: 4px 10px; font-size: 10px; }
 }
 
@@ -4036,6 +4079,99 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .diet-drawer, .diet-drawer-backdrop, .diet-rec > summary::before { transition: none; }
 }
 
+/* ═══════════════ 数据护栏：覆盖确认 / 两步删除 / 撤销条 ═══════════════
+   破坏性操作（覆盖一餐、删计划、删记录）不再一点就生效：先就地确认，
+   生效后给 5 秒撤销。全部 el() 构建，无 innerHTML、无原生弹窗。 */
+
+/* 覆盖确认条：抽屉里与餐块里共用同一套样式 */
+.diet-overwrite-bar {
+  background: var(--bg-deep); border: 1px solid var(--steel-light);
+  border-left: 3px solid var(--accent-orange);
+  border-radius: var(--radius-md); padding: 12px 14px; margin: 0 0 12px;
+}
+.diet-overwrite-text { margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: var(--text-primary); }
+.diet-overwrite-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+.diet-overwrite-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.diet-overwrite-actions .btn-secondary,
+.diet-overwrite-actions .account-btn { flex: 0 0 auto; padding: 8px 14px; }
+.diet-overwrite-replace { color: var(--danger); border-color: var(--danger); background: transparent; }
+.diet-overwrite-replace:hover { background: rgba(192, 57, 43, .08); color: var(--danger); border-color: var(--danger); }
+.diet-eat-error { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--danger); }
+
+/* 两步删除：第一击后按钮本体变红字「确认删除？」，旁边长出「取消」 */
+.account-btn.is-armed {
+  color: var(--danger); border-color: var(--danger);
+  background: rgba(192, 57, 43, .06); font-weight: 600;
+}
+.account-btn.is-armed:hover { color: var(--danger); border-color: var(--danger); background: rgba(192, 57, 43, .12); }
+.delete-cancel { flex: 0 0 auto; }
+
+/* 撤销条：深色浮 pill，固定屏幕底部中央；层级在抽屉(61)之上、登录门(1200)之下 */
+.undo-bar {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 10px); opacity: 0; z-index: 1100;
+  display: flex; align-items: center; gap: 4px;
+  max-width: min(560px, calc(100vw - 24px));
+  padding: 6px 6px 6px 16px;
+  background: var(--text-primary); color: var(--bg-deep);
+  border-radius: 14px; box-shadow: 0 8px 28px rgba(15, 23, 42, .28);
+  transition: opacity .18s var(--ease-out), transform .18s var(--ease-out);
+}
+.undo-bar.is-open { transform: translate(-50%, 0); opacity: 1; }
+.undo-bar-text { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.undo-bar-btn {
+  flex: 0 0 auto; min-height: 44px; padding: 0 12px;
+  background: transparent; border: none; border-radius: var(--radius-sm);
+  color: var(--accent-orange); font-size: 13px; font-weight: 700;
+  font-family: var(--font-body); cursor: pointer;
+}
+.undo-bar-btn:hover { background: rgba(255, 255, 255, .12); }
+.undo-bar-close {
+  flex: 0 0 auto; width: 44px; min-height: 44px;
+  background: transparent; border: none; border-radius: var(--radius-sm);
+  color: var(--steel-light); font-size: 14px; line-height: 1; cursor: pointer;
+}
+.undo-bar-close:hover { background: rgba(255, 255, 255, .12); color: var(--bg-deep); }
+@media (max-width: 768px) {
+  .undo-bar { left: 12px; right: 12px; max-width: none; transform: translateY(10px); }
+  .undo-bar.is-open { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .undo-bar { transition: none; } }
+
+/* 自绘确认框：替代原生 confirm（打断整页、无法统一样式、部分浏览器还显示域名）。
+   层级在训练面板(1200)之上——覆盖旧训练的确认就发生在面板打开前。 */
+.confirm-backdrop {
+  position: fixed; inset: 0; z-index: 1400;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(20, 20, 22, .42);
+  animation: workoutFade 0.18s var(--ease-out);
+}
+.confirm-dialog {
+  width: min(420px, 100%);
+  background: var(--bg-panel); border: 1px solid var(--steel-light);
+  border-radius: var(--radius-lg); padding: 22px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, .22);
+}
+.confirm-title { margin: 0 0 8px; font-family: var(--font-heading); font-size: 17px; color: var(--text-primary); }
+.confirm-body { margin: 0 0 18px; font-size: 13.5px; line-height: 1.65; color: var(--text-secondary); }
+.confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.confirm-actions .account-btn { flex: 0 0 auto; padding: 10px 18px; min-height: 44px; }
+.confirm-primary { background: var(--accent-ink); color: #fff; border-color: transparent; }
+.confirm-primary:hover { background: var(--accent-ink-strong); color: #fff; border-color: transparent; }
+.confirm-danger { background: var(--danger); color: #fff; border-color: transparent; }
+.confirm-danger:hover { background: #a93226; color: #fff; border-color: transparent; }
+
+/* 饮食结果锚点 chips：长餐单一屏读不完，给各部分一个直达入口 */
+.diet-anchor-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 14px; }
+.diet-anchor-chip {
+  padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--steel-light); background: var(--bg-elevated);
+  color: var(--text-secondary); font-size: 12.5px; font-family: var(--font-body);
+  transition: border-color .15s var(--ease-out), color .15s var(--ease-out);
+}
+.diet-anchor-chip:hover { border-color: var(--accent-orange); color: var(--accent-ink); }
+@media (max-width: 768px) { .diet-anchor-chip { min-height: 44px; } }
+
 /* ═══════════════ 全局视觉升级（步骤三）═══════════════
    不引新栈：单文件 vanilla + 契约测试钉死结构 + 3G 首屏 ≤3s，引 React/
    Framer Motion 会同时破坏这三者。动效只做减法与信息性反馈；素材全为
@@ -4065,6 +4201,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .diet-log-food-row input::placeholder,
 .diet-custom-fields input::placeholder { color: var(--chalk-faint); }
+/* 服务端点名出错的那一行：输入框标红；库外食物同时点亮「手动估算」开关 */
+.diet-log-food-row.is-invalid input[type="text"],
+.diet-log-food-row.is-invalid input[type="number"] { border-color: var(--danger); }
+.diet-log-food-row.is-invalid .diet-custom-toggle { color: var(--danger); font-weight: 600; }
 
 /* 抽屉关闭：原先复用 .account-btn（flex:1）被拉成半行宽的描边大框。
    改为透明方形图标按钮——视觉只是一个 ✕，44px 命中区保留可达性。 */
@@ -4108,6 +4248,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .status-panel { color: var(--status-safe); }
 .error-panel { color: var(--danger); }
+/* 生成等待的出口与刷新恢复的说明 */
+.plan-cancel-btn { flex: 0 0 auto; align-self: flex-start; margin: 0 0 10px; }
+.plan-restored-hint { margin: 0 0 12px; }
 
 /* 移动端食物行：× 回到首行第三列。auto-placement 下跨行的「手动估算」
    会把 × 甩到第三行落单，浪费一整行高度且不像一组控件。 */
@@ -4117,9 +4260,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .diet-log-food-row .log-entry-remove { grid-column: 3; grid-row: 1; }
   .diet-custom-toggle { grid-column: 1 / -1; grid-row: 2; }
   .diet-custom-fields { grid-column: 1 / -1; grid-row: 3; }
+  /* 触摸命中区：× 视觉仍是裸图标，盒子长到 44px；餐次 chips、手动估算
+     开关与抽屉输入框同档。桌面鼠标保持紧凑，不受影响。 */
+  .log-entry-remove { width: 44px; height: 44px; }
+  .diet-chip { min-height: 44px; }
+  .diet-custom-toggle { min-height: 44px; }
+  .diet-log-food-row input[type="text"],
+  .diet-log-food-row input[type="number"],
+  .diet-custom-fields input,
+  #diet-log-date, #diet-log-notes { min-height: 44px; }
 }
 @media (max-width: 375px) {
-  .diet-log-food-row .log-entry-remove { width: 30px; height: 30px; font-size: 13px; }
+  .diet-log-food-row .log-entry-remove { width: 44px; height: 44px; font-size: 15px; }
 }
 
 /* ═══════════════ 质感签名（大胆版）═══════════════
@@ -4594,13 +4746,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
       </div>
       <section id="plan-output" class="plan-workspace" aria-live="polite" style="margin-top:20px">
         <div id="plan-status" class="status-panel" role="status" aria-live="polite"></div>
+        <button class="account-btn account-btn-quiet plan-cancel-btn" id="btn-cancel-plan" type="button" hidden onclick="cancelPlanGeneration()">取消生成</button>
         <div id="plan-advice" class="stream-panel"></div>
         <div id="plan-stream" class="stream-panel"></div>
         <div id="plan-result" class="result-panel">
         <div class="welcome-area">
           <div class="empty-state">
             <div class="icon-ring">&#9764;</div>
-            <h3>Ready to Forge</h3>
+            <h2>Ready to Forge</h2>
             <p>AI 将分析你的身体数据，为你锻造专属训练计划<br>经过智能规划 → 动作检索 → 内容生成 → 安全检查四个环节</p>
           </div>
 
@@ -4650,6 +4803,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         <h3>我的计划</h3>
         <p>生成过的计划都会自动收在这里，可以重命名或删掉。登录后跟账号走，换设备也能找回。</p>
       </div>
+      <div id="saved-plans-error" class="error-panel" role="alert" hidden></div>
       <div id="saved-plans-list" class="saved-plans-list"></div>
       <div id="saved-plans-empty" class="saved-plans-empty" hidden>
         <p class="saved-plans-empty-title">还没有计划</p>
@@ -4674,7 +4828,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         <div class="welcome-area">
           <div class="empty-state">
             <div class="icon-ring">&#8981;</div>
-            <h3>Motion Inspector</h3>
+            <h2>Motion Inspector</h2>
             <p>描述你的训练感受，AI 对比标准规范<br>帮你诊断动作问题，给出具体改进建议</p>
           </div>
 
@@ -4775,7 +4929,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
       <div class="feature-card log-composer">
         <div class="result-header">
           <h3>记录本次训练</h3>
-          <p class="section-hint">记录实际完成的重量与次数，系统会据此调整后续计划</p>
+          <p class="section-hint">练完点「完成训练」会自动记录到这里，也可以手动补记。实际完成的重量与次数会用于调整后续计划</p>
         </div>
         <div class="row log-meta-row">
           <div class="field">
@@ -4823,7 +4977,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         </div>
         <div id="progress-stats" class="progress-stats"></div>
         <div id="progress-empty" class="empty-composed" hidden>
-          <div class="ec-mark">—</div>
+          <div class="ec-mark" aria-hidden="true">—</div>
           <div class="ec-title">暂无训练数据</div>
           <div class="ec-hint">先去「训练日志」记录几次训练，这里会生成容量趋势、力量进步曲线和完成率图表。</div>
         </div>
@@ -4962,7 +5116,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
         </div>
         <div id="diet-result" class="diet-result" aria-live="polite">
           <div class="empty-composed">
-            <div class="ec-mark">&#127860;</div>
+            <div class="ec-mark" aria-hidden="true">&#127860;</div>
             <div class="ec-title">练得对，也要吃对</div>
             <div class="ec-hint">填好左侧档案与上面的饮食偏好，生成训练日/休息日两套餐单：具体食物、克数、热量，还能一键记入饮食记录。</div>
           </div>
@@ -5004,6 +5158,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
             <h3>最近饮食记录</h3>
             <p class="section-hint">点一条展开食物明细</p>
           </div>
+          <div id="diet-log-list-error" class="error-panel" role="alert" hidden></div>
           <div id="diet-log-history"></div>
         </div>
 
@@ -5016,7 +5171,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
               <h3 id="diet-drawer-title">记录这一餐</h3>
               <button class="diet-drawer-close" id="btn-close-diet-drawer" type="button" aria-label="关闭记录抽屉">✕</button>
             </div>
-            <p class="section-hint">同一天同一餐重复记录会覆盖；外卖食堂查不到的食物可以手动估算</p>
+            <p class="section-hint">同一餐再记一次会先问你覆盖还是合并；外卖食堂查不到的食物可以手动估算</p>
             <div class="row log-meta-row">
               <div class="field">
                 <label for="diet-log-date">日期</label>
@@ -5036,11 +5191,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
               <span>食物明细</span>
               <button class="btn-secondary" id="btn-add-diet-food" type="button">＋ 添加食物</button>
             </div>
+            <div id="diet-recent-foods" class="diet-recent-foods" hidden></div>
             <div id="diet-log-foods"></div>
+            <datalist id="diet-food-options"></datalist>
             <div class="field">
               <label for="diet-log-notes">备注</label>
               <input type="text" id="diet-log-notes" maxlength="512" placeholder="如：食堂打的，油偏多">
             </div>
+            <div id="diet-overwrite-slot"></div>
             <div class="log-actions">
               <button class="btn-generate" id="btn-save-diet-log" type="button">▸ 记录这一餐</button>
             </div>
@@ -5058,7 +5216,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
           </div>
           <div id="diet-stats-pills" class="progress-stats"></div>
           <div id="diet-stats-empty" class="empty-composed" hidden>
-            <div class="ec-mark">—</div>
+            <div class="ec-mark" aria-hidden="true">—</div>
             <div class="ec-title">暂无饮食记录</div>
             <div class="ec-hint">先去「饮食记录」记几餐，或在计划里点「吃了这餐」，这里会生成摄入与目标的对照。</div>
           </div>
@@ -5181,7 +5339,7 @@ function escapeHtml(s) {
 
 const activeRequests = { plan: null, analysis: null, qa: null };
 const REQUEST_CONTROLS = {
-  plan: { button: 'btn-generate', status: 'plan-status', error: 'plan-error', idle: '▸ 生成计划' },
+  plan: { button: 'btn-generate', status: 'plan-status', error: 'plan-error', idle: '▸ 生成计划', cancel: 'btn-cancel-plan' },
   analysis: { button: 'btn-analyze', status: 'analysis-status', error: 'analysis-error', idle: '▸ 分析动作' },
   qa: { button: 'btn-ask', status: 'qa-status', error: 'qa-error', idle: '▸ 提问' },
 };
@@ -5205,11 +5363,26 @@ function setRequestState(kind, state, message = '', controller = null) {
     status.hidden = !isLoading;
     setText(status, isLoading ? labels.loading : '');
   }
+  // 等待要有出口：生成跑几十秒，只禁用按钮会把用户锁在原地。
+  if (config.cancel) {
+    const cancelBtn = document.getElementById(config.cancel);
+    if (cancelBtn) cancelBtn.hidden = !isLoading;
+  }
   if (error) { error.hidden = !(state === 'error' || state === 'cancelled'); setText(error, message || labels[state] || ''); }
   if (kind === 'qa') {
     const retry = document.getElementById('qa-retry');
     if (retry) retry.hidden = state !== 'error';
   }
+}
+
+/* 来源标题给人读：文件名的数字前缀/扩展名/连字符不是标题。
+   同一文件被多路检索命中时只出现一次——重复卡片挤掉真正不同的来源。 */
+function readableSourceTitle(source) {
+  const raw = String(source?.title || source?.filename || '未命名来源');
+  let title = raw.replace(/\.(md|txt|pdf|docx?)$/i, '');
+  title = title.replace(/^\d+[-_]/, '');
+  title = title.replace(/[-_]+/g, ' ').trim();
+  return title || raw;
 }
 
 function renderSourceList(node, sources) {
@@ -5223,14 +5396,21 @@ function renderSourceList(node, sources) {
     node.appendChild(empty);
     return;
   }
+  const seen = new Set();
+  const unique = [];
+  list.forEach(source => {
+    const key = String(source?.filename || source?.title || '');
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    unique.push(source);
+  });
   const group = document.createElement('div');
   group.className = 'source-card-group';
-  list.slice(0, 5).forEach(source => {
+  unique.slice(0, 5).forEach(source => {
     const card = document.createElement('details');
     card.className = 'source-card';
     const summary = document.createElement('summary');
-    const title = source?.title || source?.filename || '未命名来源';
-    appendText(summary, `《${title}》`);
+    appendText(summary, `《${readableSourceTitle(source)}》`);
     card.appendChild(summary);
     const meta = document.createElement('div');
     meta.className = 'source-card-meta';
@@ -5914,7 +6094,7 @@ async function loadSavedPlans() {
       const rename = el('button', 'account-btn account-btn-quiet', '重命名');
       rename.type = 'button'; rename.onclick = () => startRenamePlan(row, info, p);
       const del = el('button', 'account-btn account-btn-quiet', '删除');
-      del.type = 'button'; del.onclick = () => deleteSavedPlan(p.plan_id);
+      del.type = 'button'; confirmableDelete(del, () => deleteSavedPlan(p.plan_id));
       row.appendChild(open); row.appendChild(rename); row.appendChild(del);
       list.appendChild(row);
     });
@@ -5931,7 +6111,7 @@ async function loadSavedPlans() {
 async function openSavedPlan(planId) {
   try {
     const resp = await fetch(`/api/plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`);
-    if (!resp.ok) { showStatus('log-status', '计划读取失败'); return; }
+    if (!resp.ok) { showError('saved-plans-error', '计划读取失败，请稍后重试。'); return; }
     const plan = await resp.json();
     const area = document.getElementById('plan-result');
     if (!area) return;
@@ -5950,7 +6130,7 @@ async function openSavedPlan(planId) {
     activateTab('tab-plan');
     area.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
-    showStatus('log-status', `计划读取失败：${e.message}`);
+    showError('saved-plans-error', `计划读取失败：${e.message}`);
   }
 }
 
@@ -5960,14 +6140,55 @@ function showPlanSaveBarHidden() {
   document.querySelectorAll('.plan-save-bar').forEach(n => n.remove());
 }
 
+/* 刷新后不该对着「Ready to Forge」空态失忆：最近一份已保存的计划直接
+   落回结果区。只在空态还在时落位——用户可能已经点了生成；不切页签不滚动，
+   安静恢复，附一行说明告诉用户这是旧计划、生成会替换它。 */
+async function restoreLatestPlanOnWelcome() {
+  const area = document.getElementById('plan-result');
+  if (!area || !area.querySelector('.welcome-area')) return;
+  try {
+    const resp = await fetch(`/api/plans?athlete_key=${encodeURIComponent(athleteKey)}&limit=1`);
+    if (!resp.ok) return;
+    const meta = ((await resp.json()).plans || [])[0];
+    if (!meta) return;
+    const full = await fetch(`/api/plans/${meta.plan_id}?athlete_key=${encodeURIComponent(athleteKey)}`);
+    if (!full.ok) return;
+    const plan = await full.json();
+    if (!area.querySelector('.welcome-area')) return;
+    area.replaceChildren();
+    renderPlanResult(area, plan);
+    showPlanSaveBarHidden();
+    area.prepend(el('p', 'section-hint plan-restored-hint',
+      `已为你打开最近保存的计划「${meta.title || '训练计划'}」。生成新计划会替换它。`));
+  } catch (e) { /* 恢复是增强项：失败就保留空态引导 */ }
+}
+
+/* 删除走两步确认（confirmableDelete），生效后 5 秒可撤销。
+   撤销＝把删前取回的完整正文原样存回（保存闸门照常校验 delivery_status）。
+   报错落在「我的计划」自己的错误区——原先扔进训练日志页的 log-status，
+   用户站在计划列表里根本看不到。 */
 async function deleteSavedPlan(planId) {
+  showError('saved-plans-error', '');
+  let full = null;
+  try {
+    const r = await fetch(`/api/plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`);
+    if (r.ok) full = await r.json();
+  } catch (e) { /* 取不回正文就只删不给撤销，不拦删除本身 */ }
   try {
     const resp = await fetch(`/api/plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`,
                              { method: 'DELETE' });
-    if (!resp.ok) { showStatus('log-status', '删除失败'); return; }
+    if (!resp.ok) { showError('saved-plans-error', '删除失败，请稍后重试。'); return; }
     loadSavedPlans();
+    if (full) {
+      showUndoBar(`已删除「${full.title || full.plan_name || '训练计划'}」`, '撤销', () => {
+        autoSavePlan(full).then(ok => {
+          if (ok) { loadSavedPlans(); showUndoBar('已恢复这份计划', '', null); }
+          else showError('saved-plans-error', '恢复失败：这份计划没有通过交付闸门，无法重新保存。');
+        });
+      });
+    }
   } catch (e) {
-    showStatus('log-status', `删除失败：${e.message}`);
+    showError('saved-plans-error', `删除失败：${e.message}`);
   }
 }
 
@@ -7023,7 +7244,7 @@ function renderPlanDays(container, days, options) {
     card.style.animationDelay = `${.04 * index}s`;
     const header = el('div', 'plan-day-header', '');
     header.appendChild(el('span', 'plan-day-title', `DAY ${day?.day ?? index + 1} · ${day?.focus || ''}`));
-    header.appendChild(el('span', 'plan-day-count', `${exercises.length} EX`));
+    header.appendChild(el('span', 'plan-day-count', `${exercises.length} 个动作`));
     card.appendChild(header);
     const body = el('div', 'plan-day-body', '');
     const heading = el('div', 'plan-ex-heading', '');
@@ -7427,6 +7648,9 @@ async function generatePlan() {
   document.getElementById('plan-result')?.replaceChildren();
   document.getElementById('plan-error')?.replaceChildren();
   const profile = getProfile();
+  // 120 秒硬超时：模型全线卡死时不能让用户对着「处理中…」无限等下去。
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => { timedOut = true; controller.abort(); }, 120000);
   try {
     const body = { ...profile, query: document.getElementById('plan-query')?.value || '', session_id: globalSessionId, athlete_key: athleteKey };
     // 走状态图（v2）而非命令式编排：计划被安全门拦下时，只有状态图这一侧
@@ -7435,8 +7659,19 @@ async function generatePlan() {
     await streamFrom('/api/v2/plan/stream', body, 'plan-output', 'plan', controller.signal, () => activeRequests.plan === controller);
     setRequestState('plan', 'idle', '', controller);
   } catch(e) {
-    setRequestState('plan', e.name === 'AbortError' ? 'cancelled' : 'error', e.name === 'AbortError' ? '请求已取消' : `请求失败: ${e.message}`, controller);
-  } finally { if (activeRequests.plan === controller) activeRequests.plan = null; }
+    const aborted = e.name === 'AbortError';
+    const message = aborted
+      ? (timedOut ? '生成超过 120 秒已自动停止。档案与要求都还在，可以直接重试。' : '已取消生成。档案与要求都还在，随时可以再来一次。')
+      : `请求失败: ${e.message}`;
+    setRequestState('plan', aborted ? 'cancelled' : 'error', message, controller);
+  } finally {
+    window.clearTimeout(timeoutId);
+    if (activeRequests.plan === controller) activeRequests.plan = null;
+  }
+}
+
+function cancelPlanGeneration() {
+  activeRequests.plan?.abort();
 }
 
 function appendQaTurn(role, text) {
@@ -7698,6 +7933,135 @@ function showError(id, message) {
   node.hidden = !message;
 }
 
+/* ── 数据护栏共用件：撤销条 + 两步删除 ──
+   破坏性操作生效后给一个短暂的可逆出口（5 秒），而不是弹原生 confirm
+   打断整页。两者都只用 el()/textContent 构建，饮食块内外都能调用。 */
+let undoBarTimer = null;
+function dismissUndoBar() {
+  if (undoBarTimer) { window.clearTimeout(undoBarTimer); undoBarTimer = null; }
+  document.querySelectorAll('.undo-bar').forEach(n => n.remove());
+}
+/* onUndo 传 null 时只作结果提示，不带撤销按钮。新条替换旧条，同时只有一条。 */
+function showUndoBar(message, undoLabel, onUndo) {
+  dismissUndoBar();
+  const bar = el('div', 'undo-bar', '');
+  bar.setAttribute('role', 'status');
+  bar.appendChild(el('span', 'undo-bar-text', message));
+  if (onUndo) {
+    const btn = el('button', 'undo-bar-btn', undoLabel || '撤销');
+    btn.type = 'button';
+    btn.addEventListener('click', () => { dismissUndoBar(); onUndo(); });
+    bar.appendChild(btn);
+  }
+  const close = el('button', 'undo-bar-close', '✕');
+  close.type = 'button';
+  close.setAttribute('aria-label', '关闭这条提示');
+  close.addEventListener('click', dismissUndoBar);
+  bar.appendChild(close);
+  document.body.appendChild(bar);
+  requestAnimationFrame(() => bar.classList.add('is-open'));
+  undoBarTimer = window.setTimeout(dismissUndoBar, 5000);
+}
+
+/* 两步删除：第一击把按钮变成红字「确认删除？」并长出「取消」，
+   第二击才真正执行；Esc、取消、5 秒无操作都还原。同一时刻只允许
+   一个按钮处于待确认态，避免用户对着两个「确认删除？」不知道哪个是哪个。 */
+function confirmableDelete(button, onConfirm) {
+  let armed = false;
+  let timer = null;
+  let cancelBtn = null;
+  let escHandler = null;
+  const disarm = () => {
+    if (!armed) return;
+    armed = false;
+    if (timer) { window.clearTimeout(timer); timer = null; }
+    button.textContent = button.dataset.idleLabel || '删除';
+    button.classList.remove('is-armed');
+    if (cancelBtn) { cancelBtn.remove(); cancelBtn = null; }
+    if (escHandler) { document.removeEventListener('keydown', escHandler); escHandler = null; }
+  };
+  button._disarmDelete = disarm;
+  button.addEventListener('click', () => {
+    if (armed) { disarm(); onConfirm(); return; }
+    document.querySelectorAll('.account-btn.is-armed').forEach(b => {
+      if (b !== button && b._disarmDelete) b._disarmDelete();
+    });
+    armed = true;
+    button.dataset.idleLabel = button.textContent;
+    button.textContent = '确认删除？';
+    button.classList.add('is-armed');
+    cancelBtn = el('button', 'account-btn account-btn-quiet delete-cancel', '取消');
+    cancelBtn.type = 'button';
+    cancelBtn.addEventListener('click', disarm);
+    button.after(cancelBtn);
+    escHandler = e => { if (e.key === 'Escape') disarm(); };
+    document.addEventListener('keydown', escHandler);
+    timer = window.setTimeout(disarm, 5000);
+  });
+}
+
+/* 焦点圈在浮层内循环：Tab 不该跑到遮罩后面的页面上。
+   返回解绑函数，关闭浮层时调用。 */
+function trapOverlayFocus(container) {
+  const selector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const handler = event => {
+    if (event.key !== 'Tab') return;
+    const nodes = [...container.querySelectorAll(selector)].filter(n => n.getClientRects().length > 0);
+    if (!nodes.length) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (!container.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+    else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
+  container.addEventListener('keydown', handler);
+  return () => container.removeEventListener('keydown', handler);
+}
+
+/* Promise 化的自绘确认框。Esc／遮罩／取消都算拒绝；焦点先落在取消上
+   ——破坏性操作的安全侧。关闭后焦点回到触发处。 */
+function showConfirmDialog({ title, body, confirmLabel = '确认', danger = false }) {
+  return new Promise(resolve => {
+    const previousFocus = document.activeElement;
+    const backdrop = el('div', 'confirm-backdrop', '');
+    const dialog = el('div', 'confirm-dialog', '');
+    dialog.setAttribute('role', 'alertdialog');
+    dialog.setAttribute('aria-modal', 'true');
+    const titleNode = el('h3', 'confirm-title', title);
+    titleNode.id = 'confirm-dialog-title';
+    const bodyNode = el('p', 'confirm-body', body);
+    bodyNode.id = 'confirm-dialog-body';
+    dialog.setAttribute('aria-labelledby', titleNode.id);
+    dialog.setAttribute('aria-describedby', bodyNode.id);
+    const actions = el('div', 'confirm-actions', '');
+    const cancel = el('button', 'account-btn', '取消');
+    cancel.type = 'button';
+    const ok = el('button', danger ? 'account-btn confirm-danger' : 'account-btn confirm-primary', confirmLabel);
+    ok.type = 'button';
+    actions.append(cancel, ok);
+    dialog.append(titleNode, bodyNode, actions);
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
+    const releaseTrap = trapOverlayFocus(dialog);
+    let settled = false;
+    const close = result => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('keydown', onKey);
+      releaseTrap();
+      backdrop.remove();
+      if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+      resolve(result);
+    };
+    const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); close(false); } };
+    cancel.addEventListener('click', () => close(false));
+    ok.addEventListener('click', () => close(true));
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) close(false); });
+    document.addEventListener('keydown', onKey);
+    cancel.focus();
+  });
+}
+
 // 本地日历日：不能用 toISOString()，那是 UTC，东八区晚间会算成次日
 function todayLocalIso() {
   const d = new Date();
@@ -7746,6 +8110,7 @@ initAmbientPointer();
 function composedEmpty(mark, title, hint) {
   const box = el('div', 'empty-composed');
   const markNode = el('div', 'ec-mark', mark);
+  markNode.setAttribute('aria-hidden', 'true');
   markNode.appendChild(emptyRing());
   box.appendChild(markNode);
   box.appendChild(el('div', 'ec-title', title));
@@ -7996,8 +8361,14 @@ function resumeWorkoutFromDraft() {
   openWorkout(draft.day, draft.planMeta, draft);
 }
 
-function discardWorkoutDraft() {
-  if (!window.confirm('丢弃这次训练进度？已完成的组将无法恢复。')) return;
+async function discardWorkoutDraft() {
+  const ok = await showConfirmDialog({
+    title: '丢弃这次训练进度？',
+    body: '已完成的组将无法恢复。如果只是暂时离开，直接关闭面板就好——进度会保留，随时能续。',
+    confirmLabel: '丢弃进度',
+    danger: true,
+  });
+  if (!ok) return;
   clearWorkoutDraft();
 }
 
@@ -8021,7 +8392,9 @@ function tickWorkoutRest() {
   if (!workoutState || !workoutState.restEndAt) return;
   const remaining = Math.max(0, Math.ceil((workoutState.restEndAt - Date.now()) / 1000));
   workoutState.restCount.textContent = String(remaining);
-  if (remaining <= 0) stopWorkoutRest();
+  // 后台不宣布结束：节流定时器可能在用户看不见时烧掉提醒窗口。
+  // 留着 restEndAt，回前台 visibilitychange 立即补算并当场提醒。
+  if (remaining <= 0 && document.visibilityState === 'visible') stopWorkoutRest(true);
 }
 
 // 切后台的瞬间强制落盘（防抖定时器可能还没跑）；回前台立即补算两个钟，
@@ -8033,6 +8406,7 @@ document.addEventListener('visibilitychange', () => {
   } else if (workoutState) {
     tickWorkoutClock();
     tickWorkoutRest();
+    acquireWorkoutWakeLock();
   }
 });
 window.addEventListener('pagehide', () => persistWorkoutDraft());
@@ -8074,6 +8448,7 @@ function buildWorkoutSetRow(entry, index, setIndex, card) {
   weightInput.min = '0';
   weightInput.placeholder = 'kg';
   weightInput.dataset.role = 'weight';
+  weightInput.setAttribute('aria-label', `${entry.name} 第 ${setIndex + 1} 组重量（公斤）`);
   if (row.weight !== '') weightInput.value = row.weight;
   weightInput.addEventListener('input', () => {
     // touched 标记让异步返回的"上次数据"不覆盖用户已经改过的值。
@@ -8089,6 +8464,7 @@ function buildWorkoutSetRow(entry, index, setIndex, card) {
   repsInput.min = '0';
   repsInput.placeholder = '次';
   repsInput.dataset.role = 'reps';
+  repsInput.setAttribute('aria-label', `${entry.name} 第 ${setIndex + 1} 组次数`);
   if (row.reps !== '') repsInput.value = row.reps;
   repsInput.addEventListener('input', () => {
     repsInput.dataset.touched = '1';
@@ -8153,7 +8529,8 @@ function toggleWorkoutSet(index, setIndex, card) {
   card.classList.toggle('is-active', doneCount > 0 && doneCount < entry.targetSets);
 
   // 只有"完成一组"才启动休息；取消误点时不该反而开始计时。
-  if (row.done) startWorkoutRest(entry.restSeconds);
+  // 完成手势同时解锁音频上下文——浏览器只允许在用户手势里出声。
+  if (row.done) { unlockRestAudio(); startWorkoutRest(entry.restSeconds); }
 
   // 一个动作练完就把下一个带到视野里。训练时手上有汗、注意力在动作上，
   // 不该再花一步去滚动找下一个动作。
@@ -8170,26 +8547,120 @@ function updateWorkoutProgress() {
   const total = workoutState.entries.length;
   const done = workoutState.entries.filter(entry => entry.done > 0).length;
   workoutState.progressLabel.textContent = `${done} / ${total} 个动作完成`;
-  workoutState.barFill.style.width = `${total ? Math.round(done / total * 100) : 0}%`;
+  workoutState.barFill.style.transform = `scaleX(${total ? done / total : 0})`;
 }
 
 function startWorkoutRest(seconds) {
   if (!workoutState) return;
   clearInterval(workoutState.restTimer);
+  if (workoutState.restEndTimer) { clearTimeout(workoutState.restEndTimer); workoutState.restEndTimer = null; }
+  workoutState.lastRestSeconds = seconds;
   workoutState.restEndAt = Date.now() + seconds * 1000;
-  workoutState.restBar.classList.remove('is-idle');
+  workoutState.restBar.classList.remove('is-idle', 'is-ended');
   tickWorkoutRest();
   // 250ms 一跳：页面切到后台时定时器会被节流，按结束时间戳算剩余秒数
   // 就不会因为少跑几次而越走越慢；回前台时 visibilitychange 还会立即补算。
   workoutState.restTimer = setInterval(tickWorkoutRest, 250);
 }
 
-function stopWorkoutRest() {
+/* ended＝自然倒计时到点（要提醒）；false＝用户跳过或新休息开始（不打扰）。 */
+function stopWorkoutRest(ended) {
   if (!workoutState) return;
   clearInterval(workoutState.restTimer);
   workoutState.restTimer = null;
   workoutState.restEndAt = 0;
-  workoutState.restBar.classList.add('is-idle');
+  const bar = workoutState.restBar;
+  bar.classList.add('is-idle');
+  if (workoutState.restEndTimer) { clearTimeout(workoutState.restEndTimer); workoutState.restEndTimer = null; }
+  const idleText = bar.querySelector('.workout-rest-idle');
+  if (ended) {
+    announceRestEnd();
+    bar.classList.add('is-ended');
+    if (idleText) idleText.textContent = '休息结束 ✓ 开始下一组';
+    // 3 秒后回到空闲文案，并记住这次休息时长——下次不用猜「自动休息」是多久
+    workoutState.restEndTimer = window.setTimeout(() => {
+      bar.classList.remove('is-ended');
+      if (idleText) idleText.textContent = restIdleText();
+      if (workoutState) workoutState.restEndTimer = null;
+    }, 3000);
+  } else {
+    bar.classList.remove('is-ended');
+    if (idleText) idleText.textContent = restIdleText();
+  }
+}
+
+function restIdleText() {
+  const n = workoutState?.lastRestSeconds;
+  return n ? `完成一组后自动休息 ${n} 秒` : '完成一组后自动开始休息';
+}
+
+/* ── 休息结束提醒：声音＋振动 / 仅振动 / 仅画面，三档循环，选择本机记住 ──
+   画面脉冲与文案永远在（reduced-motion 下动画关闭但文案仍换），声音振动
+   是叠加通道。组间休息时用户大概率没盯屏幕——无声到点等于没提醒。 */
+const REST_ALERT_KEY = 'ironmind_rest_alert_mode';
+const REST_ALERT_LABELS = { full: '声音＋振动', silent: '仅振动', off: '仅画面' };
+let restAudioCtx = null;
+let workoutWakeLock = null;
+
+function currentRestAlertMode() {
+  let saved = null;
+  try { saved = localStorage.getItem(REST_ALERT_KEY); } catch (e) { /* 隐私模式等 */ }
+  return ['full', 'silent', 'off'].includes(saved) ? saved : 'full';
+}
+
+function unlockRestAudio() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!restAudioCtx) restAudioCtx = new Ctx();
+    if (restAudioCtx.state === 'suspended') restAudioCtx.resume().catch(() => {});
+  } catch (e) { /* 出声是增强项，失败不影响计时 */ }
+}
+
+function playRestEndBeep() {
+  try {
+    if (!restAudioCtx) return;
+    if (restAudioCtx.state === 'suspended') restAudioCtx.resume().catch(() => {});
+    const t0 = restAudioCtx.currentTime;
+    // 两声短促上行双音：健身房环境里比单声「滴」更容易被注意到
+    [880, 1174.7].forEach((freq, i) => {
+      const osc = restAudioCtx.createOscillator();
+      const gain = restAudioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = t0 + i * 0.16;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.14);
+      osc.connect(gain).connect(restAudioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.15);
+    });
+  } catch (e) { /* 同上 */ }
+}
+
+function announceRestEnd() {
+  const mode = currentRestAlertMode();
+  if (mode === 'off') return;
+  if (mode === 'full') playRestEndBeep();
+  try { if (navigator.vibrate) navigator.vibrate([180, 90, 180]); } catch (e) { /* 桌面不支持振动 */ }
+}
+
+/* 训练面板开着时尽量保住屏幕不熄：熄屏＝倒计时提醒全失效。
+   不支持或被拒都静默降级，它是增强项不是训练的前置条件。 */
+async function acquireWorkoutWakeLock() {
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible' || workoutWakeLock) return;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    if (!workoutState) { lock.release().catch(() => {}); return; }
+    workoutWakeLock = lock;
+    lock.addEventListener('release', () => { if (workoutWakeLock === lock) workoutWakeLock = null; });
+  } catch (e) { /* 降级 */ }
+}
+function releaseWorkoutWakeLock() {
+  const lock = workoutWakeLock;
+  workoutWakeLock = null;
+  if (lock) { try { lock.release().catch(() => {}); } catch (e) { /* 已释放 */ } }
 }
 
 function onWorkoutKeydown(event) {
@@ -8206,6 +8677,10 @@ function closeWorkout(force) {
   if (!force) persistWorkoutDraft();
   clearInterval(workoutState.elapsedTimer);
   clearInterval(workoutState.restTimer);
+  if (workoutState.restEndTimer) clearTimeout(workoutState.restEndTimer);
+  releaseWorkoutWakeLock();
+  workoutState.releaseFocusTrap?.();
+  document.querySelector('.app-shell')?.removeAttribute('inert');
   document.removeEventListener('keydown', onWorkoutKeydown);
   const previous = workoutState.previousFocus;
   workoutState.overlay.remove();
@@ -8215,7 +8690,7 @@ function closeWorkout(force) {
   if (!force) refreshWorkoutResumeBanner();
 }
 
-function openWorkout(day, planMeta, resume) {
+async function openWorkout(day, planMeta, resume) {
   if (!day || !Array.isArray(day.exercises) || !day.exercises.length) return;
   if (!resume) {
     const existing = readWorkoutDraft();
@@ -8224,8 +8699,13 @@ function openWorkout(day, planMeta, resume) {
         && String(existing.planMeta?.planId ?? '') === String(planMeta?.planId ?? '');
       // 同一场训练：任何入口都直接续练，不该让用户在「开始」里丢掉进度。
       if (sameSession) { openWorkout(existing.day, existing.planMeta, existing); return; }
-      if (!window.confirm(`还有一场未完成的训练（DAY ${existing.day?.day || 1}）。`
-        + '开始新训练会覆盖那份进度，继续？')) return;
+      const overwrite = await showConfirmDialog({
+        title: '开始新训练？',
+        body: `还有一场未完成的训练（DAY ${existing.day?.day || 1}）。开始新训练会覆盖那份进度。`,
+        confirmLabel: '覆盖并开始',
+        danger: true,
+      });
+      if (!overwrite) return;
       clearWorkoutDraft();
     }
   }
@@ -8363,9 +8843,25 @@ function openWorkout(day, planMeta, resume) {
   });
   const skip = el('button', '', '跳过');
   skip.type = 'button';
-  skip.addEventListener('click', stopWorkoutRest);
+  skip.addEventListener('click', () => stopWorkoutRest(false));
+  const alertBtn = el('button', '', '');
+  alertBtn.type = 'button';
+  const syncAlertBtn = () => {
+    const label = REST_ALERT_LABELS[currentRestAlertMode()];
+    alertBtn.textContent = `提醒：${label}`;
+    alertBtn.setAttribute('aria-label', `休息结束提醒方式：${label}，点击切换`);
+  };
+  syncAlertBtn();
+  alertBtn.addEventListener('click', () => {
+    unlockRestAudio();
+    const order = ['full', 'silent', 'off'];
+    const next = order[(order.indexOf(currentRestAlertMode()) + 1) % order.length];
+    try { localStorage.setItem(REST_ALERT_KEY, next); } catch (e) { /* 记不住就用默认 */ }
+    syncAlertBtn();
+  });
   restActions.appendChild(addTime);
   restActions.appendChild(skip);
+  restActions.appendChild(alertBtn);
   restActive.appendChild(restActions);
   restBar.appendChild(restActive);
   footer.appendChild(restBar);
@@ -8382,6 +8878,8 @@ function openWorkout(day, planMeta, resume) {
   overlay.appendChild(shell);
   document.body.appendChild(overlay);
   document.body.style.overflow = 'hidden';
+  // 面板外的整页设为 inert：读屏与 Tab 都不该落到遮罩后面的内容上
+  document.querySelector('.app-shell')?.setAttribute('inert', '');
 
   workoutState = {
     day,
@@ -8401,8 +8899,12 @@ function openWorkout(day, planMeta, resume) {
     elapsedTimer: null,
     restTimer: null,
     restEndAt: 0,
+    restEndTimer: null,
+    lastRestSeconds: 0,
   };
   workoutState.elapsedTimer = setInterval(tickWorkoutClock, 1000);
+  acquireWorkoutWakeLock();
+  workoutState.releaseFocusTrap = trapOverlayFocus(overlay);
 
   document.addEventListener('keydown', onWorkoutKeydown);
   closeBtn.focus();
@@ -8685,12 +9187,17 @@ function renderLogItem(log) {
 
 /* 把一次历史训练复制到今天的表单里。
    只填内容、不直接保存：用户可能只完成了其中几个动作，需要改完再提交。 */
-function copyLogToToday(log) {
+async function copyLogToToday(log) {
   const entries = Array.isArray(log.entries) ? log.entries : [];
   if (!entries.length) return;
-  if (collectLogEntries().length
-      && !window.confirm('训练日志里已有内容，复制会覆盖，继续吗？')) {
-    return;
+  if (collectLogEntries().length) {
+    const ok = await showConfirmDialog({
+      title: '覆盖当前表单？',
+      body: '训练日志里已有内容，复制会覆盖。',
+      confirmLabel: '覆盖',
+      danger: true,
+    });
+    if (!ok) return;
   }
   const container = document.getElementById('log-entries');
   if (!container) return;
@@ -8954,7 +9461,9 @@ async function loadTrainingStats() {
     if (emptyNode) {
       emptyNode.hidden = false;
       emptyNode.replaceChildren();
-      emptyNode.appendChild(el('div', 'ec-mark', '!'));
+      const failMark = el('div', 'ec-mark', '!');
+      failMark.setAttribute('aria-hidden', 'true');
+      emptyNode.appendChild(failMark);
       emptyNode.appendChild(el('div', 'ec-title', '读取失败'));
       emptyNode.appendChild(el('div', 'ec-hint', e.message || '请稍后重试。'));
     }
@@ -9627,7 +10136,13 @@ async function deleteMemoryPreference(key) {
 }
 
 async function clearMemory() {
-  if (!window.confirm('清空后 AI 将不再记得你的偏好与已确认的调整，且无法恢复。确定要清空吗？')) return;
+  const ok = await showConfirmDialog({
+    title: '清空长期记忆？',
+    body: '清空后 AI 将不再记得你的偏好与已确认的调整，且无法恢复。',
+    confirmLabel: '清空',
+    danger: true,
+  });
+  if (!ok) return;
   showError('memory-error', '');
   setBusy('btn-clear-memory', true, '清空中...');
   try {
@@ -9951,7 +10466,13 @@ function renderDietResult(container, data) {
     if (t.basis) container.appendChild(el('p', 'diet-basis', t.basis));
   }
 
-  (plan.days || []).forEach(day => container.appendChild(buildDietDayCard(day)));
+  // 锚点 chips 的目标：长餐单一屏读不完，各部分给一个直达入口
+  const anchors = [];
+  (plan.days || []).forEach(day => {
+    const card = buildDietDayCard(day);
+    anchors.push({ label: day.day_type === '训练日' ? '训练日餐单' : '休息日餐单', node: card });
+    container.appendChild(card);
+  });
 
   if (Array.isArray(plan.shopping_list) && plan.shopping_list.length) {
     const sec = el('div', 'diet-shopping', '');
@@ -9960,6 +10481,7 @@ function renderDietResult(container, data) {
     plan.shopping_list.forEach(item => list.appendChild(el('li', '', item)));
     sec.appendChild(list);
     container.appendChild(sec);
+    anchors.push({ label: '买菜清单', node: sec });
   }
   if (plan.notes) {
     const sec = el('div', '', '');
@@ -9968,6 +10490,21 @@ function renderDietResult(container, data) {
     container.appendChild(sec);
   }
   renderDietExplanation(container, plan.explain);
+  const explainToggle = container.querySelector('.explain-toggle');
+  if (explainToggle) anchors.push({ label: '餐单怎么来的', node: explainToggle });
+  if (anchors.length > 1) {
+    const nav = el('div', 'diet-anchor-chips', '');
+    nav.setAttribute('role', 'navigation');
+    nav.setAttribute('aria-label', '跳到餐单的各部分');
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
+    anchors.forEach(a => {
+      const chip = el('button', 'diet-anchor-chip', a.label);
+      chip.type = 'button';
+      chip.addEventListener('click', () => a.node.scrollIntoView({ behavior, block: 'start' }));
+      nav.appendChild(chip);
+    });
+    head.after(nav);
+  }
 }
 
 function buildDietDayCard(day) {
@@ -10016,29 +10553,58 @@ function buildDietMealBlock(meal) {
 }
 
 /* 闭环关键 UX：按计划吃完一餐，一键记入今天的饮食记录。
-   食物与克数直接来自计划行，营养数字由服务端按食物库重算。 */
+   食物与克数直接来自计划行，营养数字由服务端按食物库重算。
+   今天这一餐已有记录时不静默覆盖：餐块里就地给出合并/覆盖/取消。 */
 async function logMealFromPlan(meal, button) {
   const foods = (meal.foods || []).map(f => ({ name: f.name, grams: f.grams }));
   if (!foods.length || !meal.meal) return;
-  button.disabled = true;
+  const block = button.closest('.diet-meal-block');
+  block?.querySelector('.diet-overwrite-bar')?.remove();
+  block?.querySelector('.diet-eat-error')?.remove();
   const original = button.textContent;
+  button.disabled = true;
   button.textContent = '记录中…';
+  const pending = { log_date: todayLocalIso(), meal_type: meal.meal, foods };
   try {
-    const payload = {
-      log_date: todayLocalIso(), meal_type: meal.meal, foods, athlete_key: athleteKey,
-    };
-    const resp = await fetch('/api/diet-logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data?.error?.message || '记录失败');
-    button.textContent = '已记录 ✓';
+    const existing = await fetchExistingMeal(pending.log_date, pending.meal_type);
+    if (existing && (existing.foods || []).length && block) {
+      const bar = buildOverwriteBar(existing, pending, payload => {
+        submitMealFromPlan(payload, existing, button, original);
+      });
+      block.querySelector('.diet-meal-head')?.after(bar);
+      return;
+    }
+    await submitMealFromPlan(pending, null, button, original);
   } catch (e) {
     button.disabled = false;
     button.textContent = original;
-    showError('diet-error', `这一餐没记上：${e.message}`);
+    if (block) block.appendChild(el('p', 'diet-eat-error', `这一餐没记上：${e.message || '记录失败'}`));
+    else showError('diet-error', `这一餐没记上：${e.message || '记录失败'}`);
+  } finally {
+    // 确认条分支返回时按钮还停在「记录中…」，还原成可再点
+    if (button.textContent === '记录中…') { button.textContent = original; button.disabled = false; }
+  }
+}
+
+async function submitMealFromPlan(payload, existing, button, original) {
+  button.disabled = true;
+  button.textContent = '记录中…';
+  const block = button.closest('.diet-meal-block');
+  try {
+    const data = await postDietLog(payload);
+    button.textContent = '已记录 ✓';
+    await loadDietLogHistory();
+    dietLogUndoSnackbar(payload, existing, data.log_id);
+  } catch (e) {
+    button.disabled = false;
+    button.textContent = original;
+    // 报错落在点击处（餐块内），不扔回页面顶部的表单错误区——用户看不到
+    if (block) {
+      block.querySelector('.diet-eat-error')?.remove();
+      block.appendChild(el('p', 'diet-eat-error', `这一餐没记上：${e.message || '记录失败'}`));
+    } else {
+      showError('diet-error', `这一餐没记上：${e.message || '记录失败'}`);
+    }
   }
 }
 
@@ -10121,7 +10687,7 @@ async function loadSavedDietPlans() {
       const rename = el('button', 'account-btn account-btn-quiet', '重命名');
       rename.type = 'button'; rename.onclick = () => startRenameDietPlan(row, info, p);
       const del = el('button', 'account-btn account-btn-quiet', '删除');
-      del.type = 'button'; del.onclick = () => deleteSavedDietPlan(p.plan_id);
+      del.type = 'button'; confirmableDelete(del, () => deleteSavedDietPlan(p.plan_id));
       row.appendChild(open); row.appendChild(rename); row.appendChild(del);
       list.appendChild(row);
     });
@@ -10153,12 +10719,26 @@ async function openSavedDietPlan(planId) {
   }
 }
 
+/* 镜像训练侧：两步确认 + 删前取回正文供撤销；报错走本面板的 notice。 */
 async function deleteSavedDietPlan(planId) {
+  let full = null;
+  try {
+    const r = await fetch(`/api/diet-plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`);
+    if (r.ok) full = await r.json();
+  } catch (e) { /* 取不回正文就只删不给撤销 */ }
   try {
     const resp = await fetch(`/api/diet-plans/${planId}?athlete_key=${encodeURIComponent(athleteKey)}`,
                              { method: 'DELETE' });
-    if (!resp.ok) { showDietPlanNotice('删除失败'); return; }
+    if (!resp.ok) { showDietPlanNotice('删除失败，请稍后重试'); return; }
     loadSavedDietPlans();
+    if (full) {
+      showUndoBar(`已删除「${full.title || full.plan_name || '饮食计划'}」`, '撤销', () => {
+        autoSaveDietPlan(full).then(ok => {
+          if (ok) { loadSavedDietPlans(); showUndoBar('已恢复这份饮食计划', '', null); }
+          else showDietPlanNotice('恢复失败：只能保存已交付的饮食计划');
+        });
+      });
+    }
   } catch (e) {
     showDietPlanNotice(`删除失败：${e.message}`);
   }
@@ -10243,6 +10823,7 @@ function addDietFoodRow(food) {
   name.placeholder = '如 米饭（蒸）';
   name.dataset.key = 'name';
   name.setAttribute('aria-label', '食物名称');
+  name.setAttribute('list', 'diet-food-options');
   if (food?.name) name.value = food.name;
   const grams = document.createElement('input');
   grams.type = 'number';
@@ -10315,35 +10896,235 @@ function readDietFoodRows() {
   return { foods };
 }
 
+/* ── 记录护栏：覆盖先问、合并可选、事后可撤销 ──
+   同日同餐 upsert 是服务端语义（用户直觉是「改」不是「加」），但静默覆盖
+   会把一顿 850 kcal 的午餐换成 180 kcal 而不留任何痕迹。前端在提交前查
+   已有记录，就地给出「合并 / 覆盖 / 取消」，生效后 5 秒内可撤销。 */
+
+/* 把服务端返回的完整营养条目还原成可提交的形状：
+   catalog 只交 name+grams（数字服务端重算），custom 保留手动估算值。 */
+function toSubmitFoods(foods) {
+  return (foods || []).map(f => f.source === 'custom'
+    ? { name: f.name, grams: f.grams, kcal: f.kcal, protein_g: f.protein_g, source: 'custom' }
+    : { name: f.name, grams: f.grams });
+}
+
+/* 合并＝已有食物＋新食物，同名按新值更新（克数/估算以这次填的为准）。
+   名字精确匹配：别名归一在服务端，前端不另造一套匹配规则。 */
+function mergeDietFoods(oldFoods, newFoods) {
+  const merged = (oldFoods || []).map(f => ({ ...f }));
+  (newFoods || []).forEach(nf => {
+    const i = merged.findIndex(f => f.name === nf.name);
+    if (i >= 0) merged[i] = { ...merged[i], ...nf };
+    else merged.push({ ...nf });
+  });
+  return merged;
+}
+
+async function fetchExistingMeal(logDate, mealType) {
+  try {
+    const resp = await fetch(`/api/diet-logs?athlete_key=${encodeURIComponent(athleteKey)}&on_date=${encodeURIComponent(logDate)}`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return (data.logs || []).find(l => l.meal_type === mealType) || null;
+  } catch (e) {
+    return null;  // 查不到已有记录时不拦提交：护栏失效不该把正常记录也堵死
+  }
+}
+
+async function postDietLog(payload) {
+  const resp = await fetch('/api/diet-logs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, athlete_key: athleteKey }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const err = new Error(data?.error?.message || '记录失败');
+    err.code = data?.error?.code;
+    err.foodIndex = data?.error?.food_index;
+    throw err;
+  }
+  return data;
+}
+
+/* 服务端点名第几行出错时，把那一行标红并带进视野——报错文案之外
+   还要有视觉落点，用户不用自己数行。库外食物同时点亮「手动估算」开关。 */
+function highlightDietRowError(err) {
+  const rows = [...document.querySelectorAll('#diet-log-foods .diet-log-food-row')];
+  rows.forEach(r => r.classList.remove('is-invalid'));
+  if (!Number.isInteger(err?.foodIndex) || !rows[err.foodIndex]) return;
+  const row = rows[err.foodIndex];
+  row.classList.add('is-invalid');
+  row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  row.querySelector('[data-key="name"]')?.focus();
+}
+
+/* ── 食物名自动补全 + 最近吃过 ──
+   121 条食物库名字带生熟状态（米饭蒸 vs 大米生差三倍热量），靠记忆拼写
+   必然出错。datalist 用原生补全（输入框仍是本站样式），最近吃过 chips
+   覆盖高频复记场景。目录数据静态公开，拉一次缓存整页。 */
+let dietFoodCatalog = null;
+let dietRecentFoods = [];
+
+async function ensureDietFoodCatalog() {
+  if (dietFoodCatalog) return dietFoodCatalog;
+  try {
+    const resp = await fetch(`/api/diet-foods?athlete_key=${encodeURIComponent(athleteKey)}`);
+    if (!resp.ok) return null;
+    const foods = (await resp.json()).foods || [];
+    const list = document.getElementById('diet-food-options');
+    if (list) {
+      list.replaceChildren();
+      foods.forEach(f => {
+        const option = document.createElement('option');
+        option.value = f.name;
+        const alias = (f.aliases || []).slice(0, 2).join('、');
+        option.label = [f.category, alias ? `又称 ${alias}` : ''].filter(Boolean).join(' · ');
+        list.appendChild(option);
+      });
+    }
+    dietFoodCatalog = {};
+    foods.forEach(f => { dietFoodCatalog[f.name] = f.default_serving_g || null; });
+    return dietFoodCatalog;
+  } catch (e) {
+    return null;  // 补全是增强项：拉不到就退回纯手填
+  }
+}
+
+function renderDietRecentChips() {
+  const box = document.getElementById('diet-recent-foods');
+  if (!box) return;
+  box.replaceChildren();
+  if (!dietRecentFoods.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.appendChild(el('span', 'diet-recent-label', '最近吃过'));
+  dietRecentFoods.forEach(item => {
+    const chip = el('button', 'diet-recent-chip', item.name);
+    chip.type = 'button';
+    chip.addEventListener('click', () => {
+      addDietFoodRow({ name: item.name, grams: item.grams || '' });
+      const rows = document.querySelectorAll('#diet-log-foods .diet-log-food-row');
+      rows[rows.length - 1]?.querySelector('[data-key="grams"]')?.focus();
+    });
+    box.appendChild(chip);
+  });
+}
+
+function collectDietRecentFoods(logs) {
+  const seen = new Map();
+  (logs || []).forEach(log => {
+    (log.foods || []).forEach(f => {
+      if (f.name && !seen.has(f.name)) seen.set(f.name, f.grams);
+    });
+  });
+  dietRecentFoods = [...seen.entries()].slice(0, 6).map(([name, grams]) => ({ name, grams }));
+}
+
+/* 覆盖确认条：抽屉与计划餐块共用。合并超过单餐 12 种上限时禁用合并并说明。 */
+function buildOverwriteBar(existing, pending, onChoose) {
+  const bar = el('div', 'diet-overwrite-bar', '');
+  const oldFoods = toSubmitFoods(existing.foods);
+  const merged = mergeDietFoods(oldFoods, pending.foods);
+  const tooMany = merged.length > 12;
+  bar.appendChild(el('p', 'diet-overwrite-text',
+    `${pending.log_date} 的${pending.meal_type}已有记录：${Math.round(existing.kcal || 0)} kcal · ${oldFoods.length} 种食物。`));
+  const actions = el('div', 'diet-overwrite-actions', '');
+  const merge = el('button', 'btn-secondary', '合并进这一餐');
+  merge.type = 'button';
+  if (tooMany) merge.disabled = true;
+  const replace = el('button', 'account-btn diet-overwrite-replace', '覆盖');
+  replace.type = 'button';
+  const cancel = el('button', 'account-btn account-btn-quiet', '取消');
+  cancel.type = 'button';
+  merge.addEventListener('click', () => { bar.remove(); onChoose({ ...pending, foods: merged }); });
+  replace.addEventListener('click', () => { bar.remove(); onChoose(pending); });
+  cancel.addEventListener('click', () => bar.remove());
+  actions.append(merge, replace, cancel);
+  bar.appendChild(actions);
+  if (tooMany) {
+    bar.appendChild(el('p', 'diet-overwrite-hint',
+      `合并后共 ${merged.length} 种食物，超过单餐 12 种上限；可以改用覆盖，或先删掉几种再合并。`));
+  }
+  return bar;
+}
+
+function showDietOverwriteBar(existing, pending) {
+  const slot = document.getElementById('diet-overwrite-slot');
+  if (!slot) return;
+  slot.replaceChildren(buildOverwriteBar(existing, pending, payload => {
+    submitDietLog(payload, existing);
+  }));
+}
+function hideDietOverwriteBar() {
+  document.getElementById('diet-overwrite-slot')?.replaceChildren();
+}
+
+/* 记录成功后的撤销条：覆盖→恢复原记录；新记→删掉刚这条。 */
+function dietLogUndoSnackbar(payload, existing, logId) {
+  if (existing) {
+    showUndoBar(`已覆盖${payload.meal_type}（原 ${Math.round(existing.kcal || 0)} kcal）`, '撤销覆盖', () => {
+      const body = {
+        log_date: existing.log_date, meal_type: existing.meal_type,
+        foods: toSubmitFoods(existing.foods), notes: existing.notes || '',
+      };
+      if (existing.plan_id != null) body.plan_id = existing.plan_id;
+      postDietLog(body)
+        .then(() => loadDietLogHistory())
+        .then(() => showUndoBar(`已恢复原来的${existing.meal_type}`, '', null))
+        .catch(e => showUndoBar(`恢复失败：${e.message || '请稍后重试'}`, '', null));
+    });
+  } else if (logId != null) {
+    showUndoBar(`已记录${payload.meal_type} · ${payload.log_date}`, '撤销', () => {
+      fetch(`/api/diet-logs/${logId}?athlete_key=${encodeURIComponent(athleteKey)}`, { method: 'DELETE' })
+        .then(r => { if (!r.ok) throw new Error('删除失败'); return loadDietLogHistory(); })
+        .then(() => showUndoBar('已撤销这条记录', '', null))
+        .catch(e => showUndoBar(`撤销失败：${e.message || '请稍后重试'}`, '', null));
+    });
+  }
+}
+
 async function saveDietLog() {
   showError('diet-log-error', '');
+  hideDietOverwriteBar();
   const date = document.getElementById('diet-log-date')?.value;
   if (!date) { showError('diet-log-error', '请先选日期。'); return; }
   const meal = document.querySelector('input[name="diet-log-meal-type"]:checked')?.value || '早餐';
   const { foods, error } = readDietFoodRows();
   if (error) { showError('diet-log-error', error); return; }
+  const pending = {
+    log_date: date, meal_type: meal, foods,
+    notes: document.getElementById('diet-log-notes')?.value || '',
+  };
   setBusy('btn-save-diet-log', true, '记录中…');
   try {
-    const payload = {
-      log_date: date, meal_type: meal, foods,
-      notes: document.getElementById('diet-log-notes')?.value || '',
-      athlete_key: athleteKey,
-    };
-    const resp = await fetch('/api/diet-logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data?.error?.message || '记录失败');
-    showStatus('diet-log-status', '已记录。同一天同一餐再记会覆盖这一条。');
+    const existing = await fetchExistingMeal(date, meal);
+    if (existing && (existing.foods || []).length) {
+      showDietOverwriteBar(existing, pending);
+      return;  // 等用户在确认条上选；finally 会松开按钮
+    }
+    await submitDietLog(pending, null);
+  } catch (e) {
+    showError('diet-log-error', e.message || '记录失败');
+  } finally {
+    setBusy('btn-save-diet-log', false);
+  }
+}
+
+async function submitDietLog(payload, existing) {
+  setBusy('btn-save-diet-log', true, '记录中…');
+  try {
+    const data = await postDietLog(payload);
     document.getElementById('diet-log-foods')?.replaceChildren();
     addDietFoodRow();
     const notes = document.getElementById('diet-log-notes');
     if (notes) notes.value = '';
+    hideDietOverwriteBar();
     await loadDietLogHistory();
     closeDietDrawer();
+    dietLogUndoSnackbar(payload, existing, data.log_id);
   } catch (e) {
+    highlightDietRowError(e);
     showError('diet-log-error', e.message || '记录失败');
   } finally {
     setBusy('btn-save-diet-log', false);
@@ -10361,6 +11142,8 @@ async function loadDietLogHistory() {
     }
     const data = await resp.json();
     const logs = data.logs || [];
+    collectDietRecentFoods(logs);
+    renderDietRecentChips();
     renderDietTodaySummary(logs);
     box.replaceChildren();
     if (!logs.length) {
@@ -10393,7 +11176,7 @@ async function loadDietLogHistory() {
           `蛋白 ${Math.round(log.protein_g || 0)} g` + (log.notes ? ` · ${log.notes}` : '')));
         const del = el('button', 'account-btn account-btn-quiet diet-rec-remove', '删除');
         del.type = 'button';
-        del.onclick = () => deleteDietLogEntry(log.id);
+        confirmableDelete(del, () => deleteDietLogEntry(log));
         body.appendChild(del);
         rec.appendChild(body);
         day.appendChild(rec);
@@ -10496,13 +11279,22 @@ function dietSkeleton() {
 
 // 底部抽屉：同页浮层不整页跳转；开合管理焦点与背景滚动。
 let dietDrawerLastFocus = null;
+let dietDrawerFocusTrap = null;
 function openDietDrawer() {
   const drawer = document.getElementById('diet-drawer');
   const backdrop = document.getElementById('diet-drawer-backdrop');
   if (!drawer || !backdrop) return;
   dietDrawerLastFocus = document.activeElement;
+  hideDietOverwriteBar();
+  ensureDietFoodCatalog();
+  renderDietRecentChips();
+  // 餐次按时段给默认值：中午打开抽屉不该还要手动从「早餐」切过来
+  const hour = new Date().getHours();
+  const defaultMeal = hour < 10 ? '早餐' : hour < 14 ? '午餐' : hour < 20 ? '晚餐' : '加餐';
+  document.querySelectorAll('input[name="diet-log-meal-type"]').forEach(r => { r.checked = r.value === defaultMeal; });
   drawer.hidden = false;
   backdrop.hidden = false;
+  dietDrawerFocusTrap = trapOverlayFocus(drawer);
   requestAnimationFrame(() => {
     drawer.classList.add('is-open');
     backdrop.classList.add('is-open');
@@ -10514,6 +11306,8 @@ function closeDietDrawer() {
   const drawer = document.getElementById('diet-drawer');
   const backdrop = document.getElementById('diet-drawer-backdrop');
   if (!drawer || !backdrop) return;
+  dietDrawerFocusTrap?.();
+  dietDrawerFocusTrap = null;
   drawer.classList.remove('is-open');
   backdrop.classList.remove('is-open');
   document.body.style.overflow = '';
@@ -10521,14 +11315,31 @@ function closeDietDrawer() {
   if (dietDrawerLastFocus && dietDrawerLastFocus.focus) dietDrawerLastFocus.focus();
 }
 
-async function deleteDietLogEntry(logId) {
+/* 删除走两步确认（confirmableDelete），生效后 5 秒可撤销。
+   报错落在记录列表自己的错误区——原先扔进抽屉里的 diet-log-error，
+   抽屉关着时用户根本看不到。编号字段是服务端返回的 log_id。 */
+async function deleteDietLogEntry(log) {
+  const logId = log.log_id ?? log.id;
+  if (logId == null) { showError('diet-log-list-error', '这条记录缺少编号，请刷新页面后重试。'); return; }
+  showError('diet-log-list-error', '');
   try {
     const resp = await fetch(`/api/diet-logs/${logId}?athlete_key=${encodeURIComponent(athleteKey)}`,
                              { method: 'DELETE' });
-    if (!resp.ok) { showError('diet-log-error', '删除失败'); return; }
+    if (!resp.ok) { showError('diet-log-list-error', '删除失败，请稍后重试。'); return; }
     await loadDietLogHistory();
+    showUndoBar(`已删除 ${log.log_date} ${log.meal_type}`, '撤销', () => {
+      const body = {
+        log_date: log.log_date, meal_type: log.meal_type,
+        foods: toSubmitFoods(log.foods), notes: log.notes || '',
+      };
+      if (log.plan_id != null) body.plan_id = log.plan_id;
+      postDietLog(body)
+        .then(() => loadDietLogHistory())
+        .then(() => showUndoBar('已恢复这条记录', '', null))
+        .catch(e => showError('diet-log-list-error', `恢复失败：${e.message || '请稍后重试'}`));
+    });
   } catch (e) {
-    showError('diet-log-error', `删除失败：${e.message}`);
+    showError('diet-log-list-error', `删除失败：${e.message}`);
   }
 }
 
@@ -10557,8 +11368,10 @@ async function loadDietStats() {
   } catch (e) {
     if (emptyNode) {
       emptyNode.hidden = false;
+      const dietFailMark = el('div', 'ec-mark', '!');
+      dietFailMark.setAttribute('aria-hidden', 'true');
       emptyNode.replaceChildren(
-        el('div', 'ec-mark', '!'),
+        dietFailMark,
         el('div', 'ec-title', '读取失败'),
         el('div', 'ec-hint', e.message || '请稍后重试。'));
     }
@@ -10728,6 +11541,7 @@ function initDietTab() {
   const dateInput = document.getElementById('diet-log-date');
   if (dateInput && !dateInput.value) dateInput.value = todayLocalIso();
   if (!document.querySelector('#diet-log-foods .diet-log-food-row')) addDietFoodRow();
+  ensureDietFoodCatalog();
 
   const bind = (id, fn) => {
     const node = document.getElementById(id);
@@ -10740,6 +11554,14 @@ function initDietTab() {
   bind('btn-open-diet-drawer', openDietDrawer);
   bind('btn-close-diet-drawer', closeDietDrawer);
   document.getElementById('diet-drawer-backdrop')?.addEventListener('click', closeDietDrawer);
+  // 日期/餐次/食物明细一变，覆盖确认条就过期了——立即收起，避免对着旧餐次确认；
+  // 用户开始改某一行时，该行的报错标红也随之撤掉。
+  dateInput?.addEventListener('change', hideDietOverwriteBar);
+  document.getElementById('diet-log-meal')?.addEventListener('change', hideDietOverwriteBar);
+  document.getElementById('diet-log-foods')?.addEventListener('input', event => {
+    hideDietOverwriteBar();
+    event.target.closest('.diet-log-food-row')?.classList.remove('is-invalid');
+  });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && !document.getElementById('diet-drawer')?.hidden) closeDietDrawer();
   });
@@ -10868,7 +11690,10 @@ function initTrainingTabs() {
     refreshWorkoutResumeBanner();
     // 身份解析完再迁：迁移要按当前身份写进「我的计划」，早了会落到错的
     // owner_key 上（游客 key 与登录后的 u:{id} 不是一回事）。
-    migrateLocalHistory().then(loadSavedPlans);
+    migrateLocalHistory().then(() => {
+      loadSavedPlans();
+      restoreLatestPlanOnWelcome();
+    });
   });
 }
 

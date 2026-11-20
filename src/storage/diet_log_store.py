@@ -81,7 +81,7 @@ class DietLogStore:
         if not isinstance(log_date, date):
             return None
 
-        cleaned = self._clean_foods(foods)
+        cleaned, _reason = self._clean_foods(foods)
         if cleaned is None:
             return None
         with self.db.transaction() as tx:
@@ -101,29 +101,33 @@ class DietLogStore:
             )
             return int(row.id) if row else None
 
-    def _clean_foods(self, foods) -> list[dict] | None:
+    def _clean_foods(self, foods) -> tuple[list[dict] | None, dict | None]:
+        """返回 (清洗后的食物, 拒收原因)。原因带行号与食物名，供 API 翻成
+        用户能照着改的提示——笼统的「食物或克数有问题」等于让用户逐行猜。"""
         if not isinstance(foods, list) or not foods:
-            return None
+            return None, {"code": "EMPTY_FOODS"}
         cleaned = []
         total_kcal = 0.0
-        for item in foods:
+        for index, item in enumerate(foods):
             if not isinstance(item, dict):
-                return None
+                return None, {"code": "BAD_FOOD", "index": index}
             name = str(item.get("name") or "").strip()
             try:
                 grams = float(item.get("grams") or 0)
             except (TypeError, ValueError):
-                return None
-            if not name or grams <= 0 or grams > 2000:
-                return None
+                return None, {"code": "GRAMS_RANGE", "index": index, "name": name}
+            if not name:
+                return None, {"code": "MISSING_NAME", "index": index}
+            if grams <= 0 or grams > 2000:
+                return None, {"code": "GRAMS_RANGE", "index": index, "name": name}
             if item.get("source") == "custom":
                 try:
                     kcal = float(item.get("kcal") or 0)
                     protein = float(item.get("protein_g") or 0)
                 except (TypeError, ValueError):
-                    return None
+                    return None, {"code": "CUSTOM_RANGE", "index": index, "name": name}
                 if kcal < 0 or protein < 0:
-                    return None
+                    return None, {"code": "CUSTOM_RANGE", "index": index, "name": name}
                 kcal = min(kcal, MAX_CUSTOM_FOOD_KCAL)
                 entry = {"name": name[:60], "grams": round(grams, 1),
                          "kcal": round(kcal), "protein_g": round(protein, 1),
@@ -131,13 +135,19 @@ class DietLogStore:
             else:
                 nutrients = food_catalog.food_nutrients(name, grams)
                 if nutrients is None:
-                    return None  # 库外拒收：不入库无营养依据的记录
+                    # 库外拒收：不入库无营养依据的记录
+                    return None, {"code": "UNKNOWN_FOOD", "index": index, "name": name}
                 entry = dict(nutrients, source="catalog")
             total_kcal += entry["kcal"]
             cleaned.append(entry)
         if total_kcal > MAX_MEAL_KCAL:
-            return None
-        return cleaned
+            return None, {"code": "MEAL_KCAL_CAP", "total": round(total_kcal)}
+        return cleaned, None
+
+    def explain_rejection(self, foods) -> dict | None:
+        """只算不写：upsert 拒收后供 API 取具体原因（失败路径才跑，无额外常态开销）。"""
+        _, reason = self._clean_foods(foods)
+        return reason
 
     # ------------------------------------------------------------------
     # 读取

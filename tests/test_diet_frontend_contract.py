@@ -200,8 +200,11 @@ class TestResultRendering:
         meal = _fn_body("buildDietMealBlock")
         assert "吃了这餐" in meal
         fn = _fn_body("logMealFromPlan")
-        assert "/api/diet-logs" in fn
         assert "todayLocalIso()" in fn
+        # 提交挪进 submitMealFromPlan/postDietLog（覆盖护栏共用同一条提交链路）
+        assert "submitMealFromPlan" in fn
+        assert "postDietLog" in _fn_body("submitMealFromPlan")
+        assert "/api/diet-logs" in _fn_body("postDietLog")
 
     def test_explanation_is_collapsible_four_sections(self):
         fn = _fn_body("renderDietExplanation")
@@ -295,8 +298,10 @@ class TestDietLogRedesign:
 
     def test_save_closes_drawer_and_refreshes_summary(self):
         fn = _fn_body("saveDietLog")
-        assert "closeDietDrawer()" in fn
-        assert "loadDietLogHistory()" in fn
+        assert "submitDietLog" in fn
+        sub = _fn_body("submitDietLog")
+        assert "closeDietDrawer()" in sub
+        assert "loadDietLogHistory()" in sub
         assert "renderDietTodaySummary" in _fn_body("loadDietLogHistory")
 
     def test_drawer_closes_on_escape_and_backdrop(self):
@@ -411,3 +416,100 @@ class TestMotionSignature:
         assert '.focus-card::before' in HTML
         assert '@keyframes mb-spin' in HTML
         assert '.diet-result .diet-day-card:first-of-type::before' in HTML
+
+
+class TestDataGuardrails:
+    """体验修复批次·数据护栏：覆盖先问／合并可选／两步删除／5 秒撤销／回执归位。
+
+    钉住的是行为而不是行号：静默覆盖一顿 850 kcal 的午餐、一点就删且
+    报错扔进别的面板，都是这批修复要消灭的事故。
+    """
+
+    def test_overwrite_asks_before_replacing_meal(self):
+        fn = _fn_body("saveDietLog")
+        assert "fetchExistingMeal" in fn
+        assert "showDietOverwriteBar" in fn
+        bar = _fn_body("buildOverwriteBar")
+        for label in ("合并进这一餐", "覆盖", "取消"):
+            assert label in bar
+        # 合并超单餐 12 种上限时禁用合并并说明，而不是提交后吃 422
+        assert "merged.length > 12" in bar and "merge.disabled = true" in bar
+
+    def test_existing_meal_lookup_is_exact_date(self):
+        fn = _fn_body("fetchExistingMeal")
+        assert "on_date=" in fn
+        assert "meal_type === mealType" in fn
+
+    def test_meal_from_plan_also_guarded(self):
+        fn = _fn_body("logMealFromPlan")
+        assert "fetchExistingMeal" in fn and "buildOverwriteBar" in fn
+        # 报错落在点击处（餐块内），不扔回页面顶部表单错误区
+        assert "diet-eat-error" in _fn_body("submitMealFromPlan")
+
+    def test_overwrite_and_new_record_have_undo(self):
+        fn = _fn_body("dietLogUndoSnackbar")
+        assert "showUndoBar" in fn and "撤销覆盖" in fn
+        assert "toSubmitFoods(existing.foods)" in fn
+        assert "data.log_id" in _fn_body("submitDietLog")
+        assert "dietLogUndoSnackbar" in _fn_body("submitDietLog")
+        assert "dietLogUndoSnackbar" in _fn_body("submitMealFromPlan")
+
+    def test_deletes_are_two_step_with_cancel_and_escape(self):
+        fn = _fn_body("confirmableDelete")
+        assert "确认删除？" in fn and "取消" in fn
+        assert "Escape" in fn
+        assert "setTimeout(disarm, 5000)" in fn
+        for loader in ("loadSavedPlans", "loadSavedDietPlans", "loadDietLogHistory"):
+            assert "confirmableDelete(del" in _fn_body(loader), loader
+        # 不允许再绕回一步直删
+        assert "del.onclick = () => deleteSavedPlan" not in HTML
+        assert "del.onclick = () => deleteSavedDietPlan" not in HTML
+        assert "deleteDietLogEntry(log.id)" not in HTML
+
+    def test_deleted_plans_can_be_restored(self):
+        for fn_name, saver in (("deleteSavedPlan", "autoSavePlan(full)"),
+                               ("deleteSavedDietPlan", "autoSaveDietPlan(full)")):
+            fn = _fn_body(fn_name)
+            assert "showUndoBar" in fn and saver in fn, fn_name
+
+    def test_diet_log_delete_uses_server_id_field(self):
+        fn = _fn_body("deleteDietLogEntry")
+        assert "log.log_id" in fn
+        assert "showUndoBar" in fn and "toSubmitFoods(log.foods)" in fn
+
+    def test_failure_receipts_land_in_own_panel(self):
+        assert 'id="saved-plans-error"' in HTML
+        assert 'id="diet-log-list-error"' in HTML
+        assert "showError('saved-plans-error'" in _fn_body("deleteSavedPlan")
+        assert "showStatus('log-status'" not in _fn_body("deleteSavedPlan")
+        assert "showError('diet-log-list-error'" in _fn_body("deleteDietLogEntry")
+        assert "showError('diet-log-error'" not in _fn_body("deleteDietLogEntry")
+
+    def test_meal_defaults_by_time_of_day(self):
+        fn = _fn_body("openDietDrawer")
+        assert "getHours()" in fn
+        for meal in ("早餐", "午餐", "晚餐", "加餐"):
+            assert meal in fn
+        assert "hideDietOverwriteBar()" in fn
+
+    def test_stale_overwrite_bar_dismissed_on_form_change(self):
+        fn = _fn_body("initDietTab")
+        assert "dateInput?.addEventListener('change', hideDietOverwriteBar)" in fn
+        assert "diet-log-meal')?.addEventListener('change', hideDietOverwriteBar)" in fn
+        assert "diet-log-foods')?.addEventListener('input'" in fn
+        assert "hideDietOverwriteBar();" in fn
+        # 用户开始改行，报错标红随之撤掉
+        assert "classList.remove('is-invalid')" in fn
+
+    def test_undo_bar_is_el_built_and_above_drawer(self):
+        fn = _fn_body("showUndoBar")
+        assert "innerHTML" not in fn
+        assert "setTimeout(dismissUndoBar, 5000)" in fn
+        assert ".undo-bar {" in HTML and "z-index: 1100" in HTML
+        assert "@media (prefers-reduced-motion: reduce) { .undo-bar { transition: none; } }" in HTML
+
+    def test_merge_upserts_by_name_and_keeps_custom_values(self):
+        fn = _fn_body("mergeDietFoods")
+        assert "findIndex(f => f.name === nf.name)" in fn
+        sub = _fn_body("toSubmitFoods")
+        assert "source === 'custom'" in sub and "protein_g: f.protein_g" in sub
